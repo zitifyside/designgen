@@ -1,5 +1,4 @@
 import type {
-  ApiKey,
   DesignSystem,
   ExportJob,
   Mockup,
@@ -384,23 +383,6 @@ export const MOCK_TEMPLATES: Template[] = [
     downloads: 2410,
     description: "SaaS 출시용 단일 페이지 랜딩 프리셋. Hero·Pricing·CTA 포함.",
     conceptName: "Modern Minimal",
-  },
-];
-
-export const MOCK_API_KEYS: ApiKey[] = [
-  {
-    id: "key_001",
-    name: "Local Dev",
-    prefix: "adg_live_a12f",
-    lastUsedAt: "2026-06-07T09:14:00+09:00",
-    createdAt: "2026-04-18T10:00:00+09:00",
-  },
-  {
-    id: "key_002",
-    name: "MCP — Cursor",
-    prefix: "adg_live_88c0",
-    lastUsedAt: "2026-06-06T22:01:00+09:00",
-    createdAt: "2026-05-02T17:30:00+09:00",
   },
 ];
 

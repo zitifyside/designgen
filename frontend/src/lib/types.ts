@@ -176,14 +176,6 @@ export interface Template {
   conceptName: string;
 }
 
-export interface ApiKey {
-  id: string;
-  name: string;
-  prefix: string;
-  lastUsedAt?: string;
-  createdAt: string;
-}
-
 export interface SessionDevice {
   id: string;
   device: string;

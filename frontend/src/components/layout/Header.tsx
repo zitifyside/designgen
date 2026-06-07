@@ -81,12 +81,24 @@ export function Header() {
               구독 관리
             </Link>
             <Link
-              href="/me/api-keys"
+              href="/me/credits"
               className="block px-3 py-1.5 text-xs text-ink-700 hover:bg-ink-50"
               onClick={() => setMenuOpen(false)}
             >
-              API Key
+              크레딧
             </Link>
+            {user?.plan === "Admin" && (
+              <>
+                <div className="my-1 border-t border-ink-100" />
+                <Link
+                  href="/admin"
+                  className="block px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Admin Console →
+                </Link>
+              </>
+            )}
             <div className="my-1 border-t border-ink-100" />
             <button
               onClick={() => {

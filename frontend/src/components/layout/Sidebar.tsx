@@ -15,7 +15,6 @@ const ME_NAV = [
   { href: "/me/profile", label: "프로필" },
   { href: "/me/subscription", label: "구독" },
   { href: "/me/credits", label: "크레딧" },
-  { href: "/me/api-keys", label: "API Key" },
   { href: "/me/usage", label: "사용량" },
   { href: "/me/security", label: "보안" },
   { href: "/me/notifications", label: "알림 설정" },

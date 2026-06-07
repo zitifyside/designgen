@@ -8,7 +8,6 @@ const ITEMS = [
   { href: "/me/profile", label: "프로필", desc: "이름·이메일·아바타·언어·테마" },
   { href: "/me/subscription", label: "구독", desc: "플랜·결제 수단·이력" },
   { href: "/me/credits", label: "크레딧", desc: "잔액·충전·소비 이력" },
-  { href: "/me/api-keys", label: "API Key", desc: "Public API·MCP Server 접근" },
   { href: "/me/usage", label: "사용량", desc: "월간 생성·Export 추이" },
   { href: "/me/security", label: "보안", desc: "2FA·세션·계정 삭제" },
   { href: "/me/notifications", label: "알림 설정", desc: "인앱·이메일 채널" },

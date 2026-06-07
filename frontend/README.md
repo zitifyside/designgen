@@ -30,7 +30,8 @@ npm run build        # 프로덕션 빌드
 | `/projects/[id]/export` | Export (대상·형식·해상도·이력) | 기획서 §5 화면 4 |
 | `/templates`, `/templates/[id]` | 템플릿 마켓 | 기능정의서 §3.1 — 템플릿 마켓 |
 | `/notifications` | 알림 센터 | 기능정의서 §3.1 — 알림 센터 |
-| `/me/profile`, `/me/subscription`, `/me/credits`, `/me/api-keys`, `/me/usage`, `/me/security`, `/me/notifications` | 마이페이지 7개 서브 | 기능정의서 §3.1 — 마이페이지 |
+| `/me/profile`, `/me/subscription`, `/me/credits`, `/me/usage`, `/me/security`, `/me/notifications` | 마이페이지 6개 서브 | 기능정의서 §3.1 — 마이페이지 (API Key 는 서비스 제공자가 관리하므로 사용자 노출 없음) |
+| `/admin/...` | 관리자 영역 | 기능정의서 §2.3 — Admin |
 
 ## 디자인 시스템 실시간 반영
 
