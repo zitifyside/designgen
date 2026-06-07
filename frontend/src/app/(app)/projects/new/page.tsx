@@ -18,6 +18,34 @@ const PLATFORMS: Array<{ value: Platform; label: string; enabled: boolean }> = [
   { value: "APP", label: "APP", enabled: false },
 ];
 
+interface ConceptDraft {
+  name: string;
+  direction: string;
+  keywords: string;
+}
+
+const EMPTY_CONCEPT: ConceptDraft = { name: "", direction: "", keywords: "" };
+
+const CONCEPT_PLACEHOLDERS: ConceptDraft[] = [
+  {
+    name: "Modern Minimal",
+    direction: "낮은 채도·넓은 여백·중성 컬러 중심. 차분하고 신뢰감 있는 무드.",
+    keywords: "minimal, neutral, calm, trustworthy",
+  },
+  {
+    name: "Bold Vibrant",
+    direction: "강한 채도·굵은 타이포·진한 그림자. 임팩트 있는 첫인상.",
+    keywords: "bold, vibrant, impactful, expressive",
+  },
+  {
+    name: "Soft Pastel",
+    direction: "파스텔 컬러·둥근 모서리·따뜻한 무드. 친근하고 부드럽게.",
+    keywords: "pastel, warm, rounded, friendly",
+  },
+];
+
+type ConceptMode = "auto" | "manual";
+
 export default function NewProjectPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -32,11 +60,38 @@ export default function NewProjectPage() {
     user?.plan === "Free" ? 3 : 5,
   );
   const [files, setFiles] = useState<File[]>([]);
+  const [conceptMode, setConceptMode] = useState<ConceptMode>("auto");
+  const [concepts, setConcepts] = useState<ConceptDraft[]>([
+    { ...EMPTY_CONCEPT },
+    { ...EMPTY_CONCEPT },
+    { ...EMPTY_CONCEPT },
+  ]);
   const isFree = user?.plan === "Free";
+
+  const updateConcept = (idx: number, patch: Partial<ConceptDraft>) => {
+    setConcepts((arr) =>
+      arr.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
+    );
+  };
+
+  const applyPlaceholder = (idx: number) =>
+    updateConcept(idx, CONCEPT_PLACEHOLDERS[idx % 3]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !requirements.trim()) return;
+    if (conceptMode === "manual") {
+      const active = concepts.slice(0, conceptCount);
+      const incomplete = active.some(
+        (c) => !c.name.trim() || !c.direction.trim(),
+      );
+      if (incomplete) {
+        alert(
+          `직접 입력 모드는 컨셉 ${conceptCount}개의 이름·방향성이 모두 채워져야 한다.`,
+        );
+        return;
+      }
+    }
     const project = create({
       name: name.trim(),
       requirementsText: requirements.trim(),
@@ -214,6 +269,113 @@ export default function NewProjectPage() {
               </div>
             </div>
           </div>
+        </Card>
+
+        <Card>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-medium text-ink-700">컨셉 정의</div>
+              <p className="mt-0.5 text-[11px] text-ink-500">
+                AI 가 알아서 추출하게 두거나, 직접 컨셉의 방향성을 지정한다.
+              </p>
+            </div>
+            <div className="inline-flex gap-1 rounded-lg bg-ink-100 p-1 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setConceptMode("auto")}
+                className={`rounded-md px-2.5 py-1 font-medium transition ${
+                  conceptMode === "auto"
+                    ? "bg-white text-ink-900 shadow-sm"
+                    : "text-ink-500 hover:text-ink-800"
+                }`}
+              >
+                AI 자동
+              </button>
+              <button
+                type="button"
+                onClick={() => setConceptMode("manual")}
+                className={`rounded-md px-2.5 py-1 font-medium transition ${
+                  conceptMode === "manual"
+                    ? "bg-white text-ink-900 shadow-sm"
+                    : "text-ink-500 hover:text-ink-800"
+                }`}
+              >
+                직접 입력
+              </button>
+            </div>
+          </div>
+
+          {conceptMode === "auto" ? (
+            <div className="rounded-lg bg-ink-50 px-3 py-3 text-xs text-ink-600">
+              AI 가 요건 텍스트를 분석해 {conceptCount}종 컨셉의 이름·방향성·
+              색감을 자동 추출한다. 결과는 작업 화면에서 언제든 수정 가능하다.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {concepts.slice(0, conceptCount).map((c, idx) => {
+                const label = String.fromCharCode(65 + idx); // A·B·C
+                return (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-ink-200 bg-white p-3"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-[11px] font-semibold text-white">
+                          {label}
+                        </span>
+                        <span className="text-xs font-medium text-ink-700">
+                          컨셉 {label}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => applyPlaceholder(idx)}
+                        className="text-[10px] text-brand-600 hover:underline"
+                      >
+                        예시로 채우기
+                      </button>
+                    </div>
+                    <Input
+                      label="컨셉 이름"
+                      placeholder="예: Modern Minimal"
+                      value={c.name}
+                      onChange={(e) => updateConcept(idx, { name: e.target.value })}
+                      maxLength={60}
+                    />
+                    <div className="mt-2">
+                      <Textarea
+                        label="방향성·무드"
+                        placeholder="이 컨셉이 추구하는 시각적 무드·감정·핵심 가치를 한두 문장으로 적는다."
+                        value={c.direction}
+                        onChange={(e) =>
+                          updateConcept(idx, { direction: e.target.value })
+                        }
+                        rows={2}
+                        countMax={400}
+                        maxLength={400}
+                      />
+                    </div>
+                    <div className="mt-2">
+                      <Input
+                        label="키워드 (선택)"
+                        placeholder="쉼표로 구분 · 예: minimal, calm, neutral"
+                        value={c.keywords}
+                        onChange={(e) =>
+                          updateConcept(idx, { keywords: e.target.value })
+                        }
+                        maxLength={120}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-[10px] text-ink-400">
+                직접 입력 모드에서는 활성 컨셉 {conceptCount}개의 이름·방향성이
+                모두 채워져야 생성을 시작할 수 있다.
+              </p>
+            </div>
+          )}
         </Card>
 
         <div className="sticky bottom-0 -mx-6 mt-6 border-t border-ink-200 bg-white/90 px-6 py-4 backdrop-blur md:mx-0 md:rounded-xl md:border">
