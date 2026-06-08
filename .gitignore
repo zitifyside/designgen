@@ -43,6 +43,15 @@ google-services.json
 # Firebase/hosting cache
 .firebase/
 
+# Backend (FastAPI / Python)
+*.db
+*.sqlite3
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.python-version
+
 # === ContextBuilder Security Standard (v1.9.0) ===
 CLAUDE.md
 CLAUDE.local.md
