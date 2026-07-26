@@ -52,11 +52,12 @@ google-services.json
 *.egg-info/
 .python-version
 
-# === ContextBuilder Security Standard (v1.9.0) ===
+# === ContextBuilder Security Standard (v1.2.0) ===
 CLAUDE.md
 CLAUDE.local.md
 AGENTS.md
 AGENTS.local.md
+ARCHITECTURE.md
 .claude/
 .env
 .env.*
@@ -96,4 +97,8 @@ venv/
 _*.log
 .tmp/
 tmp/
+
+# 산출물 (내부 도메인 어휘·정책·보안 감사 외부 노출 차단)
+Docs/
+!Docs/.gitkeep
 # === ContextBuilder Security Standard END ===
