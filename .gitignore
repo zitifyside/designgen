@@ -102,3 +102,10 @@ tmp/
 Docs/
 !Docs/.gitkeep
 # === ContextBuilder Security Standard END ===
+
+firebase-adminsdk*.json
+serviceAccountKey*.json
+.yarnrc.yml
+.pypirc
+.netrc
+_netrc
