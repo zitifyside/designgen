@@ -17,9 +17,10 @@ from app.models.user import User
 
 PLANS = [
     # code, name, monthly_cents, annual_cents, gens(-1=무제한), concepts, variants, credit_unit_cents
+    # 단가는 USD 센트 기준 — 서비스정책서 9장 (Pro $19/월·연 $190, Team $49/월·연 $490)
     ("Free", "Free", 0, 0, 3, 1, 3, 0),
-    ("Pro", "Pro", 2_600_000 // 100, 0, 30, 3, 5, 50),
-    ("Team", "Team", 6_700_000 // 100, 0, -1, 3, 5, 30),
+    ("Pro", "Pro", 1_900, 19_000, 30, 3, 5, 50),
+    ("Team", "Team", 4_900, 49_000, -1, 3, 5, 30),
 ]
 
 TEMPLATES = [
@@ -44,6 +45,15 @@ async def seed() -> None:
                         max_variants=variants, credit_unit_cents=unit,
                     )
                 )
+            else:
+                # 재실행 시 기존 행도 표준 값으로 갱신한다 (구 시드의 원화값 오저장 정정 포함).
+                plan.name = name
+                plan.monthly_price_cents = m
+                plan.annual_price_cents = a
+                plan.monthly_generations = gens
+                plan.max_concepts = concepts
+                plan.max_variants = variants
+                plan.credit_unit_cents = unit
 
         # 데모 (Pro) 사용자
         if await db.scalar(select(User).where(User.email == "demo@designgenerator.io")) is None:

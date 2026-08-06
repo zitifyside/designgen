@@ -109,3 +109,6 @@ serviceAccountKey*.json
 .pypirc
 .netrc
 _netrc
+
+# TypeScript 증분 빌드 캐시 (로컬 산출물)
+*.tsbuildinfo

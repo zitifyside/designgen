@@ -41,17 +41,17 @@ async def start_generation(
 ):
     project = await _owned_project(db, project_id, user.id)
 
-    # 사용자/프로젝트당 동시에 하나의 생성 작업만 진행한다.
+    # 사용자당 동시에 하나의 생성 작업만 진행한다 (서비스정책서 5.2 — 사용자 단위 검사).
     active = await db.scalar(
         select(Generation).where(
-            Generation.project_id == project_id,
+            Generation.user_id == user.id,
             Generation.status.in_(("Pending", "Running")),
         )
     )
     if active is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="A generation is already in progress for this project",
+            detail="A generation is already in progress for this user",
         )
 
     if body.requirements_text is not None:
