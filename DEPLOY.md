@@ -36,19 +36,32 @@
 ## 2. 프론트엔드 배포 (Firebase Hosting)
 
 ```bash
-# 0) 로그인 (최초 1회, 브라우저가 열린다)
-firebase login
-
 # 1) 정적 export 빌드
 cd frontend
 NEXT_STATIC_EXPORT=1 npm run build      # → frontend/out
 
-# 2) 배포 (저장소 루트에서)
+# 2) 배포 (저장소 루트에서) — gcloud 로그인 계정을 그대로 쓴다
 cd ..
-firebase deploy --only hosting --project design-gen-zitify
+python scripts/deploy_hosting.py
 ```
 
 ⚠ `NEXT_STATIC_EXPORT=1` 없이 빌드하면 `frontend/out` 이 생기지 않아 배포가 빈 사이트가 된다.
+
+### 왜 `firebase deploy` 가 아니라 스크립트인가
+
+이 머신의 firebase CLI 에는 인증된 계정이 없고(`firebase login` 미실행), CLI 는
+gcloud ADC 를 그대로 받아들이지 않아 `Failed to get Firebase project` 로 끊긴다.
+`scripts/deploy_hosting.py` 는 Hosting REST API 를 직접 호출하며,
+gcloud 액세스 토큰 + `x-goog-user-project` 헤더로 동일한 배포(버전 생성 → 파일 업로드 →
+확정 → 릴리즈)를 수행한다. firebase.json 의 CLI 표기(source/destination·헤더 배열)를
+REST ServingConfig(glob/path·헤더 맵)로 변환하는 계층도 이 스크립트 안에 있다.
+
+`firebase login` 을 한 뒤에는 표준 CLI 명령도 그대로 쓸 수 있다.
+
+```bash
+firebase login
+firebase deploy --only hosting --project design-gen-zitify
+```
 
 ---
 
@@ -100,7 +113,17 @@ gcloud run deploy adg-api \
 | 구성 | 상태 |
 |---|---|
 | 프론트 정적 export | ✅ 빌드 검증 완료 (30 라우트) |
-| Firebase Hosting 설정 | ✅ `firebase.json`·`.firebaserc` 작성 |
-| Firebase 배포 | ⏸ CLI 로그인 필요 (`firebase login`) |
-| 백엔드 Cloud Run | ⏸ 미배포 — 배포 전까지 로그인·생성 등 API 기능은 동작하지 않는다 |
+| Firebase Hosting | ✅ 배포됨 — https://design-gen-zitify.web.app |
+| 백엔드 Cloud Run | ⛔ **미배포 — 프로젝트 결제(Blaze) 미연결** |
 | DB | ⏸ 로컬 SQLite. 운영은 PostgreSQL 로 전환 필요 |
+
+⚠ **현재 배포본은 UI 만 동작한다.** `design-gen-zitify` 는 Spark(무료) 요금제라
+Cloud Run·Functions 를 만들 수 없어 API 백엔드가 없다. 로그인·생성·Export 등
+서버가 필요한 기능은 "서버에 연결하지 못했습니다" 로 끝난다.
+
+기능을 살리려면 둘 중 하나가 필요하다.
+
+1. **Blaze 요금제 연결** 후 §3 절차로 Cloud Run 배포 + Hosting `/api/**` rewrite 추가
+2. 백엔드를 **다른 호스트**(Render·Railway·Fly.io·자체 서버)에 올리고
+   `NEXT_PUBLIC_API_BASE_URL=https://<백엔드>/api/v1` 로 다시 빌드 + 백엔드
+   `CORS_ORIGINS` 에 `https://design-gen-zitify.web.app` 추가
