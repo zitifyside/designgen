@@ -467,28 +467,28 @@ export const api = {
   },
 
   billing: {
-    plans: () => request<PlanInfo[]>("/billing/plans", { auth: false }),
-    subscription: () => request<Subscription>("/billing/subscriptions/current"),
-    creditBalance: () => request<{ credits: number }>("/billing/credits/balance"),
+    plans: () => request<PlanInfo[]>("/plans", { auth: false }),
+    subscription: () => request<Subscription>("/subscriptions/current"),
+    creditBalance: () => request<{ credits: number }>("/credits/balance"),
     creditTransactions: () =>
-      request<CreditTransaction[]>("/billing/credits/transactions"),
+      request<CreditTransaction[]>("/credits/transactions"),
     // 아래 금전 이동 4종은 Stripe 연동 전이라 서버가 501 을 반환한다.
     purchaseCredits: (quantity: number) =>
-      request<{ detail: string }>("/billing/credits/purchase", {
+      request<{ detail: string }>("/credits/purchase", {
         method: "POST",
         body: { quantity },
       }),
     checkout: (planCode: string, interval: "monthly" | "annual") =>
-      request<{ detail: string }>("/billing/subscriptions/checkout", {
+      request<{ detail: string }>("/subscriptions/checkout", {
         method: "POST",
         body: { planCode, interval },
       }),
     cancelSubscription: () =>
-      request<{ detail: string }>("/billing/subscriptions/cancel", {
+      request<{ detail: string }>("/subscriptions/cancel", {
         method: "POST",
       }),
     requestRefund: (amountCents: number, reason: string) =>
-      request<{ detail: string }>("/billing/refunds/request", {
+      request<{ detail: string }>("/refunds/request", {
         method: "POST",
         body: { amountCents, reason },
       }),
@@ -496,11 +496,11 @@ export const api = {
 
   system: {
     health: () =>
-      request<Record<string, unknown>>("/system/health", { auth: false }),
+      request<Record<string, unknown>>("/health", { auth: false }),
     announcements: () =>
-      request<AnnouncementRecord[]>("/system/announcements", { auth: false }),
+      request<AnnouncementRecord[]>("/announcements", { auth: false }),
     feedback: (body: { category: string; title: string; body: string }) =>
-      request<{ detail: string }>("/system/feedback", { method: "POST", body }),
+      request<{ detail: string }>("/feedback", { method: "POST", body }),
   },
 
   admin: {
