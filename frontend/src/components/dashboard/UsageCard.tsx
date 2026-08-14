@@ -7,6 +7,7 @@ export function UsageCard({
   ctaHref,
   ctaLabel,
   unit = "",
+  note,
 }: {
   title: string;
   used: number;
@@ -14,6 +15,7 @@ export function UsageCard({
   ctaHref?: string;
   ctaLabel?: string;
   unit?: string;
+  note?: string;
 }) {
   const pct =
     limit && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
@@ -41,6 +43,7 @@ export function UsageCard({
           />
         </div>
       )}
+      {note && <div className="mt-2 text-[11px] text-ink-500">{note}</div>}
       {ctaHref && ctaLabel && (
         <Link
           href={ctaHref}

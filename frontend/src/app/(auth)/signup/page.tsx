@@ -32,6 +32,10 @@ export default function SignupPage() {
     try {
       await signup(email, password, name);
       router.push("/dashboard");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "회원가입에 실패했다.",
+      );
     } finally {
       setLoading(false);
     }

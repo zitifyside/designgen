@@ -1,153 +1,158 @@
 "use client";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
-import {
-  ADMIN_KPI,
-  ADMIN_REVENUE_30D,
-  ADMIN_AI_COST_30D,
-  ADMIN_ERROR_RATE_30D,
-  ADMIN_AUDIT_LOGS,
-  ADMIN_HEALTH,
-} from "@/lib/admin-mock";
+import { useEffect, useState } from "react";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { api, type AdminKpi, type AdminStats, type AuditLogRecord } from "@/lib/api";
 
 export default function AdminDashboardPage() {
+  const [kpi, setKpi] = useState<AdminKpi | null>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [logs, setLogs] = useState<AuditLogRecord[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [k, s, l] = await Promise.all([
+          api.admin.dashboard(),
+          api.admin.stats(30),
+          api.admin.auditLogs(),
+        ]);
+        if (cancelled) return;
+        setKpi(k);
+        setStats(s);
+        setLogs(l.slice(0, 8));
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "지표를 불러오지 못했다.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const daily = stats?.daily ?? [];
+  const max = Math.max(1, ...daily.map((d) => d.generations));
+
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <PageHeader
-        title="관리자 대시보드"
-        description={`MAU ${ADMIN_KPI.mau.toLocaleString()} · MRR ₩${(ADMIN_KPI.mrr / 10000).toFixed(0)}만 · 에러율 ${(ADMIN_KPI.errorRate * 100).toFixed(1)}%`}
+        title="Admin 대시보드"
+        description="서비스 핵심 지표를 모니터링한다. 모든 수치는 DB 실측이다."
       />
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi label="MAU" value={ADMIN_KPI.mau.toLocaleString()} delta="+12%" />
-        <Kpi label="DAU" value={ADMIN_KPI.dau.toLocaleString()} delta="+3%" />
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="전체 사용자" value={kpi?.totalUsers ?? 0} />
+        <Kpi label="활성 사용자" value={kpi?.activeUsers ?? 0} />
+        <Kpi label="프로젝트" value={kpi?.totalProjects ?? 0} />
+        <Kpi label="누적 생성" value={kpi?.generationsTotal ?? 0} />
+      </section>
+
+      <section className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="정지 계정" value={kpi?.suspendedUsers ?? 0} tone="warning" />
+        <Kpi label="환불 대기" value={kpi?.pendingRefunds ?? 0} tone="warning" />
+        <Kpi label="미처리 피드백" value={kpi?.openFeedback ?? 0} tone="warning" />
         <Kpi
-          label="오늘 가입"
-          value={ADMIN_KPI.signupsToday.toLocaleString()}
-          delta="+18%"
-        />
-        <Kpi
-          label="오늘 생성"
-          value={ADMIN_KPI.generationsToday.toLocaleString()}
-          delta="+22%"
-        />
-        <Kpi
-          label="MRR"
-          value={`₩${(ADMIN_KPI.mrr / 10000).toFixed(0)}만`}
-          delta="+8%"
-        />
-        <Kpi
-          label="유료 전환율"
-          value={`${(ADMIN_KPI.paidRatio * 100).toFixed(1)}%`}
-          delta="+0.4%p"
-        />
-        <Kpi
-          label="MTD AI 비용"
-          value={`₩${(ADMIN_KPI.aiCostMtd / 10000).toFixed(0)}만`}
-          delta="+14%"
-          deltaTone="danger"
-        />
-        <Kpi
-          label="에러율 (24h)"
-          value={`${(ADMIN_KPI.errorRate * 100).toFixed(1)}%`}
-          delta="-0.2%p"
-          deltaTone="success"
+          label="에러율 (30일)"
+          value={`${((stats?.errorRate ?? 0) * 100).toFixed(1)}%`}
+          tone={(stats?.errorRate ?? 0) > 0.05 ? "danger" : "default"}
         />
       </section>
 
-      <section className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="매출 (백만원, 30일)" />
-          <Spark data={ADMIN_REVENUE_30D} color="#6366f1" suffix="M" />
+          <CardHeader title="일별 생성 (30일)" />
+          <div className="flex h-32 items-end gap-[2px]">
+            {daily.map((d) => (
+              <div
+                key={d.date}
+                title={`${d.date} · 생성 ${d.generations} · 실패 ${d.failures}`}
+                className="flex-1 rounded-t bg-amber-500/80"
+                style={{
+                  height: `${(d.generations / max) * 100}%`,
+                  minHeight: 2,
+                }}
+              />
+            ))}
+          </div>
+          <div className="mt-2 text-[11px] text-ink-500">
+            30일 합계 {daily.reduce((s, d) => s + d.generations, 0)}회 · 실패{" "}
+            {daily.reduce((s, d) => s + d.failures, 0)}회
+          </div>
         </Card>
+
         <Card>
-          <CardHeader title="AI 비용 (만원, 30일)" />
-          <Spark data={ADMIN_AI_COST_30D} color="#ef4444" suffix="" />
-        </Card>
-        <Card>
-          <CardHeader title="에러율 (%, 30일)" />
-          <Spark data={ADMIN_ERROR_RATE_30D} color="#f59e0b" suffix="%" />
-        </Card>
-        <Card>
-          <CardHeader
-            title="헬스 체크"
-            action={
-              <Link
-                href="/admin/health"
-                className="text-[11px] text-brand-600 hover:underline"
-              >
-                상세 →
-              </Link>
-            }
-          />
-          <ul className="space-y-1.5">
-            {ADMIN_HEALTH.slice(0, 5).map((h) => (
-              <li
-                key={h.service}
-                className="flex items-center justify-between rounded-lg border border-ink-100 px-3 py-1.5 text-xs"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-block h-2 w-2 rounded-full ${
-                      h.status === "healthy"
-                        ? "bg-emerald-500"
-                        : h.status === "degraded"
-                          ? "bg-amber-500"
-                          : "bg-red-500"
-                    }`}
-                  />
-                  <span className="font-medium">{h.service}</span>
+          <CardHeader title="등급 분포" />
+          <div className="space-y-2">
+            {Object.entries(stats?.planDistribution ?? {}).map(([plan, n]) => {
+              const total = Object.values(stats?.planDistribution ?? {}).reduce(
+                (s, v) => s + v,
+                0,
+              );
+              const pct = total ? Math.round((n / total) * 100) : 0;
+              return (
+                <div key={plan}>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-ink-700">{plan}</span>
+                    <span className="text-ink-500">
+                      {n}명 · {pct}%
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-ink-100">
+                    <div
+                      className="h-full bg-brand-600"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
                 </div>
-                <span className="font-mono text-ink-500">{h.latencyMs} ms</span>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
         </Card>
-      </section>
+      </div>
 
-      <section className="mt-5">
-        <Card>
-          <CardHeader
-            title="최근 감사 로그"
-            action={
-              <Link
-                href="/admin/audit-logs"
-                className="text-[11px] text-brand-600 hover:underline"
-              >
-                전체 보기 →
-              </Link>
-            }
-          />
-          <ul className="divide-y divide-ink-100">
-            {ADMIN_AUDIT_LOGS.slice(0, 5).map((l) => (
-              <li
-                key={l.id}
-                className="grid grid-cols-[120px_1fr_140px] gap-3 py-2 text-xs"
-              >
-                <span className="font-mono text-ink-500">{l.at}</span>
-                <span>
-                  <Badge
-                    tone={
-                      l.severity === "critical"
-                        ? "danger"
-                        : l.severity === "warning"
-                          ? "warning"
-                          : "neutral"
-                    }
-                  >
-                    {l.action}
-                  </Badge>
-                  <span className="ml-2 text-ink-700">{l.target}</span>
-                </span>
-                <span className="text-right text-ink-500">{l.actor}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </section>
+      <Card className="mt-4">
+        <CardHeader
+          title="최근 감사 로그"
+          action={
+            <Link
+              href="/admin/audit-logs"
+              className="text-xs text-brand-600 hover:underline"
+            >
+              전체 보기 →
+            </Link>
+          }
+        />
+        {logs.length === 0 ? (
+          <p className="py-3 text-xs text-ink-500">기록이 없다.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <tbody>
+              {logs.map((l) => (
+                <tr key={l.id} className="border-b border-ink-50">
+                  <td className="py-2 text-ink-500">
+                    {new Date(l.at).toLocaleString("ko-KR")}
+                  </td>
+                  <td className="py-2 font-medium text-ink-800">{l.actor}</td>
+                  <td className="py-2">{l.action}</td>
+                  <td className="py-2 text-ink-500">{l.target}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
     </div>
   );
 }
@@ -155,71 +160,25 @@ export default function AdminDashboardPage() {
 function Kpi({
   label,
   value,
-  delta,
-  deltaTone = "success",
+  tone = "default",
 }: {
   label: string;
-  value: string;
-  delta?: string;
-  deltaTone?: "success" | "danger";
+  value: number | string;
+  tone?: "default" | "warning" | "danger";
 }) {
   return (
-    <div className="rounded-xl border border-ink-200 bg-white p-3.5">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
-        {label}
-      </div>
-      <div className="mt-1.5 text-xl font-semibold text-ink-900">{value}</div>
-      {delta && (
-        <div
-          className={`mt-1 text-[10px] font-medium ${
-            deltaTone === "danger" ? "text-red-600" : "text-emerald-600"
-          }`}
-        >
-          {delta} 전월 대비
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Spark({
-  data,
-  color,
-  suffix,
-}: {
-  data: number[];
-  color: string;
-  suffix: string;
-}) {
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const pts = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * 400;
-      const y = 100 - ((v - min) / range) * 100;
-      return `${x},${y}`;
-    })
-    .join(" ");
-  const last = data[data.length - 1];
-  return (
-    <div>
-      <svg viewBox="0 0 400 100" className="w-full" preserveAspectRatio="none">
-        <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5} />
-      </svg>
-      <div className="mt-2 flex justify-between text-[10px] text-ink-500">
-        <span>
-          최저 {min.toFixed(1)}
-          {suffix}
-        </span>
-        <span className="font-medium text-ink-800">
-          현재 {last.toFixed(1)}
-          {suffix}
-        </span>
-        <span>
-          최고 {max.toFixed(1)}
-          {suffix}
-        </span>
+    <div className="rounded-xl border border-ink-200 bg-white p-4">
+      <div className="text-[11px] text-ink-500">{label}</div>
+      <div
+        className={
+          tone === "danger"
+            ? "mt-1 text-2xl font-semibold text-red-600"
+            : tone === "warning"
+              ? "mt-1 text-2xl font-semibold text-amber-600"
+              : "mt-1 text-2xl font-semibold text-ink-900"
+        }
+      >
+        {value}
       </div>
     </div>
   );

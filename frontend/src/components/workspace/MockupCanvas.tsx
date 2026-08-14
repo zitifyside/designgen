@@ -3,13 +3,15 @@
 import { CSSProperties, useMemo } from "react";
 import { tokensToCssVars } from "@/lib/token-utils";
 import type { DesignTokens, Mockup } from "@/lib/types";
-import { MockupRenderer } from "./MockupRenderer";
+import { MockupRenderer, type ElementSelection } from "./MockupRenderer";
 
 const VP = {
   Desktop: 1440,
   Tablet: 768,
   Mobile: 390,
 } as const;
+
+const CANVAS_HEIGHT = { Desktop: 900, Tablet: 900, Mobile: 720 } as const;
 
 interface Props {
   tokens: DesignTokens;
@@ -18,6 +20,8 @@ interface Props {
   viewport: keyof typeof VP;
   zoom: number;
   caption?: string;
+  selectable?: boolean;
+  onSelect?: (selection: ElementSelection) => void;
 }
 
 export function MockupCanvas({
@@ -27,9 +31,12 @@ export function MockupCanvas({
   viewport,
   zoom,
   caption,
+  selectable,
+  onSelect,
 }: Props) {
   const vars = useMemo(() => tokensToCssVars(tokens), [tokens]);
   const width = VP[viewport];
+  const height = CANVAS_HEIGHT[viewport];
   const scale = zoom / 100;
 
   return (
@@ -43,6 +50,7 @@ export function MockupCanvas({
         className="relative overflow-hidden rounded-2xl border border-ink-200 bg-white"
         style={{
           width: width * scale,
+          height: height * scale,
           maxWidth: "100%",
         }}
       >
@@ -51,27 +59,21 @@ export function MockupCanvas({
             {
               ...(vars as CSSProperties),
               width,
+              height,
               transform: `scale(${scale})`,
               transformOrigin: "top left",
               background: "var(--ds-color-bg)",
+              overflow: "hidden",
             } as CSSProperties
           }
         >
-          <div
-            style={{
-              minHeight: viewport === "Mobile" ? 720 : 900,
-            }}
-          >
-            <MockupRenderer mockup={mockup} projectName={projectName} />
-          </div>
+          <MockupRenderer
+            mockup={mockup}
+            projectName={projectName}
+            tokens={tokens}
+            onSelect={selectable ? onSelect : undefined}
+          />
         </div>
-        <div
-          aria-hidden
-          style={{
-            width: width * scale,
-            height: (viewport === "Mobile" ? 720 : 900) * scale,
-          }}
-        />
       </div>
     </div>
   );

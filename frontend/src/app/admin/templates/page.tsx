@@ -1,61 +1,84 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
-import { Textarea } from "@/components/ui/Input";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ADMIN_TEMPLATE_REVIEWS, type TemplateReview } from "@/lib/admin-mock";
+import { api } from "@/lib/api";
+import type { Template, TemplateStatus } from "@/lib/types";
 
-type Filter = "all" | TemplateReview["status"];
+type Filter = "all" | TemplateStatus;
 
-const TONE: Record<
-  TemplateReview["status"],
-  "warning" | "success" | "danger" | "neutral"
-> = {
-  Pending: "warning",
-  Approved: "success",
-  Rejected: "danger",
-  RequestChanges: "neutral",
+const LABEL: Record<TemplateStatus, string> = {
+  Pending: "심사 대기",
+  Approved: "게시 중",
+  Rejected: "거부됨",
+  RequestChanges: "수정 요청",
 };
 
+const TONE: Record<TemplateStatus, "warning" | "success" | "danger" | "neutral"> =
+  {
+    Pending: "warning",
+    Approved: "success",
+    Rejected: "danger",
+    RequestChanges: "neutral",
+  };
+
 export default function AdminTemplatesPage() {
-  const [list, setList] = useState<TemplateReview[]>(ADMIN_TEMPLATE_REVIEWS);
+  const [items, setItems] = useState<Template[]>([]);
   const [filter, setFilter] = useState<Filter>("Pending");
-  const [rejectTarget, setRejectTarget] = useState<TemplateReview | null>(null);
+  const [target, setTarget] = useState<Template | null>(null);
+  const [decision, setDecision] = useState<TemplateStatus>("Approved");
   const [reason, setReason] = useState("");
-  const [action, setAction] = useState<"Rejected" | "RequestChanges">(
-    "Rejected",
-  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = list.filter((r) =>
-    filter === "all" ? true : r.status === filter,
-  );
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      setItems(
+        await api.admin.templates({
+          status: filter === "all" ? undefined : filter,
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "템플릿을 불러오지 못했다.");
+    }
+  }, [filter]);
 
-  const approve = (id: string) =>
-    setList((arr) =>
-      arr.map((r) => (r.id === id ? { ...r, status: "Approved" } : r)),
-    );
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const submitReject = () => {
-    if (!rejectTarget || reason.trim().length < 5) return;
-    setList((arr) =>
-      arr.map((r) =>
-        r.id === rejectTarget.id ? { ...r, status: action } : r,
-      ),
-    );
-    setRejectTarget(null);
-    setReason("");
+  const moderate = async () => {
+    if (!target) return;
+    if (decision !== "Approved" && !reason.trim()) {
+      setError("거부·수정 요청은 사유 입력이 필수다.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.admin.moderateTemplate(target.id, decision, reason.trim());
+      setTarget(null);
+      setReason("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "처리에 실패했다.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <PageHeader
         title="템플릿 심사"
-        description="마켓에 등록 요청된 템플릿을 심사한다. Pending → Approved / Rejected / RequestChanges."
+        description="마켓 등록 요청을 검토한다. 승인 시 즉시 게시된다."
         action={
           <Tabs
             size="sm"
@@ -63,103 +86,124 @@ export default function AdminTemplatesPage() {
             onChange={(v) => setFilter(v as Filter)}
             items={[
               { value: "Pending", label: "대기" },
-              { value: "Approved", label: "승인" },
+              { value: "Approved", label: "게시" },
               { value: "Rejected", label: "거부" },
-              { value: "RequestChanges", label: "수정 요청" },
               { value: "all", label: "전체" },
             ]}
           />
         }
       />
 
-      <div className="space-y-3">
-        {filtered.map((r) => (
-          <Card key={r.id}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Badge tone={TONE[r.status]}>{r.status}</Badge>
-                  <Badge tone="neutral">{r.category}</Badge>
-                  <span className="text-xs font-semibold text-ink-900">
-                    {r.price === 0 ? "무료" : `$${r.price}`}
-                  </span>
-                </div>
-                <h3 className="mt-2 text-sm font-semibold text-ink-900">
-                  {r.templateName}
-                </h3>
-                <div className="mt-1 text-[11px] text-ink-500">
-                  by {r.authorEmail} · 제출 {r.submittedAt}
-                </div>
-              </div>
-              {r.status === "Pending" && (
-                <div className="flex shrink-0 flex-col gap-1.5">
-                  <Button size="sm" onClick={() => approve(r.id)}>
-                    승인
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setRejectTarget(r);
-                      setAction("RequestChanges");
-                    }}
-                  >
-                    수정 요청
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => {
-                      setRejectTarget(r);
-                      setAction("Rejected");
-                    }}
-                  >
-                    거부
-                  </Button>
-                </div>
-              )}
-            </div>
-          </Card>
-        ))}
-        {filtered.length === 0 && (
-          <Card>
-            <p className="py-8 text-center text-xs text-ink-400">
-              해당 상태의 템플릿이 없다.
-            </p>
-          </Card>
-        )}
-      </div>
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
+      <Card padded={false}>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-ink-200 text-left text-ink-500">
+              <th className="px-4 py-3 font-medium">이름</th>
+              <th className="px-4 py-3 font-medium">작성자</th>
+              <th className="px-4 py-3 font-medium">카테고리</th>
+              <th className="px-4 py-3 font-medium">가격</th>
+              <th className="px-4 py-3 font-medium">상태</th>
+              <th className="px-4 py-3 font-medium">등록</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((t) => (
+              <tr key={t.id} className="border-b border-ink-100">
+                <td className="px-4 py-3">
+                  <div className="font-medium text-ink-900">{t.name}</div>
+                  <div className="text-[10px] text-ink-500">{t.description}</div>
+                </td>
+                <td className="px-4 py-3 text-ink-600">{t.authorName}</td>
+                <td className="px-4 py-3 text-ink-600">{t.category}</td>
+                <td className="px-4 py-3">
+                  {t.price === 0 ? "무료" : `$${t.price}`}
+                </td>
+                <td className="px-4 py-3">
+                  <Badge tone={TONE[t.status]}>{LABEL[t.status]}</Badge>
+                </td>
+                <td className="px-4 py-3 text-ink-500">
+                  {new Date(t.createdAt).toLocaleDateString("ko-KR")}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setTarget(t);
+                        setDecision("Approved");
+                      }}
+                    >
+                      승인
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setTarget(t);
+                        setDecision("Rejected");
+                      }}
+                    >
+                      거부
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setTarget(t);
+                        setDecision("RequestChanges");
+                      }}
+                    >
+                      수정 요청
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-ink-400">
+                  해당 상태의 템플릿이 없다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
 
       <Modal
-        open={!!rejectTarget}
-        onClose={() => setRejectTarget(null)}
-        title={action === "Rejected" ? "템플릿 거부" : "수정 요청"}
-        description="작성자에게 자동 통지된다."
+        open={!!target}
+        onClose={() => setTarget(null)}
+        title={`템플릿 ${LABEL[decision]}`}
+        description="처리 결과는 작성자에게 인앱 알림으로 통지된다."
+        size="sm"
         footer={
           <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRejectTarget(null)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>
               취소
             </Button>
-            <Button
-              variant={action === "Rejected" ? "danger" : "primary"}
-              size="sm"
-              disabled={reason.trim().length < 5}
-              onClick={submitReject}
-            >
-              발송
+            <Button size="sm" loading={busy} onClick={() => void moderate()}>
+              확인
             </Button>
           </div>
         }
       >
+        <div className="mb-3 text-xs text-ink-600">
+          대상: <b>{target?.name}</b>
+        </div>
         <Textarea
-          label="사유 (5자 이상)"
+          label={decision === "Approved" ? "메모 (선택)" : "사유 (필수)"}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          rows={4}
+          rows={3}
+          countMax={500}
+          maxLength={500}
         />
       </Modal>
     </div>

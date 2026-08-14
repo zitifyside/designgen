@@ -7,9 +7,10 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { useProjectStore } from "@/store/project-store";
-import type { Platform } from "@/lib/types";
+import type { ConceptBrief, DsMode, Platform } from "@/lib/types";
 
 const PLATFORMS: Array<{ value: Platform; label: string; enabled: boolean }> = [
   { value: "Web", label: "Web", enabled: true },
@@ -18,15 +19,19 @@ const PLATFORMS: Array<{ value: Platform; label: string; enabled: boolean }> = [
   { value: "APP", label: "APP", enabled: false },
 ];
 
-interface ConceptDraft {
-  name: string;
-  direction: string;
-  keywords: string;
-}
+/** 생성 화면 프리셋 (기능정의서 v0.2.0 §4.1) — 빈 값은 'AI 자동 선택'이다. */
+const SCREEN_PRESETS: Array<{ value: string; label: string }> = [
+  { value: "", label: "AI 자동 선택" },
+  { value: "landing", label: "랜딩" },
+  { value: "login", label: "로그인" },
+  { value: "dashboard", label: "대시보드" },
+  { value: "list", label: "목록" },
+  { value: "detail", label: "상세" },
+];
 
-const EMPTY_CONCEPT: ConceptDraft = { name: "", direction: "", keywords: "" };
+const EMPTY_CONCEPT: ConceptBrief = { name: "", direction: "", keywords: "" };
 
-const CONCEPT_PLACEHOLDERS: ConceptDraft[] = [
+const CONCEPT_PLACEHOLDERS: ConceptBrief[] = [
   {
     name: "Modern Minimal",
     direction: "낮은 채도·넓은 여백·중성 컬러 중심. 차분하고 신뢰감 있는 무드.",
@@ -49,70 +54,96 @@ type ConceptMode = "auto" | "manual";
 export default function NewProjectPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
   const create = useProjectStore((s) => s.create);
+
+  const isFree = user?.plan === "Free" || user?.plan === undefined;
+  const canUnifiedDs = user?.plan === "Pro" || user?.plan === "Team" || user?.plan === "Admin";
+
   const [name, setName] = useState("");
   const [requirements, setRequirements] = useState("");
   const [platform, setPlatform] = useState<Platform>("Web");
-  const [conceptCount, setConceptCount] = useState<1 | 2 | 3>(
-    user?.plan === "Free" ? 1 : 3,
-  );
-  const [variantCount, setVariantCount] = useState<3 | 5>(
-    user?.plan === "Free" ? 3 : 5,
-  );
+  const [conceptCount, setConceptCount] = useState<1 | 2 | 3>(isFree ? 1 : 3);
+  const [variantCount, setVariantCount] = useState<3 | 5>(isFree ? 3 : 5);
+  const [dsMode, setDsMode] = useState<DsMode>("per_concept");
+  const [screenPreset, setScreenPreset] = useState<string>("");
+  const [customScreen, setCustomScreen] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [conceptMode, setConceptMode] = useState<ConceptMode>("auto");
-  const [concepts, setConcepts] = useState<ConceptDraft[]>([
+  const [concepts, setConcepts] = useState<ConceptBrief[]>([
     { ...EMPTY_CONCEPT },
     { ...EMPTY_CONCEPT },
     { ...EMPTY_CONCEPT },
   ]);
-  const isFree = user?.plan === "Free";
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const updateConcept = (idx: number, patch: Partial<ConceptDraft>) => {
-    setConcepts((arr) =>
-      arr.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
-    );
+  const updateConcept = (idx: number, patch: Partial<ConceptBrief>) => {
+    setConcepts((arr) => arr.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
   };
 
   const applyPlaceholder = (idx: number) =>
     updateConcept(idx, CONCEPT_PLACEHOLDERS[idx % 3]);
-
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !requirements.trim()) return;
-    if (conceptMode === "manual") {
-      const active = concepts.slice(0, conceptCount);
-      const incomplete = active.some(
-        (c) => !c.name.trim() || !c.direction.trim(),
-      );
-      if (incomplete) {
-        alert(
-          `직접 입력 모드는 컨셉 ${conceptCount}개의 이름·방향성이 모두 채워져야 한다.`,
-        );
-        return;
-      }
-    }
-    const project = create({
-      name: name.trim(),
-      requirementsText: requirements.trim(),
-      platform,
-    });
-    router.push(`/projects/new/generating?projectId=${project.id}`);
-  };
 
   const handleFiles = (list: FileList | null) => {
     if (!list) return;
     setFiles(Array.from(list).slice(0, 5));
   };
 
-  const expectedCredit =
-    (conceptCount * variantCount) / 5; // 5종 시안 = 1 크레딧 단위
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!name.trim() || !requirements.trim()) return;
+
+    let briefs: ConceptBrief[] | undefined;
+    if (conceptMode === "manual") {
+      const active = concepts.slice(0, conceptCount);
+      if (active.some((c) => !c.name.trim() || !c.direction.trim())) {
+        setError(
+          `직접 입력 모드는 컨셉 ${conceptCount}개의 이름·방향성이 모두 채워져야 한다.`,
+        );
+        return;
+      }
+      briefs = active;
+    }
+
+    const targetScreen =
+      screenPreset === "custom" ? customScreen.trim() : screenPreset;
+
+    setSubmitting(true);
+    try {
+      const project = await create({
+        name: name.trim(),
+        requirementsText: requirements.trim(),
+        platform,
+        conceptCount,
+        variantCount,
+        dsMode,
+        targetScreen: targetScreen || undefined,
+        conceptBriefs: briefs,
+      });
+      const generation = await api.generations.start(project.id, {
+        concepts: conceptCount,
+        variants: variantCount,
+        dsMode,
+        targetScreen: targetScreen || undefined,
+        conceptBriefs: briefs,
+      });
+      void refreshUser();
+      router.push(
+        `/projects/new/generating?projectId=${project.id}&generationId=${generation.id}`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "생성을 시작하지 못했다.");
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <PageHeader
         title="새 프로젝트"
-        description="요건사항을 입력하면 AI 가 DS 와 시안을 자동 생성한다."
+        description="요건사항을 입력하면 AI 가 DS 와 단일 화면의 구조 변형 시안을 자동 생성한다."
         breadcrumb={
           <>
             <span>대시보드</span>
@@ -150,9 +181,7 @@ export default function NewProjectPage() {
         </Card>
 
         <Card>
-          <div className="text-xs font-medium text-ink-700">
-            파일 첨부 (선택)
-          </div>
+          <div className="text-xs font-medium text-ink-700">파일 첨부 (선택)</div>
           <p className="mt-0.5 text-[11px] text-ink-500">
             .md·.png·.jpg·.pdf — 이미지 20MB·문서 10MB, 최대 5개
           </p>
@@ -187,6 +216,11 @@ export default function NewProjectPage() {
               ))}
             </ul>
           )}
+
+          <p className="mt-2 text-[10px] text-amber-700">
+            ※ 파일 업로드 API 는 아직 연동 전이라, 현재 생성은 위 요건 텍스트만
+            분석한다.
+          </p>
         </Card>
 
         <Card>
@@ -216,12 +250,58 @@ export default function NewProjectPage() {
         </Card>
 
         <Card>
+          <div className="text-xs font-medium text-ink-700">
+            생성 화면 <span className="font-normal text-ink-400">(선택)</span>
+          </div>
+          <p className="mt-0.5 text-[11px] text-ink-500">
+            시안은 이 화면 하나의 레이아웃 구조 변형으로 생성된다. 미지정 시 AI 가
+            요건을 분석해 대표 화면을 고른다.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {SCREEN_PRESETS.map((s) => (
+              <button
+                key={s.value || "auto"}
+                type="button"
+                onClick={() => setScreenPreset(s.value)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                  screenPreset === s.value
+                    ? "border-brand-500 bg-brand-50 text-brand-700"
+                    : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setScreenPreset("custom")}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                screenPreset === "custom"
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
+                  : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+              }`}
+            >
+              직접 입력
+            </button>
+          </div>
+          {screenPreset === "custom" && (
+            <div className="mt-2">
+              <Input
+                label="화면명"
+                placeholder="예: 주문 내역, 온보딩 3단계"
+                value={customScreen}
+                onChange={(e) => setCustomScreen(e.target.value)}
+                maxLength={60}
+              />
+            </div>
+          )}
+        </Card>
+
+        <Card>
           <div className="grid grid-cols-2 gap-6">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-ink-700">
-                  컨셉 수
-                </span>
+                <span className="text-xs font-medium text-ink-700">컨셉 수</span>
                 {isFree && <Badge tone="warning">Free: 1종 고정</Badge>}
               </div>
               <div className="mt-2 grid grid-cols-3 gap-1.5">
@@ -272,6 +352,58 @@ export default function NewProjectPage() {
         </Card>
 
         <Card>
+          <div className="text-xs font-medium text-ink-700">DS 생성 방식</div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setDsMode("per_concept")}
+              className={`rounded-xl border p-3 text-left transition ${
+                dsMode === "per_concept"
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-ink-200 bg-white hover:bg-ink-50"
+              }`}
+            >
+              <div className="text-xs font-semibold text-ink-900">
+                컨셉별 DS 생성
+                <span className="ml-1 text-[10px] font-normal text-ink-500">
+                  기본값
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-600">
+                컨셉마다 Color·Typography·Spacing 등 전 카테고리를 독립 생성한다.
+                Primary Hue 60도 이상 구별.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              disabled={!canUnifiedDs}
+              onClick={() => canUnifiedDs && setDsMode("unified")}
+              title={
+                canUnifiedDs
+                  ? undefined
+                  : "'단일 DS 통일' 은 Pro 이상 등급에서 선택할 수 있다."
+              }
+              className={`relative rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                dsMode === "unified"
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-ink-200 bg-white hover:bg-ink-50"
+              }`}
+            >
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-900">
+                {!canUnifiedDs && <span aria-hidden>🔒</span>}
+                단일 DS 통일
+                {!canUnifiedDs && <Badge tone="brand">Pro+</Badge>}
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-600">
+                Base Token 1벌을 전 컨셉이 공유하고 강조색만 변주한다.
+                Typography·Spacing 은 공통 고정.
+              </p>
+            </button>
+          </div>
+        </Card>
+
+        <Card>
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-medium text-ink-700">컨셉 정의</div>
@@ -307,8 +439,8 @@ export default function NewProjectPage() {
 
           {conceptMode === "auto" ? (
             <div className="rounded-lg bg-ink-50 px-3 py-3 text-xs text-ink-600">
-              AI 가 요건 텍스트를 분석해 {conceptCount}종 컨셉의 이름·방향성·
-              색감을 자동 추출한다. 결과는 작업 화면에서 언제든 수정 가능하다.
+              AI 가 요건 텍스트를 분석해 {conceptCount}종 컨셉의 이름·방향성·색감을
+              자동 추출한다. 결과는 작업 화면에서 언제든 수정 가능하다.
             </div>
           ) : (
             <div className="space-y-3">
@@ -371,20 +503,35 @@ export default function NewProjectPage() {
                 );
               })}
               <p className="text-[10px] text-ink-400">
-                직접 입력 모드에서는 활성 컨셉 {conceptCount}개의 이름·방향성이
-                모두 채워져야 생성을 시작할 수 있다.
+                직접 입력 모드에서는 활성 컨셉 {conceptCount}개의 이름·방향성이 모두
+                채워져야 생성을 시작할 수 있다.
               </p>
             </div>
           )}
         </Card>
 
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {error}
+          </div>
+        )}
+
         <div className="sticky bottom-0 -mx-6 mt-6 border-t border-ink-200 bg-white/90 px-6 py-4 backdrop-blur md:mx-0 md:rounded-xl md:border">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-ink-500">
-              총 {conceptCount * variantCount}종 시안 · 예상 소요 2~3분 · 차감
-              크레딧 약 {expectedCredit.toFixed(0)}회
+              컨셉 {conceptCount} × 구조 변형 {variantCount} ={" "}
+              {conceptCount * variantCount}종 시안 · 예상 소요 2~3분 · 월간 생성
+              한도 <span className="font-medium text-ink-700">1회 차감</span>
+              <span className="ml-1 text-[10px] text-ink-400">
+                (v1.0 균일제)
+              </span>
             </div>
-            <Button type="submit" size="lg" disabled={!name || !requirements}>
+            <Button
+              type="submit"
+              size="lg"
+              loading={submitting}
+              disabled={!name || !requirements}
+            >
               생성 시작
             </Button>
           </div>

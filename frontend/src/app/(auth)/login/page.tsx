@@ -11,7 +11,7 @@ export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("demo@designgenerator.io");
-  const [password, setPassword] = useState("demo1234!");
+  const [password, setPassword] = useState("demo1234");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +23,11 @@ export default function LoginPage() {
       await login(email, password);
       router.push("/dashboard");
     } catch (err) {
-      setError("로그인에 실패했다. 잠시 후 다시 시도한다.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "로그인에 실패했다. 잠시 후 다시 시도한다.",
+      );
     } finally {
       setLoading(false);
     }

@@ -51,7 +51,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
   const hydrated = useAuthStore((s) => s.hydrated);
   const user = useAuthStore((s) => s.user);
-  const updateProfile = useAuthStore((s) => s.updateProfile);
   const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
@@ -70,7 +69,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Admin 권한 가드 — Mock: Admin 등급이 아니면 임시 승격 안내
+  // Admin 권한 가드. 서버(RBAC)가 최종 판정하며, 여기서는 화면 접근만 막는다.
   if (user.plan !== "Admin") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-ink-900 p-6">
@@ -84,17 +83,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             현재 등급은 <Badge tone="warning">{user.plan}</Badge>.
           </p>
           <p className="mt-2 text-[11px] text-ink-500">
-            (개발 환경 한정) 아래 버튼으로 본 세션을 Admin 으로 임시 승격할 수
-            있다. 실제 서비스에서는 RBAC 가 강제된다.
+            등급 변경은 서버에서만 가능하다 — Admin 계정으로 로그인하거나 관리자에게
+            권한 부여를 요청한다.
           </p>
           <div className="mt-5 flex justify-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => updateProfile({ plan: "Admin" })}
-            >
-              Admin 으로 임시 승격
-            </Button>
             <Link href="/dashboard">
               <Button variant="outline" size="sm">
                 대시보드로 돌아가기
@@ -172,7 +164,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
             <button
               onClick={() => {
-                logout();
+                void logout();
                 router.push("/login");
               }}
               className="rounded-lg border border-ink-700 px-2 py-1 text-[10px] text-ink-300 hover:bg-ink-800"

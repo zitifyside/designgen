@@ -1,99 +1,96 @@
 "use client";
 
 import { create } from "zustand";
-import { MOCK_PROJECTS } from "@/lib/mock-data";
-import type { Platform, Project, ProjectStatus } from "@/lib/types";
+import { api } from "@/lib/api";
+import type { ConceptBrief, DsMode, Platform, Project } from "@/lib/types";
 
 interface ProjectState {
   projects: Project[];
   loaded: boolean;
-  load: () => void;
-  toggleFavorite: (id: string) => void;
+  loading: boolean;
+  error: string | null;
+
+  load: (force?: boolean) => Promise<void>;
+  toggleFavorite: (id: string) => Promise<void>;
   create: (input: {
     name: string;
     requirementsText: string;
     platform: Platform;
-  }) => Project;
-  update: (id: string, patch: Partial<Project>) => void;
-  remove: (id: string) => void;
-  setStatus: (id: string, status: ProjectStatus) => void;
+    conceptCount?: number;
+    variantCount?: number;
+    dsMode?: DsMode;
+    targetScreen?: string;
+    targetScreenTitle?: string;
+    conceptBriefs?: ConceptBrief[];
+  }) => Promise<Project>;
+  update: (id: string, patch: Partial<Project>) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  /** 서버가 돌려준 최신 프로젝트를 목록에 반영한다. */
+  upsert: (project: Project) => void;
   getById: (id: string) => Project | undefined;
-}
-
-const STORAGE_KEY = "adg.projects.v1";
-
-function persist(projects: Project[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-}
-
-function readPersisted(): Project[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as Project[];
-  } catch {
-    return null;
-  }
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
   projects: [],
   loaded: false,
+  loading: false,
+  error: null,
 
-  load: () => {
-    if (get().loaded) return;
-    const persisted = readPersisted();
-    set({ projects: persisted ?? MOCK_PROJECTS, loaded: true });
+  load: async (force = false) => {
+    if (get().loading) return;
+    if (get().loaded && !force) return;
+    set({ loading: true, error: null });
+    try {
+      const projects = await api.projects.list();
+      set({ projects, loaded: true, loading: false });
+    } catch (e) {
+      set({
+        loading: false,
+        loaded: true,
+        error: e instanceof Error ? e.message : "프로젝트를 불러오지 못했습니다.",
+      });
+    }
   },
 
-  toggleFavorite: (id) => {
-    const next = get().projects.map((p) =>
-      p.id === id ? { ...p, isFavorite: !p.isFavorite } : p,
-    );
-    persist(next);
-    set({ projects: next });
+  toggleFavorite: async (id) => {
+    const updated = await api.projects.toggleFavorite(id);
+    get().upsert(updated);
   },
 
-  create: ({ name, requirementsText, platform }) => {
-    const now = new Date().toISOString();
-    const id = `p_${Math.random().toString(36).slice(2, 8)}`;
-    const project: Project = {
-      id,
-      ownerId: "u_001",
-      name,
-      description: requirementsText.slice(0, 80),
-      platform,
-      status: "Generating",
-      isFavorite: false,
-      requirementsText,
-      createdAt: now,
-      updatedAt: now,
-      thumbnailConcept: "A",
-      thumbnailMockup: 0,
-    };
-    const next = [project, ...get().projects];
-    persist(next);
-    set({ projects: next });
+  create: async (input) => {
+    const project = await api.projects.create({
+      name: input.name,
+      requirementsText: input.requirementsText,
+      platform: input.platform,
+      conceptCount: input.conceptCount,
+      variantCount: input.variantCount,
+      dsMode: input.dsMode,
+      targetScreen: input.targetScreen,
+      targetScreenTitle: input.targetScreenTitle,
+      conceptBriefs: input.conceptBriefs,
+    });
+    set({ projects: [project, ...get().projects] });
     return project;
   },
 
-  update: (id, patch) => {
-    const next = get().projects.map((p) =>
-      p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p,
-    );
-    persist(next);
-    set({ projects: next });
+  update: async (id, patch) => {
+    const updated = await api.projects.update(id, patch);
+    get().upsert(updated);
   },
 
-  remove: (id) => {
-    const next = get().projects.filter((p) => p.id !== id);
-    persist(next);
-    set({ projects: next });
+  remove: async (id) => {
+    await api.projects.remove(id);
+    set({ projects: get().projects.filter((p) => p.id !== id) });
   },
 
-  setStatus: (id, status) => get().update(id, { status }),
+  upsert: (project) => {
+    const exists = get().projects.some((p) => p.id === project.id);
+    set({
+      projects: exists
+        ? get().projects.map((p) => (p.id === project.id ? project : p))
+        : [project, ...get().projects],
+    });
+  },
 
   getById: (id) => get().projects.find((p) => p.id === id),
 }));

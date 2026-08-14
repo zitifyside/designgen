@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/Slider";
 import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
-import type { ConceptLabel, DesignTokens } from "@/lib/types";
+import type { ConceptLabel, DesignTokens, DsMode } from "@/lib/types";
 
 const SECTIONS = [
   "Color",
@@ -32,10 +32,15 @@ export function DSController({
   concept,
   conceptName,
   tokens,
+  readOnly = false,
+  dsMode = "per_concept",
 }: {
   concept: ConceptLabel;
   conceptName: string;
   tokens: DesignTokens;
+  /** 컨셉 확정 후 비확정 컨셉은 읽기 전용이다. */
+  readOnly?: boolean;
+  dsMode?: DsMode;
 }) {
   const [open, setOpen] = useState<Record<Section, boolean>>({
     Color: true,
@@ -62,14 +67,32 @@ export function DSController({
           {conceptName}
         </div>
         <button
-          onClick={() => reset(concept)}
+          onClick={() => void reset(concept)}
           className="mt-1.5 text-[11px] text-ink-500 hover:text-brand-600 hover:underline"
         >
-          ↺ 초기 토큰으로 되돌리기
+          ↺ 서버 저장본으로 되돌리기
         </button>
+
+        {readOnly && (
+          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-800">
+            컨셉 확정 후 비확정 컨셉은 읽기 전용이다. 수정하려면 상단에서 확정을
+            해제한다.
+          </div>
+        )}
+        {!readOnly && dsMode === "unified" && (
+          <div className="mt-2 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-2 text-[11px] leading-relaxed text-brand-700">
+            단일 DS 통일 — Typography·Spacing 등 Base 항목 수정은 전 컨셉에 함께
+            반영된다. 강조색(Secondary·Info)만 컨셉별로 달라진다.
+          </div>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto scrollbar-thin",
+          readOnly && "pointer-events-none opacity-60",
+        )}
+      >
         {/* COLOR */}
         <PanelSection
           title="Color"

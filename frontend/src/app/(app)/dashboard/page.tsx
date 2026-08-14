@@ -13,29 +13,54 @@ import { useProjectStore } from "@/store/project-store";
 
 type Sort = "updated" | "created" | "name";
 
+const RECENT_DAYS = 7;
+const RECENT_LIMIT = 5;
+
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
   const load = useProjectStore((s) => s.load);
   const projects = useProjectStore((s) => s.projects);
+  const loading = useProjectStore((s) => s.loading);
+  const error = useProjectStore((s) => s.error);
   const [sort, setSort] = useState<Sort>("updated");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
-    load();
-  }, [load]);
+    void load();
+    void refreshUser();
+  }, [load, refreshUser]);
 
-  const sorted = useMemo(() => {
-    const copy = [...projects];
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const copy = q
+      ? projects.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.description.toLowerCase().includes(q),
+        )
+      : [...projects];
     copy.sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name, "ko");
-      if (sort === "created")
-        return b.createdAt.localeCompare(a.createdAt);
+      if (sort === "created") return b.createdAt.localeCompare(a.createdAt);
       return b.updatedAt.localeCompare(a.updatedAt);
     });
     return copy;
-  }, [projects, sort]);
+  }, [projects, sort, query]);
 
-  const favorites = sorted.filter((p) => p.isFavorite);
-  const others = sorted.filter((p) => !p.isFavorite);
+  const favorites = filtered.filter((p) => p.isFavorite);
+  const others = filtered.filter((p) => !p.isFavorite);
+
+  // 최근 작업 — 최근 7일 5건 (기능정의서 v0.2.0 §3.1).
+  const recent = useMemo(() => {
+    const cutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000;
+    return [...projects]
+      .filter((p) => new Date(p.updatedAt).getTime() >= cutoff)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, RECENT_LIMIT);
+  }, [projects]);
+
+  const monthlyLimit = user?.monthlyGenerations.limit ?? 0;
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
@@ -49,12 +74,25 @@ export default function DashboardPage() {
         }
       />
 
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+          <button
+            className="ml-2 font-medium underline"
+            onClick={() => void load(true)}
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
+
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <UsageCard
           title="이번 달 생성"
           used={user?.monthlyGenerations.used ?? 0}
-          limit={user?.monthlyGenerations.limit ?? null}
+          limit={monthlyLimit === -1 ? null : monthlyLimit}
           unit="회"
+          note={monthlyLimit === -1 ? "무제한 플랜" : undefined}
           ctaHref="/me/usage"
           ctaLabel="상세 보기"
         />
@@ -76,6 +114,28 @@ export default function DashboardPage() {
         />
       </div>
 
+      {recent.length > 0 && (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-semibold text-ink-700">
+            최근 작업 · 최근 {RECENT_DAYS}일
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {recent.map((p) => (
+              <Link
+                key={p.id}
+                href={`/projects/${p.id}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
+              >
+                <span className="font-medium text-ink-900">{p.name}</span>
+                <span className="text-[10px] text-ink-400">
+                  {relativeTime(p.updatedAt)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {favorites.length > 0 && (
         <section className="mb-8">
           <h2 className="mb-3 text-sm font-semibold text-ink-700">
@@ -90,25 +150,38 @@ export default function DashboardPage() {
       )}
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-ink-700">
             전체 프로젝트 · {others.length}
           </h2>
-          <Tabs
-            size="sm"
-            value={sort}
-            onChange={(v) => setSort(v as Sort)}
-            items={[
-              { value: "updated", label: "최근 수정" },
-              { value: "created", label: "최근 생성" },
-              { value: "name", label: "이름" },
-            ]}
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="이름으로 검색"
+              className="w-44 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+            <Tabs
+              size="sm"
+              value={sort}
+              onChange={(v) => setSort(v as Sort)}
+              items={[
+                { value: "updated", label: "최근 수정" },
+                { value: "created", label: "최근 생성" },
+                { value: "name", label: "이름" },
+              ]}
+            />
+          </div>
         </div>
 
-        {others.length === 0 ? (
+        {loading && projects.length === 0 ? (
+          <div className="rounded-xl border border-ink-200 bg-white px-4 py-10 text-center text-sm text-ink-400">
+            프로젝트를 불러오는 중…
+          </div>
+        ) : others.length === 0 ? (
           <EmptyState
-            title="아직 프로젝트가 없다"
+            title={query ? "검색 결과가 없다" : "아직 프로젝트가 없다"}
             description="기획서·이미지·텍스트 어떤 입력으로도 시작할 수 있다."
             action={
               <Link href="/projects/new">
@@ -126,4 +199,14 @@ export default function DashboardPage() {
       </section>
     </div>
   );
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(diff / 60000);
+  if (minutes < 1) return "방금";
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.round(hours / 24)}일 전`;
 }

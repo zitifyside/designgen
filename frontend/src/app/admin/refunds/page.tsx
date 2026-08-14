@@ -1,127 +1,130 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Modal } from "@/components/ui/Modal";
-import { Tabs } from "@/components/ui/Tabs";
 import { Textarea } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ADMIN_REFUNDS, type RefundRequest } from "@/lib/admin-mock";
+import { api, type AdminRefund } from "@/lib/api";
 
-type Filter = "all" | "Pending" | "Approved" | "Rejected";
-
-const TONE: Record<RefundRequest["status"], "warning" | "success" | "danger"> = {
+const TONE: Record<string, "neutral" | "success" | "danger" | "warning"> = {
   Pending: "warning",
   Approved: "success",
   Rejected: "danger",
 };
 
 export default function AdminRefundsPage() {
-  const [list, setList] = useState<RefundRequest[]>(ADMIN_REFUNDS);
-  const [filter, setFilter] = useState<Filter>("Pending");
-  const [rejectTarget, setRejectTarget] = useState<RefundRequest | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
+  const [refunds, setRefunds] = useState<AdminRefund[]>([]);
+  const [target, setTarget] = useState<AdminRefund | null>(null);
+  const [approve, setApprove] = useState(true);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = list.filter((r) =>
-    filter === "all" ? true : r.status === filter,
-  );
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      setRefunds(await api.admin.refunds());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "환불 요청을 불러오지 못했다.");
+    }
+  }, []);
 
-  const approve = (id: string) => {
-    if (!confirm("Stripe Refund API 를 호출하여 환불을 즉시 처리한다. 계속?"))
-      return;
-    setList((arr) =>
-      arr.map((r) => (r.id === id ? { ...r, status: "Approved" } : r)),
-    );
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const resolve = async () => {
+    if (!target) return;
+    setBusy(true);
+    try {
+      await api.admin.resolveRefund(target.id, approve, note);
+      setTarget(null);
+      setNote("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "처리에 실패했다.");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const reject = () => {
-    if (!rejectTarget || rejectReason.trim().length < 5) return;
-    setList((arr) =>
-      arr.map((r) =>
-        r.id === rejectTarget.id ? { ...r, status: "Rejected" } : r,
-      ),
-    );
-    setRejectTarget(null);
-    setRejectReason("");
-  };
-
-  const pending = list.filter((r) => r.status === "Pending").length;
-  const totalPending = list
-    .filter((r) => r.status === "Pending")
-    .reduce((s, r) => s + r.amount, 0);
+  const pending = refunds.filter((r) => r.status === "Pending");
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <PageHeader
         title="환불 처리"
-        description={`대기 중 ${pending}건 · 합계 ₩${totalPending.toLocaleString()}`}
-        action={
-          <Tabs
-            size="sm"
-            value={filter}
-            onChange={(v) => setFilter(v as Filter)}
-            items={[
-              { value: "Pending", label: "대기" },
-              { value: "Approved", label: "승인" },
-              { value: "Rejected", label: "거부" },
-              { value: "all", label: "전체" },
-            ]}
-          />
-        }
+        description={`대기 ${pending.length}건 · 승인 시 Stripe Refund API 호출은 결제 연동 후 활성화된다.`}
       />
 
-      <Card>
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
+      <Card padded={false}>
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-ink-100 text-left text-ink-500">
-              <th className="py-2 font-medium">사용자</th>
-              <th className="py-2 font-medium">금액</th>
-              <th className="py-2 font-medium">사유</th>
-              <th className="py-2 font-medium">요청 일시</th>
-              <th className="py-2 font-medium">상태</th>
-              <th className="py-2 font-medium text-right">액션</th>
+            <tr className="border-b border-ink-200 text-left text-ink-500">
+              <th className="px-4 py-3 font-medium">요청자</th>
+              <th className="px-4 py-3 font-medium">금액</th>
+              <th className="px-4 py-3 font-medium">사유</th>
+              <th className="px-4 py-3 font-medium">상태</th>
+              <th className="px-4 py-3 font-medium">요청일</th>
+              <th />
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
-              <tr key={r.id} className="border-b border-ink-50">
-                <td className="py-2.5 font-medium">{r.userEmail}</td>
-                <td className="py-2.5 font-mono">
-                  ₩{r.amount.toLocaleString()}
+            {refunds.map((r) => (
+              <tr key={r.id} className="border-b border-ink-100">
+                <td className="px-4 py-3 font-mono text-ink-700">
+                  {r.userId ?? "—"}
                 </td>
-                <td className="py-2.5 text-ink-700">{r.reason}</td>
-                <td className="py-2.5 text-ink-500">{r.requestedAt}</td>
-                <td className="py-2.5">
-                  <Badge tone={TONE[r.status]}>{r.status}</Badge>
+                <td className="px-4 py-3 font-medium text-ink-900">
+                  ${(r.amountCents / 100).toFixed(2)}
                 </td>
-                <td className="py-2.5 text-right">
-                  {r.status === "Pending" ? (
-                    <div className="inline-flex gap-2">
-                      <button
-                        onClick={() => approve(r.id)}
-                        className="text-emerald-600 hover:underline"
+                <td className="px-4 py-3 text-ink-600">{r.reason || "—"}</td>
+                <td className="px-4 py-3">
+                  <Badge tone={TONE[r.status] ?? "neutral"}>{r.status}</Badge>
+                </td>
+                <td className="px-4 py-3 text-ink-500">
+                  {new Date(r.createdAt).toLocaleDateString("ko-KR")}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {r.status === "Pending" && (
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setTarget(r);
+                          setApprove(true);
+                        }}
                       >
                         승인
-                      </button>
-                      <button
-                        onClick={() => setRejectTarget(r)}
-                        className="text-red-600 hover:underline"
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setTarget(r);
+                          setApprove(false);
+                        }}
                       >
                         거부
-                      </button>
+                      </Button>
                     </div>
-                  ) : (
-                    <span className="text-ink-400">처리됨</span>
                   )}
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {refunds.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-ink-400">
-                  해당 상태의 요청이 없다.
+                <td colSpan={6} className="px-4 py-8 text-center text-ink-400">
+                  환불 요청이 없다.
                 </td>
               </tr>
             )}
@@ -130,42 +133,36 @@ export default function AdminRefundsPage() {
       </Card>
 
       <Modal
-        open={!!rejectTarget}
-        onClose={() => {
-          setRejectTarget(null);
-          setRejectReason("");
-        }}
-        title="환불 거부"
-        description="사유는 사용자에게 자동 통지된다."
+        open={!!target}
+        onClose={() => setTarget(null)}
+        title={approve ? "환불 승인" : "환불 거부"}
+        description={
+          approve
+            ? "승인 시 감사 로그에 기록되고 요청자에게 통지된다."
+            : "거부 사유는 요청자에게 전달된다."
+        }
+        size="sm"
         footer={
           <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setRejectTarget(null);
-                setRejectReason("");
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>
               취소
             </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={rejectReason.trim().length < 5}
-              onClick={reject}
-            >
-              거부
+            <Button size="sm" loading={busy} onClick={() => void resolve()}>
+              확인
             </Button>
           </div>
         }
       >
+        <div className="mb-3 text-xs text-ink-600">
+          금액 <b>${((target?.amountCents ?? 0) / 100).toFixed(2)}</b>
+        </div>
         <Textarea
-          label="거부 사유 (5자 이상)"
-          value={rejectReason}
-          onChange={(e) => setRejectReason(e.target.value)}
+          label="메모"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
           rows={3}
-          placeholder="환불 정책 §3.2 에 따라 결제 후 14일 경과로 거부…"
+          countMax={500}
+          maxLength={500}
         />
       </Modal>
     </div>

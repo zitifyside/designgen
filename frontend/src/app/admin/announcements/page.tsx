@@ -1,78 +1,83 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Modal } from "@/components/ui/Modal";
+import { Card } from "@/components/ui/Card";
 import { Input, Textarea } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ADMIN_ANNOUNCEMENTS, type Announcement } from "@/lib/admin-mock";
+import { api, type AnnouncementRecord } from "@/lib/api";
 
-type Audience = "all" | "free" | "pro" | "team";
-type Priority = "low" | "normal" | "high";
+const AUDIENCES = ["all", "free", "pro", "team"] as const;
+const PRIORITIES = ["low", "normal", "high"] as const;
 
-const PRIORITY_TONE: Record<Priority, "neutral" | "brand" | "danger"> = {
+const PRIORITY_TONE: Record<string, "neutral" | "brand" | "danger"> = {
   low: "neutral",
   normal: "brand",
   high: "danger",
 };
 
-const STATUS_TONE: Record<
-  Announcement["status"],
-  "neutral" | "warning" | "success" | "ink"
-> = {
-  Draft: "neutral",
-  Scheduled: "warning",
-  Published: "success",
-  Archived: "ink",
+const EMPTY: Partial<AnnouncementRecord> = {
+  title: "",
+  body: "",
+  audience: ["all"],
+  priority: "normal",
+  status: "Draft",
 };
 
 export default function AdminAnnouncementsPage() {
-  const [list, setList] = useState<Announcement[]>(ADMIN_ANNOUNCEMENTS);
+  const [items, setItems] = useState<AnnouncementRecord[]>([]);
+  const [form, setForm] = useState<Partial<AnnouncementRecord>>(EMPTY);
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({
-    title: "",
-    body: "",
-    audience: ["all"] as Audience[],
-    priority: "normal" as Priority,
-    startsAt: "",
-  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const create = () => {
-    if (!draft.title.trim() || !draft.body.trim()) return;
-    const next: Announcement = {
-      id: `an_${Date.now()}`,
-      title: draft.title.trim(),
-      body: draft.body.trim(),
-      audience: draft.audience,
-      priority: draft.priority,
-      startsAt: draft.startsAt || new Date().toISOString(),
-      status: "Published",
-    };
-    setList((arr) => [next, ...arr]);
-    setOpen(false);
-    setDraft({
-      title: "",
-      body: "",
-      audience: ["all"],
-      priority: "normal",
-      startsAt: "",
-    });
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      setItems(await api.admin.announcements());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "공지를 불러오지 못했다.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const save = async () => {
+    if (!form.title?.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (form.id) await api.admin.updateAnnouncement(form.id, form);
+      else await api.admin.createAnnouncement(form);
+      setOpen(false);
+      setForm(EMPTY);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "저장에 실패했다.");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const archive = (id: string) => {
-    setList((arr) =>
-      arr.map((a) => (a.id === id ? { ...a, status: "Archived" } : a)),
-    );
+  const remove = async (id: string) => {
+    setError(null);
+    try {
+      await api.admin.deleteAnnouncement(id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "삭제에 실패했다.");
+    }
   };
 
-  const toggleAudience = (a: Audience) => {
-    setDraft((d) => {
-      const set = new Set(d.audience);
-      if (set.has(a)) set.delete(a);
-      else set.add(a);
-      return { ...d, audience: Array.from(set) };
+  const toggleAudience = (a: string) => {
+    const cur = form.audience ?? [];
+    setForm({
+      ...form,
+      audience: cur.includes(a) ? cur.filter((x) => x !== a) : [...cur, a],
     });
   };
 
@@ -80,102 +85,130 @@ export default function AdminAnnouncementsPage() {
     <div className="mx-auto max-w-5xl px-6 py-8">
       <PageHeader
         title="공지사항"
-        description="대시보드 상단 배너 + 인앱 알림(우선순위 high)으로 노출된다."
-        action={<Button onClick={() => setOpen(true)}>+ 새 공지</Button>}
+        description="등록한 공지는 대시보드 배너와 인앱 알림(high)으로 노출된다."
+        action={
+          <Button
+            size="sm"
+            onClick={() => {
+              setForm(EMPTY);
+              setOpen(true);
+            }}
+          >
+            새 공지
+          </Button>
+        }
       />
 
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="space-y-3">
-        {list.map((a) => (
+        {items.map((a) => (
           <Card key={a.id}>
-            <CardHeader
-              title={a.title}
-              description={a.body}
-              action={
-                <div className="flex items-center gap-2">
-                  <Badge tone={PRIORITY_TONE[a.priority]}>
-                    {a.priority.toUpperCase()}
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-ink-900">
+                    {a.title}
+                  </span>
+                  <Badge tone={PRIORITY_TONE[a.priority] ?? "neutral"}>
+                    {a.priority}
                   </Badge>
-                  <Badge tone={STATUS_TONE[a.status]}>{a.status}</Badge>
+                  <Badge tone="neutral">{a.status}</Badge>
+                  <span className="text-[10px] text-ink-400">
+                    대상 {a.audience.join(", ")}
+                  </span>
                 </div>
-              }
-            />
-            <div className="flex items-center justify-between border-t border-ink-100 pt-3 text-[11px] text-ink-500">
-              <div>
-                대상: {a.audience.join(", ").toUpperCase()} · 시작{" "}
-                {a.startsAt.replace("T", " ")}
-                {a.endsAt && ` · 종료 ${a.endsAt.replace("T", " ")}`}
+                <p className="mt-2 whitespace-pre-wrap text-xs text-ink-600">
+                  {a.body}
+                </p>
               </div>
-              {a.status === "Published" && (
-                <button
-                  onClick={() => archive(a.id)}
-                  className="text-ink-500 hover:text-red-600"
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setForm(a);
+                    setOpen(true);
+                  }}
                 >
-                  보관 처리
-                </button>
-              )}
+                  수정
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void remove(a.id)}
+                >
+                  삭제
+                </Button>
+              </div>
             </div>
           </Card>
         ))}
+        {items.length === 0 && (
+          <Card>
+            <p className="py-6 text-center text-xs text-ink-400">
+              등록된 공지가 없다.
+            </p>
+          </Card>
+        )}
       </div>
 
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="새 공지 등록"
-        description="등록 즉시 대상 사용자에게 노출된다."
-        size="lg"
+        title={form.id ? "공지 수정" : "새 공지"}
+        size="md"
         footer={
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               취소
             </Button>
-            <Button
-              size="sm"
-              disabled={!draft.title.trim() || !draft.body.trim()}
-              onClick={create}
-            >
-              발행
+            <Button size="sm" loading={busy} onClick={() => void save()}>
+              저장
             </Button>
           </div>
         }
       >
-        <div className="space-y-3">
-          <Input
-            label="제목"
-            value={draft.title}
-            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-            maxLength={200}
-          />
+        <Input
+          label="제목"
+          value={form.title ?? ""}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+          maxLength={200}
+        />
+        <div className="mt-3">
           <Textarea
-            label="본문 (Markdown 지원)"
-            value={draft.body}
-            onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+            label="본문 (Markdown)"
+            value={form.body ?? ""}
+            onChange={(e) => setForm({ ...form, body: e.target.value })}
             rows={5}
             countMax={10000}
             maxLength={10000}
           />
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
             <div className="mb-1.5 text-xs font-medium text-ink-700">
               노출 대상
             </div>
             <div className="grid grid-cols-4 gap-1.5">
-              {(["all", "free", "pro", "team"] as Audience[]).map((a) => {
-                const active = draft.audience.includes(a);
-                return (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={() => toggleAudience(a)}
-                    className={`rounded-lg border py-2 text-xs font-medium ${
-                      active
-                        ? "border-brand-500 bg-brand-50 text-brand-700"
-                        : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
-                    }`}
-                  >
-                    {a.toUpperCase()}
-                  </button>
-                );
-              })}
+              {AUDIENCES.map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => toggleAudience(a)}
+                  className={`rounded-lg border py-2 text-[11px] font-medium ${
+                    (form.audience ?? []).includes(a)
+                      ? "border-brand-500 bg-brand-50 text-brand-700"
+                      : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                  }`}
+                >
+                  {a}
+                </button>
+              ))}
             </div>
           </div>
           <div>
@@ -183,21 +216,68 @@ export default function AdminAnnouncementsPage() {
               우선순위
             </div>
             <div className="grid grid-cols-3 gap-1.5">
-              {(["low", "normal", "high"] as Priority[]).map((p) => (
+              {PRIORITIES.map((p) => (
                 <button
                   key={p}
                   type="button"
-                  onClick={() => setDraft({ ...draft, priority: p })}
-                  className={`rounded-lg border py-2 text-xs font-medium ${
-                    draft.priority === p
+                  onClick={() => setForm({ ...form, priority: p })}
+                  className={`rounded-lg border py-2 text-[11px] font-medium ${
+                    form.priority === p
                       ? "border-brand-500 bg-brand-50 text-brand-700"
                       : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
                   }`}
                 >
-                  {p.toUpperCase()}
+                  {p}
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <Input
+            label="노출 시작 (선택)"
+            type="datetime-local"
+            value={(form.startsAt ?? "").slice(0, 16)}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                startsAt: e.target.value
+                  ? new Date(e.target.value).toISOString()
+                  : null,
+              })
+            }
+          />
+          <Input
+            label="노출 종료 (선택)"
+            type="datetime-local"
+            value={(form.endsAt ?? "").slice(0, 16)}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                endsAt: e.target.value
+                  ? new Date(e.target.value).toISOString()
+                  : null,
+              })
+            }
+          />
+        </div>
+        <div className="mt-3">
+          <div className="mb-1.5 text-xs font-medium text-ink-700">상태</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {["Draft", "Published"].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setForm({ ...form, status: s })}
+                className={`rounded-lg border py-2 text-[11px] font-medium ${
+                  form.status === s
+                    ? "border-brand-500 bg-brand-50 text-brand-700"
+                    : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
           </div>
         </div>
       </Modal>

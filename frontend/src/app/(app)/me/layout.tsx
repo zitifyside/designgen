@@ -9,6 +9,8 @@ const ITEMS = [
   { href: "/me/subscription", label: "구독", desc: "플랜·결제 수단·이력" },
   { href: "/me/credits", label: "크레딧", desc: "잔액·충전·소비 이력" },
   { href: "/me/usage", label: "사용량", desc: "월간 생성·Export 추이" },
+  { href: "/me/api-keys", label: "API Key", desc: "Public API·MCP 인증 (Pro+)" },
+  { href: "/me/team", label: "팀", desc: "멤버·역할·정원 (Team+)" },
   { href: "/me/security", label: "보안", desc: "2FA·세션·계정 삭제" },
   { href: "/me/notifications", label: "알림 설정", desc: "인앱·이메일 채널" },
 ];

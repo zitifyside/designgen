@@ -1,85 +1,102 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
-import { Card, CardHeader } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ADMIN_HEALTH } from "@/lib/admin-mock";
+import { api, type HealthComponent } from "@/lib/api";
 
-const STATUS_BG = {
-  healthy: "bg-emerald-500",
-  degraded: "bg-amber-500",
-  down: "bg-red-500",
+const TONE: Record<HealthComponent["status"], "success" | "warning" | "danger" | "neutral"> =
+  {
+    operational: "success",
+    degraded: "warning",
+    down: "danger",
+    not_configured: "neutral",
+  };
+
+const LABEL: Record<HealthComponent["status"], string> = {
+  operational: "정상",
+  degraded: "주의",
+  down: "장애",
+  not_configured: "미구성",
 };
 
-const STATUS_TONE = {
-  healthy: "success",
-  degraded: "warning",
-  down: "danger",
-} as const;
-
 export default function AdminHealthPage() {
-  const downOrDegraded = ADMIN_HEALTH.filter(
-    (h) => h.status !== "healthy",
-  ).length;
+  const [items, setItems] = useState<HealthComponent[]>([]);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setItems(await api.admin.health());
+      setCheckedAt(new Date().toLocaleString("ko-KR"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "상태를 확인하지 못했다.");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const timer = setInterval(() => void load(), 30_000);
+    return () => clearInterval(timer);
+  }, [load]);
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-4xl px-6 py-8">
       <PageHeader
         title="헬스 체크"
-        description={
-          downOrDegraded > 0
-            ? `${downOrDegraded}개 서비스에 이상이 감지된다. 즉시 확인이 필요하다.`
-            : "모든 서비스가 정상 동작 중이다."
+        description="30초 주기로 주요 구성요소 상태를 확인한다."
+        action={
+          <Button size="sm" variant="outline" loading={busy} onClick={() => void load()}>
+            지금 확인
+          </Button>
         }
       />
 
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {ADMIN_HEALTH.map((h) => (
-          <Card key={h.service}>
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`relative inline-block h-2 w-2 rounded-full ${STATUS_BG[h.status]}`}
-                  >
-                    {h.status === "healthy" && (
-                      <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400 opacity-60" />
-                    )}
-                  </span>
-                  <span className="text-sm font-semibold text-ink-900">
-                    {h.service}
-                  </span>
-                </div>
-                <div className="mt-2 text-2xl font-semibold font-mono text-ink-900">
-                  {h.latencyMs}
-                  <span className="text-xs text-ink-500"> ms</span>
-                </div>
-                <div className="mt-1 text-[10px] text-ink-400">
-                  마지막 확인 {h.lastChecked}
-                </div>
-              </div>
-              <Badge tone={STATUS_TONE[h.status]}>
-                {h.status.toUpperCase()}
-              </Badge>
-            </div>
-          </Card>
-        ))}
-      </div>
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
 
-      <Card className="mt-5">
-        <CardHeader
-          title="알림 정책"
-          description="장애 감지 시 자동 발송 채널"
-        />
-        <ul className="space-y-1.5 text-xs text-ink-600">
-          <li>· Slack #ops-alerts — 모든 degraded/down 즉시</li>
-          <li>· Email oncall@designgenerator.io — critical 만</li>
-          <li>· PagerDuty — v2.0 도입 예정</li>
-          <li>
-            · AI 비용 임계값 (₩500,000/일) 초과 시 Slack + 이메일 동시 발송
-          </li>
+      <Card padded={false}>
+        <ul>
+          {items.map((c) => (
+            <li
+              key={c.name}
+              className="flex items-center justify-between gap-3 border-b border-ink-100 px-5 py-3 last:border-b-0"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-ink-900">{c.name}</div>
+                <div className="mt-0.5 text-[11px] text-ink-500">{c.detail}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                {typeof c.latencyMs === "number" && (
+                  <span className="font-mono text-[11px] text-ink-400">
+                    {c.latencyMs}ms
+                  </span>
+                )}
+                <Badge tone={TONE[c.status]}>{LABEL[c.status]}</Badge>
+              </div>
+            </li>
+          ))}
+          {items.length === 0 && (
+            <li className="px-5 py-8 text-center text-xs text-ink-400">
+              상태 정보를 불러오는 중…
+            </li>
+          )}
         </ul>
       </Card>
+
+      {checkedAt && (
+        <p className="mt-3 text-[11px] text-ink-400">최종 확인 {checkedAt}</p>
+      )}
     </div>
   );
 }

@@ -1,84 +1,82 @@
 "use client";
 
 import { create } from "zustand";
-import { MOCK_USER } from "@/lib/mock-data";
+import { ApiError, api, readTokens, writeTokens } from "@/lib/api";
 import type { User } from "@/lib/types";
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   hydrated: boolean;
-  hydrate: () => void;
+  error: string | null;
+
+  hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
-  logout: () => void;
-  updateProfile: (patch: Partial<User>) => void;
-}
-
-const STORAGE_KEY = "adg.auth.v1";
-
-function readStored(): { authenticated: boolean; user: User | null } {
-  if (typeof window === "undefined") return { authenticated: false, user: null };
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { authenticated: false, user: null };
-    const parsed = JSON.parse(raw);
-    return {
-      authenticated: !!parsed.authenticated,
-      user: parsed.user ?? null,
-    };
-  } catch {
-    return { authenticated: false, user: null };
-  }
-}
-
-function persist(authenticated: boolean, user: User | null) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ authenticated, user }));
+  logout: () => Promise<void>;
+  /** 생성·결제 후 쿼터·크레딧을 다시 읽어온다. */
+  refreshUser: () => Promise<void>;
+  updateProfile: (patch: Partial<User>) => Promise<void>;
+  setUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   hydrated: false,
+  error: null,
 
-  hydrate: () => {
+  hydrate: async () => {
     if (get().hydrated) return;
-    const { authenticated, user } = readStored();
-    set({ isAuthenticated: authenticated, user, hydrated: true });
+    const tokens = readTokens();
+    if (!tokens?.accessToken) {
+      set({ hydrated: true, isAuthenticated: false, user: null });
+      return;
+    }
+    try {
+      const user = await api.auth.me();
+      set({ user, isAuthenticated: true, hydrated: true });
+    } catch (e) {
+      // 401 이면 토큰이 만료·폐기된 것이므로 비로그인 상태로 되돌린다.
+      if (e instanceof ApiError && e.status === 401) writeTokens(null);
+      set({ hydrated: true, isAuthenticated: false, user: null });
+    }
   },
 
-  login: async (email) => {
-    await new Promise((r) => setTimeout(r, 250));
-    const user: User = { ...MOCK_USER, email };
-    persist(true, user);
-    set({ isAuthenticated: true, user });
+  login: async (email, password) => {
+    set({ error: null });
+    const user = await api.auth.login(email, password);
+    set({ user, isAuthenticated: true, hydrated: true });
   },
 
-  signup: async (email, _password, name) => {
-    await new Promise((r) => setTimeout(r, 350));
-    const user: User = {
-      ...MOCK_USER,
-      email,
-      name,
-      plan: "Free",
-      credits: 0,
-      monthlyGenerations: { used: 0, limit: 3 },
-    };
-    persist(true, user);
-    set({ isAuthenticated: true, user });
+  signup: async (email, password, name) => {
+    set({ error: null });
+    const user = await api.auth.signup(email, password, name);
+    set({ user, isAuthenticated: true, hydrated: true });
   },
 
-  logout: () => {
-    persist(false, null);
-    set({ isAuthenticated: false, user: null });
+  logout: async () => {
+    try {
+      await api.auth.logout();
+    } finally {
+      set({ user: null, isAuthenticated: false });
+    }
   },
 
-  updateProfile: (patch) => {
-    const current = get().user;
-    if (!current) return;
-    const next = { ...current, ...patch };
-    persist(get().isAuthenticated, next);
-    set({ user: next });
+  refreshUser: async () => {
+    if (!get().isAuthenticated) return;
+    try {
+      const user = await api.auth.me();
+      set({ user });
+    } catch {
+      /* 조회 실패는 화면을 막지 않는다. */
+    }
   },
+
+  updateProfile: async (patch) => {
+    const user = await api.users.updateProfile(patch);
+    set({ user });
+  },
+
+  setUser: (user) => set({ user }),
 }));

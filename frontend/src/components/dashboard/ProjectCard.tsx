@@ -1,35 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { MOCK_DESIGN_SYSTEMS } from "@/lib/mock-data";
-import type { Project } from "@/lib/types";
+import type { Project, ProjectStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { useProjectStore } from "@/store/project-store";
 
-const STATUS_TONE = {
+const STATUS_TONE: Record<
+  ProjectStatus,
+  "neutral" | "warning" | "success" | "danger" | "brand"
+> = {
   Draft: "neutral",
   InputReady: "neutral",
   Generating: "warning",
   Completed: "success",
+  CompletedWarning: "warning",
+  ConceptLocked: "brand",
   Failed: "danger",
   Cancelled: "neutral",
-} as const;
+};
 
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<ProjectStatus, string> = {
   Draft: "Draft",
   InputReady: "준비 완료",
   Generating: "생성 중",
   Completed: "완료",
+  CompletedWarning: "완료 (대체 렌더)",
+  ConceptLocked: "컨셉 확정",
   Failed: "실패",
   Cancelled: "취소됨",
-} as const;
+};
+
+/** thumbnailColors 순서: primary · secondary · background · surface */
+function palette(project: Project) {
+  const [primary, secondary, background, surface] = project.thumbnailColors ?? [];
+  return {
+    primary: primary ?? "#94A3B8",
+    secondary: secondary ?? "#CBD5E1",
+    background: background ?? "#F1F5F9",
+    surface: surface ?? "#FFFFFF",
+  };
+}
 
 export function ProjectCard({ project }: { project: Project }) {
   const toggle = useProjectStore((s) => s.toggleFavorite);
-  const ds = MOCK_DESIGN_SYSTEMS(project.id).find(
-    (d) => d.conceptLabel === project.thumbnailConcept,
-  );
-  const c = ds?.tokens.color;
+  const c = palette(project);
+  const hasDesign = (project.thumbnailColors ?? []).length > 0;
 
   return (
     <Link
@@ -39,7 +54,7 @@ export function ProjectCard({ project }: { project: Project }) {
       <button
         onClick={(e) => {
           e.preventDefault();
-          toggle(project.id);
+          void toggle(project.id);
         }}
         className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-sm shadow-sm backdrop-blur"
         aria-label="즐겨찾기"
@@ -49,45 +64,41 @@ export function ProjectCard({ project }: { project: Project }) {
 
       <div
         className="relative aspect-[16/10] w-full p-4"
-        style={{
-          background: c?.background ?? "#F1F5F9",
-        }}
+        style={{ background: c.background }}
       >
         <div
           className="h-full w-full rounded-md p-3 shadow-sm"
           style={{
-            background: c?.surface ?? "#fff",
-            border: `1px solid ${c?.neutral ? c.neutral + "22" : "#E2E8F0"}`,
+            background: c.surface,
+            border: `1px solid ${c.secondary}22`,
           }}
         >
           <div
             className="h-2.5 w-24 rounded"
-            style={{ background: c?.primary ?? "#94A3B8" }}
+            style={{ background: c.primary }}
           />
           <div
             className="mt-2 h-1.5 w-32 rounded"
-            style={{ background: c?.textMuted ?? "#CBD5E1" }}
+            style={{ background: c.secondary, opacity: 0.6 }}
           />
           <div className="mt-3 grid grid-cols-3 gap-1.5">
-            {[0, 1, 2].map((i) => (
+            {[c.primary, c.secondary, c.primary].map((bg, i) => (
               <div
                 key={i}
                 className="h-8 rounded"
-                style={{
-                  background:
-                    i === 0
-                      ? c?.primary
-                      : i === 1
-                        ? c?.secondary
-                        : c?.neutral,
-                  opacity: 0.85,
-                }}
+                style={{ background: bg, opacity: i === 2 ? 0.4 : 0.85 }}
               />
             ))}
           </div>
           <div className="mt-3 h-1.5 w-36 rounded bg-ink-200/60" />
           <div className="mt-1 h-1.5 w-28 rounded bg-ink-200/60" />
         </div>
+
+        {!hasDesign && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-[11px] font-medium text-ink-500">
+            아직 생성 전
+          </div>
+        )}
       </div>
 
       <div className="p-3.5">
@@ -102,8 +113,27 @@ export function ProjectCard({ project }: { project: Project }) {
         <p className="mt-1 line-clamp-1 text-xs text-ink-500">
           {project.description}
         </p>
-        <div className="mt-2 flex items-center gap-2 text-[10px] text-ink-400">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-ink-400">
           <span>{project.platform}</span>
+          <span>·</span>
+          <span>
+            컨셉 {project.conceptCount} × 시안 {project.variantCount}
+          </span>
+          {project.dsMode === "unified" && (
+            <>
+              <span>·</span>
+              <span className="text-brand-600">단일 DS</span>
+            </>
+          )}
+          {project.targetScreenTitle && (
+            <>
+              <span>·</span>
+              <span>
+                {project.targetScreenTitle}
+                {project.targetScreenInferred ? " (AI 선택)" : ""}
+              </span>
+            </>
+          )}
           <span>·</span>
           <span>{new Date(project.updatedAt).toLocaleDateString("ko-KR")}</span>
         </div>

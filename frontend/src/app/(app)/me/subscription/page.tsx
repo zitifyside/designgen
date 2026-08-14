@@ -1,164 +1,210 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
+import { Tabs } from "@/components/ui/Tabs";
+import { cn } from "@/lib/cn";
+import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
+import type { PlanInfo, Subscription } from "@/lib/types";
 
-const PLANS = [
-  {
-    key: "Free",
-    price: 0,
-    description: "혼자 시작하는 디자이너·기획자",
-    features: ["월 3회 생성", "컨셉 1종·시안 3종", "PNG Export (워터마크)"],
-  },
-  {
-    key: "Pro",
-    price: 19,
-    description: "전문 디자이너·개발자",
-    features: [
-      "월 30회 생성",
-      "DS 컨트롤러 전체 Token",
-      ".fig·.json·.css Export",
-      "MCP Server 연동",
-      "API Key 발급",
-    ],
-    recommended: true,
-  },
-  {
-    key: "Team",
-    price: 49,
-    description: "10명 이하 스타트업·에이전시",
-    features: [
-      "무제한 생성",
-      "팀 프로젝트 공유",
-      "우선 처리 큐",
-      "팀 공용 API Key",
-    ],
-  },
-];
-
-const HISTORY = [
-  { date: "2026-06-05", item: "Pro 월간 결제", amount: 26000, status: "완료" },
-  { date: "2026-05-05", item: "Pro 월간 결제", amount: 26000, status: "완료" },
-  { date: "2026-04-05", item: "Pro 월간 결제", amount: 26000, status: "완료" },
-];
+const PLAN_FEATURES: Record<string, string[]> = {
+  Free: [
+    "월 3회 생성 (컨셉 1종 × 시안 3종)",
+    "Color Token 수정",
+    "PNG Export (워터마크)",
+  ],
+  Pro: [
+    "월 30회 생성 (컨셉 1~3종 × 시안 3/5종)",
+    "전체 Token 수정 · 단일 DS 통일",
+    ".fig·.json·.css Export",
+    "API Key · MCP Server 연동",
+    "템플릿 등록·판매",
+  ],
+  Team: [
+    "무제한 생성",
+    "팀 워크스페이스 (기본 5시드)",
+    "공유 DS 라이브러리",
+    "우선 처리 큐",
+  ],
+};
 
 export default function SubscriptionPage() {
   const user = useAuthStore((s) => s.user);
-  if (!user) return null;
+  const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [interval, setInterval] = useState<"monthly" | "annual">("monthly");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [planList, sub] = await Promise.all([
+        api.billing.plans(),
+        api.billing.subscription().catch(() => null),
+      ]);
+      setPlans(planList);
+      setSubscription(sub);
+    } catch {
+      /* 조회 실패는 화면을 막지 않는다. */
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const handleCheckout = async (code: string) => {
+    setBusy(code);
+    setNotice(null);
+    try {
+      const res = await api.billing.checkout(code, interval);
+      setNotice(res.detail);
+      await load();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "결제를 시작하지 못했다.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCancel = async () => {
+    setBusy("cancel");
+    setNotice(null);
+    try {
+      const res = await api.billing.cancelSubscription();
+      setNotice(res.detail);
+      await load();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "구독 취소에 실패했다.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const price = (p: PlanInfo) =>
+    interval === "monthly" ? p.monthlyPriceCents : p.annualPriceCents;
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader
-          title="현재 구독"
-          description="다음 결제일까지 본 플랜의 모든 권한이 유지된다."
-        />
-        <div className="flex items-center justify-between rounded-lg bg-brand-50 p-4">
+        <CardHeader title="현재 구독" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-brand-700">
-              {user.plan} · ${user.plan === "Pro" ? 19 : user.plan === "Team" ? 49 : 0}/월
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-semibold text-ink-900">
+                {user?.plan ?? "Free"}
+              </span>
+              <Badge tone={subscription?.status === "active" ? "success" : "neutral"}>
+                {subscription?.status ?? "active"}
+              </Badge>
             </div>
-            <div className="mt-1 text-xs text-brand-600">
-              다음 결제일 2026-07-05 · Visa •••• 4242
+            <div className="mt-1 text-xs text-ink-500">
+              {subscription?.currentPeriodEnd
+                ? `다음 결제일 ${new Date(
+                    subscription.currentPeriodEnd,
+                  ).toLocaleDateString("ko-KR")}`
+                : "결제 주기 정보 없음"}
+              {subscription?.cancelAtPeriodEnd && " · 기간 만료 시 해지 예정"}
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              결제 수단 변경
-            </Button>
-            <Button variant="outline" size="sm">
+          {user?.plan !== "Free" && (
+            <Button
+              variant="outline"
+              size="sm"
+              loading={busy === "cancel"}
+              onClick={handleCancel}
+            >
               구독 취소
             </Button>
+          )}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-ink-100 pt-4 text-xs">
+          <div>
+            <div className="text-ink-500">이번 달 생성</div>
+            <div className="mt-0.5 font-medium text-ink-900">
+              {user?.monthlyGenerations.used ?? 0}
+              {user?.monthlyGenerations.limit === -1
+                ? " / 무제한"
+                : ` / ${user?.monthlyGenerations.limit ?? 0}`}
+            </div>
+          </div>
+          <div>
+            <div className="text-ink-500">크레딧</div>
+            <div className="mt-0.5 font-medium text-ink-900">
+              {user?.credits ?? 0}회
+            </div>
           </div>
         </div>
       </Card>
 
+      {notice && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {notice}
+        </div>
+      )}
+
       <Card>
-        <CardHeader title="플랜 변경" />
-        <div className="grid gap-3 lg:grid-cols-3">
-          {PLANS.map((p) => {
-            const current = p.key === user.plan;
+        <CardHeader
+          title="플랜"
+          description="서비스정책서 기준 요금이다."
+          action={
+            <Tabs
+              size="sm"
+              value={interval}
+              onChange={(v) => setInterval(v as "monthly" | "annual")}
+              items={[
+                { value: "monthly", label: "월간" },
+                { value: "annual", label: "연간" },
+              ]}
+            />
+          }
+        />
+        <div className="grid gap-3 md:grid-cols-3">
+          {plans.map((p) => {
+            const current = p.code === user?.plan;
             return (
               <div
-                key={p.key}
-                className={`relative rounded-xl border p-4 ${
-                  p.recommended
-                    ? "border-brand-500 bg-brand-50/40"
-                    : "border-ink-200 bg-white"
-                }`}
-              >
-                {p.recommended && (
-                  <div className="absolute right-3 top-3">
-                    <Badge tone="brand">추천</Badge>
-                  </div>
+                key={p.code}
+                className={cn(
+                  "rounded-xl border p-4",
+                  current ? "border-brand-500 bg-brand-50" : "border-ink-200",
                 )}
-                <div className="text-sm font-semibold text-ink-900">{p.key}</div>
-                <div className="mt-1 text-[11px] text-ink-500">
-                  {p.description}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-ink-900">
+                    {p.name}
+                  </div>
+                  {current && <Badge tone="brand">현재</Badge>}
                 </div>
-                <div className="mt-3 flex items-baseline gap-1">
-                  <span className="text-2xl font-semibold text-ink-900">
-                    ${p.price}
+                <div className="mt-2 text-2xl font-semibold text-ink-900">
+                  ${(price(p) / 100).toFixed(0)}
+                  <span className="text-xs font-normal text-ink-500">
+                    {interval === "monthly" ? "/월" : "/년"}
                   </span>
-                  <span className="text-xs text-ink-400">/월</span>
                 </div>
-                <ul className="mt-3 space-y-1 text-xs text-ink-600">
-                  {p.features.map((f) => (
+                <ul className="mt-3 space-y-1.5 text-[11px] text-ink-600">
+                  {(PLAN_FEATURES[p.code] ?? []).map((f) => (
                     <li key={f}>· {f}</li>
                   ))}
                 </ul>
                 <Button
-                  fullWidth
-                  variant={current ? "outline" : "primary"}
-                  size="sm"
                   className="mt-4"
-                  disabled={current}
+                  fullWidth
+                  size="sm"
+                  variant={current ? "outline" : "primary"}
+                  disabled={current || p.code === "Free"}
+                  loading={busy === p.code}
+                  onClick={() => handleCheckout(p.code)}
                 >
-                  {current ? "사용 중" : "변경"}
+                  {current ? "이용 중" : `${p.name} 시작`}
                 </Button>
               </div>
             );
           })}
         </div>
-      </Card>
-
-      <Card>
-        <CardHeader
-          title="결제 이력"
-          description="영수증은 PDF 로 다운로드 가능하다."
-        />
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-ink-100 text-left text-ink-500">
-              <th className="py-2 font-medium">일자</th>
-              <th className="py-2 font-medium">항목</th>
-              <th className="py-2 font-medium">금액</th>
-              <th className="py-2 font-medium">상태</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {HISTORY.map((h, i) => (
-              <tr key={i} className="border-b border-ink-50">
-                <td className="py-2 text-ink-600">{h.date}</td>
-                <td className="py-2">{h.item}</td>
-                <td className="py-2 font-mono">
-                  ₩{h.amount.toLocaleString()}
-                </td>
-                <td className="py-2">
-                  <Badge tone="success">{h.status}</Badge>
-                </td>
-                <td className="py-2 text-right">
-                  <button className="text-brand-600 hover:underline">
-                    영수증
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </Card>
     </div>
   );

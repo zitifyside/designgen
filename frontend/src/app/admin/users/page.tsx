@@ -1,82 +1,103 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
+import { Input, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ADMIN_USERS, type AdminUser } from "@/lib/admin-mock";
+import { api, type AdminUser } from "@/lib/api";
 import type { Plan } from "@/lib/types";
 
-type StatusFilter = "all" | AdminUser["status"];
+type StatusFilter = "all" | "Active" | "Suspended" | "Deleted";
 type PlanFilter = "all" | Plan;
 
-const STATUS_TONE: Record<
-  AdminUser["status"],
-  "success" | "warning" | "neutral"
-> = {
+const STATUS_TONE: Record<string, "success" | "warning" | "neutral"> = {
   Active: "success",
   Suspended: "warning",
   Deleted: "neutral",
 };
 
+const PLANS: Plan[] = ["Free", "Pro", "Team", "Admin"];
+
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<AdminUser[]>(ADMIN_USERS);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
   const [target, setTarget] = useState<AdminUser | null>(null);
   const [suspendReason, setSuspendReason] = useState("");
-  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = users.filter((u) => {
-    if (statusFilter !== "all" && u.status !== statusFilter) return false;
-    if (planFilter !== "all" && u.plan !== planFilter) return false;
-    if (
-      q &&
-      !`${u.email} ${u.name}`.toLowerCase().includes(q.toLowerCase())
-    )
-      return false;
-    return true;
-  });
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      setUsers(
+        await api.admin.users({
+          q: q || undefined,
+          plan: planFilter === "all" ? undefined : planFilter,
+          status: statusFilter === "all" ? undefined : statusFilter,
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "사용자를 불러오지 못했다.");
+    }
+  }, [q, planFilter, statusFilter]);
 
-  const changePlan = (id: string, plan: Plan) => {
-    setUsers((arr) => arr.map((u) => (u.id === id ? { ...u, plan } : u)));
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const changePlan = async (id: string, plan: Plan) => {
+    setBusy(id);
+    try {
+      await api.admin.changeTier(id, plan);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "등급 변경에 실패했다.");
+    } finally {
+      setBusy(null);
+    }
   };
 
-  const suspend = () => {
-    if (!target || suspendReason.trim().length < 10) return;
-    setUsers((arr) =>
-      arr.map((u) =>
-        u.id === target.id ? { ...u, status: "Suspended" } : u,
-      ),
-    );
-    setSuspendOpen(false);
-    setSuspendReason("");
-    setTarget(null);
-  };
-
-  const restore = (id: string) => {
-    setUsers((arr) =>
-      arr.map((u) => (u.id === id ? { ...u, status: "Active" } : u)),
-    );
+  const suspend = async (suspendFlag: boolean) => {
+    if (!target) return;
+    if (suspendFlag && suspendReason.trim().length < 10) return;
+    setBusy("suspend");
+    try {
+      await api.admin.suspend(target.id, suspendFlag, suspendReason.trim());
+      setTarget(null);
+      setSuspendReason("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "처리에 실패했다.");
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <PageHeader
         title="사용자 관리"
-        description={`전체 ${users.length}명 · 활성 ${users.filter((u) => u.status === "Active").length}명 · 정지 ${users.filter((u) => u.status === "Suspended").length}명`}
+        description="등급 변경·정지 처리는 감사 로그에 자동 기록된다."
       />
 
-      <Card>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-[240px] flex-1">
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
+      <Card className="mb-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-64">
             <Input
-              placeholder="이메일·이름 검색…"
+              label="검색"
+              placeholder="이메일·이름"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -89,7 +110,6 @@ export default function AdminUsersPage() {
               { value: "all", label: "전체" },
               { value: "Active", label: "활성" },
               { value: "Suspended", label: "정지" },
-              { value: "Deleted", label: "삭제됨" },
             ]}
           />
           <Tabs
@@ -97,124 +117,123 @@ export default function AdminUsersPage() {
             value={planFilter}
             onChange={(v) => setPlanFilter(v as PlanFilter)}
             items={[
-              { value: "all", label: "전체 플랜" },
-              { value: "Free", label: "Free" },
-              { value: "Pro", label: "Pro" },
-              { value: "Team", label: "Team" },
+              { value: "all", label: "전 등급" },
+              ...PLANS.map((p) => ({ value: p, label: p })),
             ]}
           />
         </div>
+      </Card>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-ink-100 text-left text-ink-500">
-                <th className="py-2 font-medium">사용자</th>
-                <th className="py-2 font-medium">플랜</th>
-                <th className="py-2 font-medium">상태</th>
-                <th className="py-2 font-medium text-right">월 매출</th>
-                <th className="py-2 font-medium text-right">생성</th>
-                <th className="py-2 font-medium">가입</th>
-                <th className="py-2 font-medium">최근 활동</th>
-                <th className="py-2 font-medium text-right">액션</th>
+      <Card padded={false}>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-ink-200 text-left text-ink-500">
+              <th className="px-4 py-3 font-medium">사용자</th>
+              <th className="px-4 py-3 font-medium">등급</th>
+              <th className="px-4 py-3 font-medium">상태</th>
+              <th className="px-4 py-3 font-medium">생성</th>
+              <th className="px-4 py-3 font-medium">가입</th>
+              <th className="px-4 py-3 font-medium">최근 활동</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} className="border-b border-ink-100">
+                <td className="px-4 py-3">
+                  <div className="font-medium text-ink-900">{u.name}</div>
+                  <div className="text-[10px] text-ink-500">{u.email}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <select
+                    value={u.plan}
+                    disabled={busy === u.id}
+                    onChange={(e) => void changePlan(u.id, e.target.value as Plan)}
+                    className="rounded-lg border border-ink-200 bg-white px-2 py-1 text-xs"
+                  >
+                    {PLANS.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge tone={STATUS_TONE[u.status] ?? "neutral"}>
+                    {u.status}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3 text-ink-600">{u.generations}</td>
+                <td className="px-4 py-3 text-ink-500">
+                  {new Date(u.joinedAt).toLocaleDateString("ko-KR")}
+                </td>
+                <td className="px-4 py-3 text-ink-500">
+                  {u.lastActiveAt
+                    ? new Date(u.lastActiveAt).toLocaleDateString("ko-KR")
+                    : "—"}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTarget(u)}
+                  >
+                    {u.status === "Suspended" ? "정지 해제" : "정지"}
+                  </Button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-ink-50">
-                  <td className="py-2.5">
-                    <div className="font-medium text-ink-800">{u.name}</div>
-                    <div className="text-[10px] text-ink-500">{u.email}</div>
-                  </td>
-                  <td className="py-2.5">
-                    <select
-                      value={u.plan}
-                      onChange={(e) =>
-                        changePlan(u.id, e.target.value as Plan)
-                      }
-                      className="rounded border border-ink-200 bg-white px-1.5 py-0.5 text-[11px] font-medium"
-                    >
-                      {(["Free", "Pro", "Team", "Admin"] as Plan[]).map((p) => (
-                        <option key={p}>{p}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="py-2.5">
-                    <Badge tone={STATUS_TONE[u.status]}>{u.status}</Badge>
-                  </td>
-                  <td className="py-2.5 text-right font-mono text-ink-700">
-                    ₩{u.monthlySpend.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 text-right font-mono">{u.generations}</td>
-                  <td className="py-2.5 text-ink-500">{u.joinedAt}</td>
-                  <td className="py-2.5 text-ink-500">{u.lastActiveAt}</td>
-                  <td className="py-2.5 text-right">
-                    {u.status === "Active" ? (
-                      <button
-                        onClick={() => {
-                          setTarget(u);
-                          setSuspendOpen(true);
-                        }}
-                        className="text-red-600 hover:underline"
-                      >
-                        정지
-                      </button>
-                    ) : u.status === "Suspended" ? (
-                      <button
-                        onClick={() => restore(u.id)}
-                        className="text-emerald-600 hover:underline"
-                      >
-                        복구
-                      </button>
-                    ) : (
-                      <span className="text-ink-400">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-ink-400">
+                  조건에 맞는 사용자가 없다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </Card>
 
       <Modal
-        open={suspendOpen}
-        onClose={() => {
-          setSuspendOpen(false);
-          setTarget(null);
-          setSuspendReason("");
-        }}
-        title={`${target?.name ?? ""} 정지`}
-        description="감사 로그에 자동 기록된다. 사용자에게는 이메일 통지가 발송된다."
+        open={!!target}
+        onClose={() => setTarget(null)}
+        title={
+          target?.status === "Suspended" ? "계정 정지 해제" : "계정 정지"
+        }
+        description={
+          target?.status === "Suspended"
+            ? "정지를 해제하면 즉시 로그인이 가능해진다."
+            : "정지 사유는 10자 이상 입력한다. 감사 로그에 기록된다."
+        }
+        size="sm"
         footer={
           <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSuspendOpen(false);
-                setSuspendReason("");
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>
               취소
             </Button>
             <Button
-              variant="danger"
               size="sm"
-              disabled={suspendReason.trim().length < 10}
-              onClick={suspend}
+              loading={busy === "suspend"}
+              onClick={() => void suspend(target?.status !== "Suspended")}
             >
-              정지 처리
+              확인
             </Button>
           </div>
         }
       >
-        <Input
-          label="정지 사유 (10자 이상)"
-          placeholder="약관 위반·결제 사기·스팸·기타…"
-          value={suspendReason}
-          onChange={(e) => setSuspendReason(e.target.value)}
-        />
+        <div className="mb-3 text-xs text-ink-600">
+          대상: <b>{target?.email}</b>
+        </div>
+        {target?.status !== "Suspended" && (
+          <Textarea
+            label="정지 사유"
+            value={suspendReason}
+            onChange={(e) => setSuspendReason(e.target.value)}
+            rows={3}
+            countMax={500}
+            maxLength={500}
+          />
+        )}
       </Modal>
     </div>
   );

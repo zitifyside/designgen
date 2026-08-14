@@ -1,171 +1,190 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
-import { Textarea } from "@/components/ui/Input";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ADMIN_FEEDBACK, type FeedbackItem } from "@/lib/admin-mock";
+import { api, type FeedbackRecord } from "@/lib/api";
 
-type StatusFilter = "all" | FeedbackItem["status"];
+type StatusFilter = "all" | "new" | "in_review" | "resolved" | "closed";
 
-const STATUS_TONE: Record<
-  FeedbackItem["status"],
-  "warning" | "brand" | "success" | "neutral"
-> = {
+const STATUS_LABEL: Record<string, string> = {
+  new: "신규",
+  in_review: "검토 중",
+  resolved: "해결",
+  closed: "종료",
+};
+
+const TONE: Record<string, "warning" | "brand" | "success" | "neutral"> = {
   new: "warning",
   in_review: "brand",
   resolved: "success",
   closed: "neutral",
 };
 
-const CATEGORY_TONE: Record<
-  FeedbackItem["category"],
-  "danger" | "brand" | "neutral"
-> = {
-  bug: "danger",
-  feature: "brand",
-  feedback: "neutral",
-};
-
 export default function AdminFeedbackPage() {
-  const [list, setList] = useState<FeedbackItem[]>(ADMIN_FEEDBACK);
-  const [filter, setFilter] = useState<StatusFilter>("new");
-  const [replyTarget, setReplyTarget] = useState<FeedbackItem | null>(null);
-  const [replyBody, setReplyBody] = useState("");
+  const [items, setItems] = useState<FeedbackRecord[]>([]);
+  const [filter, setFilter] = useState<StatusFilter>("all");
+  const [target, setTarget] = useState<FeedbackRecord | null>(null);
+  const [response, setResponse] = useState("");
+  const [nextStatus, setNextStatus] = useState("resolved");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = list.filter((f) =>
-    filter === "all" ? true : f.status === filter,
-  );
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      setItems(
+        await api.admin.feedback({
+          status: filter === "all" ? undefined : filter,
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "피드백을 불러오지 못했다.");
+    }
+  }, [filter]);
 
-  const setStatus = (id: string, status: FeedbackItem["status"]) => {
-    setList((arr) => arr.map((f) => (f.id === id ? { ...f, status } : f)));
-  };
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const sendReply = () => {
-    if (!replyTarget || replyBody.trim().length < 5) return;
-    setStatus(replyTarget.id, "resolved");
-    setReplyTarget(null);
-    setReplyBody("");
+  const submit = async () => {
+    if (!target) return;
+    setBusy(true);
+    try {
+      await api.admin.resolveFeedback(target.id, nextStatus, response);
+      setTarget(null);
+      setResponse("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "처리에 실패했다.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <PageHeader
         title="피드백 관리"
-        description="사용자의 버그·기능 요청·일반 피드백을 응대한다."
+        description="사용자 피드백·버그 리포트에 응답한다."
         action={
           <Tabs
             size="sm"
             value={filter}
             onChange={(v) => setFilter(v as StatusFilter)}
             items={[
-              { value: "new", label: "신규" },
-              { value: "in_review", label: "검토중" },
-              { value: "resolved", label: "해결" },
-              { value: "closed", label: "종료" },
               { value: "all", label: "전체" },
+              { value: "new", label: "신규" },
+              { value: "in_review", label: "검토 중" },
+              { value: "resolved", label: "해결" },
             ]}
           />
         }
       />
 
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="space-y-3">
-        {filtered.map((f) => (
+        {items.map((f) => (
           <Card key={f.id}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Badge tone={CATEGORY_TONE[f.category]}>{f.category}</Badge>
-                  <Badge tone={STATUS_TONE[f.status]}>{f.status}</Badge>
+                  <span className="text-sm font-semibold text-ink-900">
+                    {f.title}
+                  </span>
+                  <Badge tone={TONE[f.status] ?? "neutral"}>
+                    {STATUS_LABEL[f.status] ?? f.status}
+                  </Badge>
+                  <span className="text-[10px] text-ink-400">{f.category}</span>
                 </div>
-                <h3 className="mt-2 text-sm font-semibold text-ink-900">
-                  {f.title}
-                </h3>
-                <p className="mt-1 text-xs text-ink-600">{f.body}</p>
-                <div className="mt-2 text-[10px] text-ink-400">
-                  {f.userEmail} · {f.createdAt}
+                <div className="mt-1 text-[11px] text-ink-500">
+                  {f.userEmail} ·{" "}
+                  {new Date(f.createdAt).toLocaleString("ko-KR")}
                 </div>
-              </div>
-              <div className="flex shrink-0 flex-col gap-1.5">
-                {f.status !== "in_review" && f.status !== "resolved" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setStatus(f.id, "in_review")}
-                  >
-                    검토 시작
-                  </Button>
-                )}
-                {f.status !== "resolved" && f.status !== "closed" && (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setReplyTarget(f);
-                      setReplyBody("");
-                    }}
-                  >
-                    답변·해결
-                  </Button>
-                )}
-                {f.status !== "closed" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setStatus(f.id, "closed")}
-                  >
-                    종료
-                  </Button>
+                <p className="mt-2 whitespace-pre-wrap text-xs text-ink-700">
+                  {f.body}
+                </p>
+                {f.adminResponse && (
+                  <div className="mt-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-600">
+                    <b>답변</b> · {f.adminResponse}
+                  </div>
                 )}
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setTarget(f);
+                  setResponse(f.adminResponse ?? "");
+                }}
+              >
+                응답
+              </Button>
             </div>
           </Card>
         ))}
-        {filtered.length === 0 && (
+        {items.length === 0 && (
           <Card>
-            <p className="py-8 text-center text-xs text-ink-400">
-              해당 상태의 피드백이 없다.
+            <p className="py-6 text-center text-xs text-ink-400">
+              피드백이 없다.
             </p>
           </Card>
         )}
       </div>
 
       <Modal
-        open={!!replyTarget}
-        onClose={() => setReplyTarget(null)}
-        title="사용자 답변"
-        description="입력 내용은 사용자의 이메일로 자동 발송된다."
+        open={!!target}
+        onClose={() => setTarget(null)}
+        title="피드백 응답"
+        description="응답 내용은 사용자에게 전달된다."
+        size="sm"
         footer={
           <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setReplyTarget(null)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>
               취소
             </Button>
-            <Button
-              size="sm"
-              disabled={replyBody.trim().length < 5}
-              onClick={sendReply}
-            >
-              발송 + 해결 처리
+            <Button size="sm" loading={busy} onClick={() => void submit()}>
+              저장
             </Button>
           </div>
         }
       >
-        <p className="mb-2 text-xs text-ink-500">
-          원본: {replyTarget?.title}
-        </p>
+        <div className="mb-3">
+          <div className="mb-1.5 text-xs font-medium text-ink-700">상태</div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {["new", "in_review", "resolved", "closed"].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setNextStatus(s)}
+                className={`rounded-lg border py-2 text-[11px] font-medium ${
+                  nextStatus === s
+                    ? "border-brand-500 bg-brand-50 text-brand-700"
+                    : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                }`}
+              >
+                {STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
+        </div>
         <Textarea
-          label="답변 본문"
-          value={replyBody}
-          onChange={(e) => setReplyBody(e.target.value)}
-          rows={6}
-          placeholder="안녕하세요. 알려주신 이슈는…"
+          label="응답 내용"
+          value={response}
+          onChange={(e) => setResponse(e.target.value)}
+          rows={4}
+          countMax={2000}
+          maxLength={2000}
         />
       </Modal>
     </div>

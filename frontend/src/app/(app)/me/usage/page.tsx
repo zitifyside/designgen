@@ -1,126 +1,182 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
-import { useState } from "react";
+import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
+import type { ExportRecord, Generation, Project } from "@/lib/types";
 
-const DAILY = [3, 5, 2, 6, 4, 7, 3, 5, 6, 8, 4, 5, 9, 6, 7, 4, 5, 3, 6, 8, 5, 7, 4, 6, 5, 8, 3, 4, 6, 5];
-const EXPORT_DIST = [
-  { format: "png", count: 42, color: "#6366f1" },
-  { format: "fig", count: 18, color: "#10b981" },
-  { format: "json", count: 9, color: "#f59e0b" },
-  { format: "css", count: 6, color: "#ef4444" },
-];
+type Range = "7" | "30" | "90";
 
 export default function UsagePage() {
   const user = useAuthStore((s) => s.user);
-  const [range, setRange] = useState<"day" | "week" | "month">("day");
-  if (!user) return null;
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  const [range, setRange] = useState<Range>("30");
+  const [generations, setGenerations] = useState<Generation[]>([]);
+  const [exports, setExports] = useState<ExportRecord[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const totalExports = EXPORT_DIST.reduce((s, e) => s + e.count, 0);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const list = await api.projects.list();
+      setProjects(list);
+      const histories = await Promise.all(
+        list.map((p) => api.generations.history(p.id).catch(() => [])),
+      );
+      setGenerations(histories.flat());
+      setExports(await api.exports.history().catch(() => []));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    void refreshUser();
+  }, [load, refreshUser]);
+
+  const days = Number(range);
+  const cutoff = useMemo(
+    () => Date.now() - days * 24 * 60 * 60 * 1000,
+    [days],
+  );
+
+  const inRange = generations.filter(
+    (g) => new Date(g.startedAt ?? g.completedAt ?? Date.now()).getTime() >= cutoff,
+  );
+  const byDay = useMemo(() => {
+    const buckets = new Map<string, number>();
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      buckets.set(d.toISOString().slice(0, 10), 0);
+    }
+    for (const g of inRange) {
+      const key = new Date(g.startedAt ?? g.completedAt ?? Date.now())
+        .toISOString()
+        .slice(0, 10);
+      if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    return Array.from(buckets.entries());
+  }, [inRange, days]);
+
+  const max = Math.max(1, ...byDay.map(([, v]) => v));
+  const screenAdds = inRange.filter((g) => g.kind === "screen_add").length;
+  const failures = inRange.filter((g) => g.status === "Failed").length;
+  const warnings = inRange.filter((g) => g.isWarning).length;
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="이번 달 요약" />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <CardHeader
+          title="사용량 요약"
+          action={
+            <Tabs
+              size="sm"
+              value={range}
+              onChange={(v) => setRange(v as Range)}
+              items={[
+                { value: "7", label: "7일" },
+                { value: "30", label: "30일" },
+                { value: "90", label: "90일" },
+              ]}
+            />
+          }
+        />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric
-            label="생성"
-            value={user.monthlyGenerations.used}
-            sub={`/${user.monthlyGenerations.limit} 회`}
+            label="이번 달 생성"
+            value={`${user?.monthlyGenerations.used ?? 0}${
+              user?.monthlyGenerations.limit === -1
+                ? " / ∞"
+                : ` / ${user?.monthlyGenerations.limit ?? 0}`
+            }`}
           />
-          <Metric label="Export" value={totalExports} sub="회" />
-          <Metric
-            label="크레딧 사용"
-            value={32}
-            sub="회 (전월 대비 +12%)"
-          />
-          <Metric label="MCP 호출" value={184} sub="회 (전월 대비 +44%)" />
+          <Metric label="크레딧 잔액" value={`${user?.credits ?? 0}회`} />
+          <Metric label="프로젝트" value={`${projects.length}개`} />
+          <Metric label="Export" value={`${exports.length}건`} />
         </div>
       </Card>
 
       <Card>
         <CardHeader
-          title="생성 추이"
-          description="기간 단위를 전환하여 사용 패턴을 분석한다."
-          action={
-            <Tabs
-              size="sm"
-              value={range}
-              onChange={(v) => setRange(v as "day" | "week" | "month")}
-              items={[
-                { value: "day", label: "일별" },
-                { value: "week", label: "주별" },
-                { value: "month", label: "월별" },
-              ]}
-            />
-          }
+          title={`일별 생성 추이 · 최근 ${days}일`}
+          description="전체 생성과 화면 추가 생성을 합산한 수치이다."
         />
-        <div className="flex h-40 items-end gap-1">
-          {DAILY.map((v, i) => (
-            <div key={i} className="flex flex-1 flex-col items-center gap-1">
+        {loading ? (
+          <p className="py-6 text-center text-xs text-ink-400">불러오는 중…</p>
+        ) : (
+          <div className="flex h-32 items-end gap-[2px]">
+            {byDay.map(([date, count]) => (
               <div
-                className="w-full rounded-sm bg-brand-500/80 transition-all hover:bg-brand-600"
-                style={{ height: `${(v / 10) * 100}%` }}
-                title={`${i + 1}일: ${v}회`}
+                key={date}
+                title={`${date} · ${count}회`}
+                className="flex-1 rounded-t bg-brand-500/80"
+                style={{ height: `${(count / max) * 100}%`, minHeight: 2 }}
               />
-              {(i + 1) % 5 === 0 && (
-                <span className="text-[9px] text-ink-400">{i + 1}</span>
-              )}
+            ))}
+          </div>
+        )}
+        <div className="mt-3 grid grid-cols-3 gap-3 border-t border-ink-100 pt-3 text-xs">
+          <div>
+            <div className="text-ink-500">기간 내 생성</div>
+            <div className="mt-0.5 font-medium text-ink-900">
+              {inRange.length}회
             </div>
-          ))}
+          </div>
+          <div>
+            <div className="text-ink-500">화면 추가 생성</div>
+            <div className="mt-0.5 font-medium text-ink-900">{screenAdds}회</div>
+          </div>
+          <div>
+            <div className="text-ink-500">실패 · 대체 렌더</div>
+            <div className="mt-0.5 font-medium text-ink-900">
+              {failures} · {warnings}
+            </div>
+          </div>
         </div>
       </Card>
 
       <Card>
-        <CardHeader title="Export 형식 분포" />
-        <div className="space-y-2.5">
-          {EXPORT_DIST.map((e) => {
-            const pct = Math.round((e.count / totalExports) * 100);
-            return (
-              <div key={e.format}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono font-medium text-ink-800">
-                    .{e.format}
-                  </span>
-                  <span className="text-ink-500">
-                    {e.count}회 · {pct}%
-                  </span>
-                </div>
-                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-ink-100">
-                  <div
-                    className="h-full"
-                    style={{ width: `${pct}%`, background: e.color }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <CardHeader title="최근 Export" description="최근 7일 보존분이다." />
+        {exports.length === 0 ? (
+          <p className="py-3 text-xs text-ink-500">Export 이력이 없다.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-ink-100 text-left text-ink-500">
+                <th className="py-2 font-medium">프로젝트</th>
+                <th className="py-2 font-medium">형식</th>
+                <th className="py-2 font-medium">범위</th>
+                <th className="py-2 font-medium">일시</th>
+              </tr>
+            </thead>
+            <tbody>
+              {exports.slice(0, 10).map((e) => (
+                <tr key={e.id} className="border-b border-ink-50">
+                  <td className="py-2 text-ink-800">{e.projectName}</td>
+                  <td className="py-2 font-mono">.{e.format}</td>
+                  <td className="py-2 text-ink-500">{e.scope}</td>
+                  <td className="py-2 text-ink-500">
+                    {new Date(e.createdAt).toLocaleString("ko-KR")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
     </div>
   );
 }
 
-function Metric({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: number;
-  sub?: string;
-}) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-ink-100 p-3">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
-        {label}
-      </div>
-      <div className="mt-1 flex items-baseline gap-1">
-        <span className="text-2xl font-semibold text-ink-900">{value}</span>
-        {sub && <span className="text-[10px] text-ink-500">{sub}</span>}
-      </div>
+    <div className="rounded-lg border border-ink-200 p-3">
+      <div className="text-[11px] text-ink-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-ink-900">{value}</div>
     </div>
   );
 }
