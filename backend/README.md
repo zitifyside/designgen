@@ -3,30 +3,94 @@
 AI Design Generator의 FastAPI 백엔드입니다. 기본은 SQLite(별도 설치 불필요),
 `DATABASE_URL`만 바꾸면 PostgreSQL로 전환됩니다. 비동기 SQLAlchemy 2.0 + Alembic 기반.
 
-> **의도적으로 비워둔 부분** (요청 범위):
-> - **AI 프롬프트 / 모델 호출** — [`app/services/ai/`](app/services/ai/)의 Gemini·Codex
->   프로바이더는 연결만 돼 있고 프롬프트와 요청 본문은 전부 비어 있습니다
->   (`raise NotImplementedError`). `FAKE_AI_PIPELINE` 모드가 placeholder
->   디자인 시스템 + 목업을 생성하므로, 키 없이도 앱이 끝까지 동작합니다.
+> **아직 비어 있는 부분**:
+> - **실 AI 호출** — [`app/services/ai/`](app/services/ai/)의 Gemini·Codex 프로바이더는
+>   프롬프트·구조화 출력 스키마까지 작성돼 있지만, 기본값은 `FAKE_AI_PIPELINE=true`
+>   (결정론적 placeholder)입니다. 실호출은 키를 넣고 `false` 로 바꿔야 켜집니다.
 > - **결제** — [`app/api/routes/billing.py`](app/api/routes/billing.py)의 Stripe
 >   결제·크레딧 구매·환불·웹훅은 `501`을 반환합니다. 결제용 DB 모델은 이미
 >   만들어져 있습니다.
 
-## 빠른 시작
+## 로컬 환경 (Windows · 권장)
+
+제어 스크립트 하나로 준비·기동·정지·검증을 모두 처리합니다. 서버는 **콘솔 창 없이**
+백그라운드로 뜨고 로그는 `backend/logs/` 로 떨어집니다.
+
+```powershell
+cd D:\Project\designgenerator\backend
+
+# 최초 1회 — 가상환경 + 의존성 + .env 확인 + DB 시드
+powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 setup
+
+# 기동 / 정지 / 재기동 / 상태
+powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 start
+powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 stop
+powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 restart
+powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 status
+```
+
+| Action | 설명 |
+|---|---|
+| `setup` | 가상환경 생성 → 의존성 설치 → `.env` 확인 → DB 시드 |
+| `start` | 숨김 실행 기동. `-Port 8010` 로 포트 변경, `-Reload` 로 자동 리로드 |
+| `stop` | 프로세스 트리 정리 후 포트 해제까지 확인 |
+| `status` | 기동 여부 + `/health` 응답 (DB·환경·fake 파이프라인 여부) |
+| `logs` | 최근 로그 (`-Lines 100`) |
+| `seed` | 플랜·계정 시드 (멱등) |
+| `reset` | ⚠ DB 삭제 후 재시드 — 로컬 데이터가 사라집니다 |
+| `smoke` | 문서 v0.5.0 규칙 E2E 46 검사 (임시 DB 격리, 서버 불필요) |
+
+### 수동 실행 (macOS·Linux 또는 스크립트 없이)
 
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env          # SECRET_KEY 수정 (키는 나중에)
+cp .env.example .env          # SECRET_KEY 수정
 python -m app.seed            # 테이블 생성 + 데모/관리자 계정 + 플랜 시드
 uvicorn app.main:app --reload --port 8000
 ```
 
+### 접속 정보
+
 - API 문서 (Swagger): http://localhost:8000/docs
-- 기본 URL: `http://localhost:8000/api/v1`
-- 시드 계정: `demo@designgenerator.io / demo1234`, `admin@designgenerator.io / admin1234`
+- 기본 URL: `http://localhost:8000/api/v1` · 헬스: `/api/v1/health`
+- 시드 계정: `demo@designgenerator.io / demo1234` (Pro), `admin@designgenerator.io / admin1234` (Admin)
+
+### 환경 변수 (`.env`)
+
+시크릿은 ContextBuilder `Secrets/env/designgenerator/backend/.env` 를 심볼릭 링크로
+참조합니다. 값 수정은 링크 원본에서 하고, 저장소에는 커밋하지 않습니다.
+
+| 키 | 로컬 기본값 | 비고 |
+|---|---|---|
+| `DATABASE_URL` | `sqlite+aiosqlite:///./designgen.db` | Postgres 전환 시 `postgresql+asyncpg://…` |
+| `CORS_ORIGINS` | `localhost:3000~3002` | 프론트가 다른 포트로 뜨면 여기에 추가 |
+| `FAKE_AI_PIPELINE` | `true` | `false` 로 바꾸면 실제 Gemini·OpenAI 호출 |
+| `DEBUG` | `true` | SQL 쿼리를 로그에 찍습니다. 조용히 하려면 `false` |
+| `SECRET_KEY` | 개발용 플레이스홀더 | 배포 전 반드시 교체 |
+
+### 프론트와 함께 띄우기
+
+```powershell
+# 1) 백엔드
+powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 start
+
+# 2) 프론트 (별도 창)
+cd ..\frontend; npm run dev
+```
+
+프론트 개발 서버는 `http://localhost:8000/api/v1` 을 기본 API 주소로 씁니다
+(`frontend/next.config.mjs`). 3000 번이 점유돼 다른 포트로 뜨면 `CORS_ORIGINS` 에
+그 포트를 추가하고 백엔드를 재기동합니다.
+
+### 정합 점검
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 smoke   # E2E 46 검사
+.venv\Scripts\python.exe scripts\check_api_paths.py                     # 프론트 호출 경로 ↔ 라우트 대조
+```
 
 ## 프로젝트 구조
 
