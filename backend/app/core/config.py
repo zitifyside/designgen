@@ -60,6 +60,20 @@ class Settings(BaseSettings):
     log_sink_mode: str = "dual"
 
     @property
+    def allowed_hosts(self) -> list[str]:
+        """CORS 출처에서 호스트만 뽑은 TrustedHost 허용 목록.
+
+        Cloud Run 은 자체 도메인(*.run.app)으로도 요청을 받으므로 함께 허용한다.
+        """
+        hosts: list[str] = []
+        for origin in self.cors_origins:
+            host = origin.split("://")[-1].split("/")[0]
+            if host and host not in hosts:
+                hosts.append(host)
+        hosts.append("*.run.app")
+        return hosts
+
+    @property
     def loghub_environment(self) -> str:
         """허브가 받는 environment 는 production·staging·local 세 값뿐이다."""
         value = (self.mae_loghub_env or self.environment).strip().lower()

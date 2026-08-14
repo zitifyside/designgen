@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.deps import CurrentUser, DbDep
 from app.core.observability import log_event, user_id_var
+from app.core.security_middleware import validate_password_strength
 from app.core.security import (
     REFRESH_TOKEN,
     create_access_token,
@@ -88,6 +89,7 @@ async def signup(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
+    validate_password_strength(body.password, email=str(body.email))
     limit = plan_limits("Free")[0]
     user = User(
         email=body.email,

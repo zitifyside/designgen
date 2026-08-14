@@ -15,6 +15,7 @@ from app.api.routes import (
     system,
     teams,
     templates,
+    uploads,
     users,
 )
 
@@ -27,6 +28,7 @@ api_router.include_router(projects.router)
 api_router.include_router(generations.router)
 api_router.include_router(design_systems.router)
 api_router.include_router(mockups.router)
+api_router.include_router(uploads.router)
 api_router.include_router(exports.router)
 api_router.include_router(templates.router)
 api_router.include_router(notifications.router)

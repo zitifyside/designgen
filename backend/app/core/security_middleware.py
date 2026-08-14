@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict, deque
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
@@ -110,6 +110,56 @@ def enforce_request_limits(request: Request) -> JSONResponse | None:
         )
     bucket.append(now)
     return None
+
+
+# ── 비밀번호 정책 ─────────────────────────────────────────────────
+
+MIN_PASSWORD_LENGTH = 8
+
+# 유출 목록 상위권에서 뽑은 최소 차단 집합. 사전 전체를 들고 있을 필요는 없고,
+# "숫자만"·"같은 문자 반복" 같은 구조 규칙이 실제로 더 많이 걸러낸다.
+COMMON_PASSWORDS = {
+    "password", "password1", "123456789", "12345678", "qwerty123",
+    "111111111", "adminadmin", "letmein1", "welcome1", "iloveyou",
+    "designgenerator", "adg12345",
+}
+
+
+def validate_password_strength(password: str, *, email: str = "") -> None:
+    """약한 비밀번호를 가입·변경 시점에 거부한다.
+
+    복잡도 규칙을 잔뜩 거는 대신 실제로 뚫리는 패턴만 막는다 —
+    길이 미달·숫자만·문자 반복·흔한 값·이메일 아이디 포함.
+    """
+    value = (password or "").strip()
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"비밀번호는 최소 {MIN_PASSWORD_LENGTH}자 이상이어야 합니다.",
+        )
+    lowered = value.lower()
+    if lowered in COMMON_PASSWORDS:
+        raise HTTPException(
+            status_code=400, detail="너무 흔한 비밀번호입니다. 다른 값을 사용해 주세요."
+        )
+    if value.isdigit():
+        raise HTTPException(
+            status_code=400, detail="숫자로만 이루어진 비밀번호는 사용할 수 없습니다."
+        )
+    if len(set(value)) <= 3:
+        raise HTTPException(
+            status_code=400, detail="같은 문자의 반복은 비밀번호로 사용할 수 없습니다."
+        )
+    # 이메일 아이디 포함 여부는 구분자를 무시하고 본다 —
+    # `weak2.live@…` 에 `weak2live` 를 쓰는 식으로 점 하나만 빼면 통과하던 구멍이 있었다.
+    def alnum(value: str) -> str:
+        return "".join(ch for ch in value.lower() if ch.isalnum())
+
+    local = alnum((email or "").split("@")[0])
+    if local and len(local) >= 4 and local in alnum(value):
+        raise HTTPException(
+            status_code=400, detail="비밀번호에 이메일 아이디를 포함할 수 없습니다."
+        )
 
 
 # ── 시작 시 시크릿 점검 ────────────────────────────────────────────

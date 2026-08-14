@@ -17,6 +17,7 @@ import type {
   ExportFormat,
   ExportRecord,
   ExportScope,
+  FileUploadRecord,
   Generation,
   Mockup,
   Notification,
@@ -233,6 +234,35 @@ export async function downloadFile(path: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * multipart 업로드. Content-Type 을 직접 지정하면 boundary 가 빠지므로
+ * 브라우저가 채우도록 두고, 인증 헤더만 붙인다.
+ */
+export async function uploadMultipart<T>(path: string, files: File[]): Promise<T> {
+  const form = new FormData();
+  for (const file of files) form.append("files", file, file.name);
+
+  const tokens = readTokens();
+  const res = await fetch(buildUrl(path), {
+    method: "POST",
+    headers: tokens?.accessToken
+      ? { Authorization: `Bearer ${tokens.accessToken}` }
+      : {},
+    body: form,
+  });
+  if (!res.ok) {
+    let detail = `업로드에 실패했습니다 (${res.status})`;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") detail = data.detail;
+    } catch {
+      /* 본문이 JSON 이 아니면 기본 메시지를 쓴다. */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return (await res.json()) as T;
+}
+
 interface AuthResponse extends TokenPair {
   tokenType: string;
   user: User;
@@ -389,6 +419,17 @@ export const api = {
       request<Generation>(`/projects/${id}/screens`, {
         method: "POST",
         body,
+      }),
+  },
+
+  files: {
+    list: (projectId: string) =>
+      request<FileUploadRecord[]>(`/projects/${projectId}/files`),
+    upload: (projectId: string, files: File[]) =>
+      uploadMultipart<FileUploadRecord[]>(`/projects/${projectId}/files`, files),
+    remove: (projectId: string, fileId: string) =>
+      request<{ detail: string }>(`/projects/${projectId}/files/${fileId}`, {
+        method: "DELETE",
       }),
   },
 

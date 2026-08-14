@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.router import api_router
@@ -67,6 +68,11 @@ app = FastAPI(
     redoc_url="/redoc" if settings.environment != "production" else None,
     openapi_url="/openapi.json" if settings.environment != "production" else None,
 )
+
+# Host 헤더 위조(캐시 포이즈닝·비밀번호 재설정 링크 변조)를 막는다.
+# 허용 목록은 CORS 출처에서 호스트만 뽑아 만든다 — 두 설정이 갈라지지 않게.
+if settings.environment == "production" and settings.allowed_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 
 app.add_middleware(
     CORSMiddleware,

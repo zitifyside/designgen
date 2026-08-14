@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
 from app.core.security import hash_password, verify_password
+from app.core.security_middleware import validate_password_strength
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import Generation
 from app.models.notification import Notification
@@ -50,6 +51,7 @@ async def change_password(body: PasswordChangeIn, user: CurrentUser, db: DbDep):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect"
         )
+    validate_password_strength(body.new_password, email=user.email)
     user.password_hash = hash_password(body.new_password)
     db.add(user)
     return Message(detail="Password updated")

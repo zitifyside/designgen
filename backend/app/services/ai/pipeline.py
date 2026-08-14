@@ -31,6 +31,7 @@ from app.models.design import DesignSystem, Mockup
 from app.models.generation import Generation
 from app.models.notification import Notification
 from app.models.project import DS_MODE_UNIFIED, Project
+from app.models.upload import FileUpload
 from app.models.user import User
 from app.services.ai.base import AIProvider
 from app.services.ai.codex import CodexProvider
@@ -42,6 +43,7 @@ from app.services.ai.placeholder import (
     placeholder_layouts,
 )
 from app.services.quota import refund_generation
+from app.services.upload import merge_requirements
 
 # 단계 → 누적 진행률 체크포인트(%)
 STAGE_PROGRESS = {
@@ -100,11 +102,22 @@ async def run_generation(
         try:
             await _set_stage(db, gen, "InputAnalyzer")
 
+            # 첨부 자료의 추출 텍스트를 요건에 합류시킨다 (기능정의서 §3.1 파일 업로드).
+            attachments = (
+                await db.scalars(
+                    select(FileUpload).where(FileUpload.project_id == project.id)
+                )
+            ).all()
+            analysis_input = merge_requirements(
+                project.requirements_text,
+                [(f.filename, f.extracted_text) for f in attachments],
+            )
+
             # 생성 화면 미지정 시 Input Analyzer 가 대표 화면을 추론한다.
             screen, screen_title = project.target_screen, project.target_screen_title
             if not screen:
                 screen, screen_title = infer_target_screen(
-                    project.requirements_text, project.platform
+                    analysis_input, project.platform
                 )
                 project.target_screen = screen
                 project.target_screen_title = screen_title
@@ -118,6 +131,7 @@ async def run_generation(
                 concept_sets, layouts_by_concept, fallback = await _run_real(
                     gen, project, concepts, variants, ds_mode,
                     screen, screen_title, concept_briefs, provider_name, db,
+                    requirements=analysis_input,
                 )
 
             await _set_stage(db, gen, "Renderer")
@@ -393,11 +407,14 @@ async def _run_fake(
 
 async def _run_real(
     gen, project, concepts, variants, ds_mode, screen, screen_title,
-    concept_briefs, provider_name, db,
+    concept_briefs, provider_name, db, requirements: str | None = None,
 ):
     provider = get_provider(provider_name)
 
-    analysis = await provider.analyze_input(project.requirements_text, project.platform)
+    analysis = await provider.analyze_input(
+        requirements if requirements is not None else project.requirements_text,
+        project.platform,
+    )
     analysis.setdefault("dsMode", ds_mode)
     analysis.setdefault("targetScreen", screen)
     analysis.setdefault("targetScreenTitle", screen_title)

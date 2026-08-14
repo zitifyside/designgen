@@ -193,10 +193,16 @@ async def main() -> None:
         r = await c.get(f"{API}/templates", headers=h)
         check("  승인 후 노출", any(t["id"] == tid for t in r.json()))
 
+        # 12-b) 비밀번호 정책 (약한 값 거부)
+        r = await c.post(f"{API}/auth/signup", json={"email": "weak.smoke@test.io", "password": "12345678", "name": "약한"})
+        check("약한 비밀번호 거부(400)", r.status_code == 400, f"{r.status_code} {r.text[:60]}")
+        r = await c.post(f"{API}/auth/signup", json={"email": "weak2.smoke@test.io", "password": "password", "name": "약한"})
+        check("흔한 비밀번호 거부(400)", r.status_code == 400, str(r.status_code))
+
         # 13) Free 등급 게이팅
-        r = await c.post(f"{API}/auth/signup", json={"email": "free.smoke@test.io", "password": "free1234", "name": "프리"})
+        r = await c.post(f"{API}/auth/signup", json={"email": "free.smoke@test.io", "password": "Free-adg-2026", "name": "프리"})
         if r.status_code != 201:
-            r = await c.post(f"{API}/auth/login", json={"email": "free.smoke@test.io", "password": "free1234"})
+            r = await c.post(f"{API}/auth/login", json={"email": "free.smoke@test.io", "password": "Free-adg-2026"})
         fh = {"Authorization": f"Bearer {r.json()['accessToken']}"}
         r = await c.post(
             f"{API}/projects",

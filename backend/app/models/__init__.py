@@ -13,6 +13,7 @@ from app.models.logging import AppLogEvent
 from app.models.notification import Notification
 from app.models.platform import ApiKey, ExportHistory, Team, TeamMembership
 from app.models.project import Project
+from app.models.upload import FileUpload
 from app.models.template import Template, TemplatePurchase, TemplateReview
 from app.models.user import (
     EmailVerification,
@@ -30,6 +31,7 @@ __all__ = [
     "DesignSystem",
     "EmailVerification",
     "ExportHistory",
+    "FileUpload",
     "Feedback",
     "Generation",
     "Mockup",

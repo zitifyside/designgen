@@ -143,6 +143,19 @@ export interface Mockup {
   isFavorite: boolean;
 }
 
+export interface FileUploadRecord {
+  id: string;
+  projectId: string;
+  filename: string;
+  kind: "image" | "document";
+  contentType: string;
+  sizeBytes: number;
+  pages?: number | null;
+  /** 분석에 실제로 반영된 텍스트 분량. 이미지는 0 이다. */
+  extractedChars: number;
+  createdAt: string;
+}
+
 export interface ScreenInfo {
   screen: string;
   screenTitle: string;

@@ -122,6 +122,12 @@ export default function NewProjectPage() {
         targetScreen: targetScreen || undefined,
         conceptBriefs: briefs,
       });
+      // 첨부는 프로젝트 생성 직후에 올린다 — 서버가 텍스트를 추출해
+      // 요건과 합쳐 분석 입력으로 쓴다.
+      if (files.length > 0) {
+        await api.files.upload(project.id, files);
+      }
+
       const generation = await api.generations.start(project.id, {
         concepts: conceptCount,
         variants: variantCount,
@@ -183,7 +189,7 @@ export default function NewProjectPage() {
         <Card>
           <div className="text-xs font-medium text-ink-700">파일 첨부 (선택)</div>
           <p className="mt-0.5 text-[11px] text-ink-500">
-            .md·.png·.jpg·.pdf — 이미지 20MB·문서 10MB, 최대 5개
+            .md·.txt·.pdf·.png·.jpg — 이미지 20MB·문서 10MB, 최대 5개
           </p>
           <label
             htmlFor="file-input"
@@ -195,7 +201,7 @@ export default function NewProjectPage() {
               id="file-input"
               type="file"
               multiple
-              accept=".md,.png,.jpg,.jpeg,.pdf"
+              accept=".md,.txt,.png,.jpg,.jpeg,.pdf"
               onChange={(e) => handleFiles(e.target.files)}
               className="hidden"
             />
@@ -217,9 +223,9 @@ export default function NewProjectPage() {
             </ul>
           )}
 
-          <p className="mt-2 text-[10px] text-amber-700">
-            ※ 파일 업로드 API 는 아직 연동 전이라, 현재 생성은 위 요건 텍스트만
-            분석한다.
+          <p className="mt-2 text-[10px] text-ink-500">
+            ※ .md·.txt·.pdf 는 본문 텍스트를 추출해 요건에 합쳐 분석한다. 이미지는
+            v1.0 에서 참고 메타만 기록하며 분석에는 쓰이지 않는다.
           </p>
         </Card>
 
