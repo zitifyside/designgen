@@ -40,6 +40,7 @@ const NAV = [
   {
     section: "시스템",
     items: [
+      { href: "/admin/logs", label: "로그", icon: "🧾" },
       { href: "/admin/health", label: "헬스 체크", icon: "❤️" },
     ],
   },

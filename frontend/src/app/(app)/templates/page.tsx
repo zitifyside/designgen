@@ -66,17 +66,25 @@ export default function TemplatesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    // 공개 목록과 내 템플릿은 따로 가져온다 — 개인 영역이 실패해도(로그아웃·권한)
+    // 공개 마켓까지 빈 화면이 되면 안 된다.
     try {
-      const [list, own] = await Promise.all([
-        api.templates.list(),
-        canPublish ? api.templates.mine() : Promise.resolve<Template[]>([]),
-      ]);
-      setTemplates(list);
-      setMine(own);
+      setTemplates(await api.templates.list());
     } catch (e) {
       setError(e instanceof Error ? e.message : "템플릿을 불러오지 못했다.");
     } finally {
       setLoading(false);
+    }
+    if (!canPublish) {
+      setMine([]);
+      return;
+    }
+    try {
+      setMine(await api.templates.mine());
+    } catch {
+      // 내 템플릿 조회 실패는 마켓 열람을 막지 않는다.
+      setMine([]);
     }
   }, [canPublish]);
 

@@ -26,6 +26,7 @@ from sqlalchemy import delete, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.core.observability import build_event
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import Generation
 from app.models.notification import Notification
@@ -174,6 +175,19 @@ async def run_generation(
             gen.completed_at = _now()
             project.status = "CompletedWarning" if fallback else "Completed"
             db.add(
+                build_event(
+                    kind="generation.completed",
+                    level="warn" if fallback else "info",
+                    message="CSS Fallback 으로 완료" if fallback else "생성 완료",
+                    user_id=gen.user_id,
+                    payload={
+                        "generationId": gen.id, "projectId": project.id,
+                        "concepts": len(concept_sets), "variants": variants,
+                        "dsMode": ds_mode, "screen": screen, "fallback": fallback,
+                    },
+                )
+            )
+            db.add(
                 Notification(
                     user_id=gen.user_id,
                     category="generation",
@@ -293,6 +307,16 @@ async def run_screen_generation(
             # 화면 추가 후에도 프로젝트는 컨셉 확정 상태를 유지한다.
             project.status = "ConceptLocked"
             db.add(
+                build_event(
+                    kind="generation.screen_completed",
+                    level="warn" if fallback else "info",
+                    message="화면 추가 생성 완료",
+                    user_id=gen.user_id,
+                    payload={"generationId": gen.id, "projectId": project.id,
+                             "screen": screen, "fallback": fallback},
+                )
+            )
+            db.add(
                 Notification(
                     user_id=gen.user_id,
                     category="generation",
@@ -325,6 +349,15 @@ async def _fail(db, generation_id: str, exc: Exception, *, reset_project_status:
     else:
         gen.error = str(exc) or exc.__class__.__name__
     gen.completed_at = _now()
+    db.add(
+        build_event(
+            kind="generation.failed",
+            level="error",
+            message=f"생성 실패: {gen.error}"[:4000],
+            user_id=gen.user_id,
+            payload={"generationId": gen.id, "projectId": gen.project_id, "kind": gen.kind},
+        )
+    )
     proj = await db.get(Project, gen.project_id)
     if proj is not None:
         proj.status = reset_project_status

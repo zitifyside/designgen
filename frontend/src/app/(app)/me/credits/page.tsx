@@ -21,16 +21,13 @@ export default function CreditsPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try {
-      const [tx, planList] = await Promise.all([
-        api.billing.creditTransactions(),
-        api.billing.plans(),
-      ]);
-      setTransactions(tx);
-      setPlans(planList);
-    } catch {
-      /* 조회 실패는 화면을 막지 않는다. */
-    }
+    // 한쪽 실패가 다른 쪽 표시를 막지 않도록 따로 가져온다.
+    const [tx, planList] = await Promise.all([
+      api.billing.creditTransactions().catch(() => [] as CreditTransaction[]),
+      api.billing.plans().catch(() => [] as PlanInfo[]),
+    ]);
+    setTransactions(tx);
+    setPlans(planList);
   }, []);
 
   useEffect(() => {

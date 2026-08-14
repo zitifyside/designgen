@@ -1,0 +1,10 @@
+# AI Design Generator — 정식 출시 전이라 검색 노출을 막는다.
+# 출시 시점에 Allow 로 전환하되 /admin·/me 는 계속 차단한다.
+User-agent: *
+Disallow: /
+
+# 관리자·개인 영역은 어떤 경우에도 수집 대상이 아니다.
+User-agent: *
+Disallow: /admin
+Disallow: /me
+Disallow: /api

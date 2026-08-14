@@ -7,18 +7,24 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.core.deps import AdminUser, DbDep
+from app.core.observability import TIER_AUDIT, log_event
 from app.models.admin import Announcement, AuditLog, Feedback
 from app.models.billing import Payment, Plan, Refund, Subscription
 from app.models.generation import Generation
+from app.models.logging import AppLogEvent
+from app.models.platform import ApiKey
 from app.models.notification import Notification
 from app.models.project import Project
 from app.models.template import Template
-from app.models.user import User
+from app.models.user import Session, User
 from app.core.config import settings
 from app.schemas.admin import (
+    AdminUserDetailOut,
     AdminUserOut,
     DailyPointOut,
     HealthComponentOut,
+    LogEventOut,
+    LogStatsOut,
     StatsOut,
     AnnouncementIn,
     AnnouncementOut,
@@ -32,6 +38,7 @@ from app.schemas.admin import (
 )
 from app.schemas.common import Message
 from app.schemas.template import TemplateModerateIn, TemplateOut
+from app.services import loghub
 from app.services.quota import plan_limits
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -42,8 +49,21 @@ def _now() -> dt.datetime:
 
 
 async def _log(db, admin: User, action: str, target: str, severity: str = "info") -> None:
+    """관리자 조치를 감사 로그(DB)와 중앙 로그 허브에 함께 남긴다.
+
+    감사 로그는 t3(감사 사본) 등급으로 보낸다 — 허브 구조설계상 운영 지표(t1)·
+    오류(t2) 와 보존 정책이 다르다.
+    """
     db.add(
         AuditLog(actor=admin.email, action=action, target=target, severity=severity)
+    )
+    log_event(
+        kind=f"admin.{action}"[:80],
+        level="warn" if severity in ("warning", "critical") else "info",
+        message=f"관리자 조치: {action} → {target}",
+        tier=TIER_AUDIT,
+        user_id=admin.id,
+        payload={"actor": admin.email, "action": action, "target": target},
     )
 
 
@@ -417,3 +437,217 @@ async def health_components(admin: AdminUser, db: DbDep):
         )
     )
     return out
+
+
+# 로그 (관측)
+@router.get("/logs", response_model=list[LogEventOut])
+async def list_logs(
+    admin: AdminUser,
+    db: DbDep,
+    level: str | None = Query(default=None),
+    kind: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    user_id: str | None = Query(default=None, alias="userId"),
+    trace_id: str | None = Query(default=None, alias="traceId"),
+    hours: int = Query(default=24, ge=1, le=720),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    """애플리케이션 로그 조회.
+
+    중앙 로그 허브가 권위 저장소이고 여기는 로컬 사본이다 — 허브가 죽어도
+    운영 콘솔에서 최근 로그를 볼 수 있어야 하므로 두 곳에 쓴다.
+    """
+    since = _now() - dt.timedelta(hours=hours)
+    stmt = select(AppLogEvent).where(AppLogEvent.occurred_at >= since)
+    if level:
+        levels = [item.strip() for item in level.split(",") if item.strip()]
+        stmt = stmt.where(AppLogEvent.level.in_(levels))
+    if kind:
+        stmt = stmt.where(AppLogEvent.kind.ilike(kind + "%"))
+    if user_id:
+        stmt = stmt.where(AppLogEvent.user_id == user_id)
+    if trace_id:
+        stmt = stmt.where(AppLogEvent.trace_id == trace_id)
+    if q:
+        like = "%" + q + "%"
+        stmt = stmt.where(AppLogEvent.message.ilike(like) | AppLogEvent.path.ilike(like))
+    rows = (
+        await db.scalars(stmt.order_by(AppLogEvent.occurred_at.desc()).limit(limit))
+    ).all()
+
+    emails = await _emails_for(db, {r.user_id for r in rows if r.user_id})
+    return [_to_log_out(r, emails.get(r.user_id)) for r in rows]
+
+
+@router.get("/logs/stats", response_model=LogStatsOut)
+async def log_stats(
+    admin: AdminUser,
+    db: DbDep,
+    hours: int = Query(default=24, ge=1, le=720),
+):
+    since = _now() - dt.timedelta(hours=hours)
+    rows = (
+        await db.scalars(select(AppLogEvent).where(AppLogEvent.occurred_at >= since))
+    ).all()
+
+    by_level: dict[str, int] = {}
+    by_kind: dict[str, int] = {}
+    for r in rows:
+        by_level[r.level] = by_level.get(r.level, 0) + 1
+        by_kind[r.kind] = by_kind.get(r.kind, 0) + 1
+    errors = by_level.get("error", 0) + by_level.get("fatal", 0)
+
+    return LogStatsOut(
+        range_hours=hours,
+        total=len(rows),
+        by_level=by_level,
+        top_kinds=[
+            {"kind": k, "count": v}
+            for k, v in sorted(by_kind.items(), key=lambda kv: kv[1], reverse=True)[:12]
+        ],
+        error_rate=(errors / len(rows)) if rows else 0.0,
+        forwarder=loghub.stats(),
+    )
+
+
+def _to_log_out(r, email: str | None):
+    return LogEventOut(
+        id=r.id,
+        event_id=r.event_id,
+        occurred_at=r.occurred_at,
+        level=r.level,
+        tier=r.tier,
+        kind=r.kind,
+        message=r.message,
+        trace_id=r.trace_id,
+        user_id=r.user_id,
+        user_email=email,
+        source=r.source,
+        method=r.method,
+        path=r.path,
+        status_code=r.status_code,
+        duration_ms=r.duration_ms,
+        payload=r.payload,
+        stack=r.stack,
+    )
+
+
+async def _emails_for(db, user_ids: set) -> dict:
+    if not user_ids:
+        return {}
+    rows = (await db.scalars(select(User).where(User.id.in_(user_ids)))).all()
+    return {u.id: u.email for u in rows}
+
+
+# 사용자 상세
+@router.get("/users/{user_id}", response_model=AdminUserDetailOut)
+async def user_detail(user_id: str, admin: AdminUser, db: DbDep):
+    """사용자 한 명의 계정·구독·활동·보유 프로젝트를 모아 본다
+    (기능정의서 v0.2.0 §3.3 사용자 목록·상세).
+    """
+    target = await db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    projects = (
+        await db.scalars(
+            select(Project)
+            .where(Project.owner_id == user_id)
+            .order_by(Project.updated_at.desc())
+            .limit(20)
+        )
+    ).all()
+    gens = (
+        await db.scalars(select(Generation).where(Generation.user_id == user_id))
+    ).all()
+    sub = await db.scalar(select(Subscription).where(Subscription.user_id == user_id))
+    sessions = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Session)
+            .where(Session.user_id == user_id, Session.revoked.is_(False))
+        )
+        or 0
+    )
+    api_keys = (
+        await db.scalar(
+            select(func.count())
+            .select_from(ApiKey)
+            .where(ApiKey.user_id == user_id, ApiKey.revoked.is_(False))
+        )
+        or 0
+    )
+    activity = (
+        await db.scalars(
+            select(AppLogEvent)
+            .where(AppLogEvent.user_id == user_id)
+            .order_by(AppLogEvent.occurred_at.desc())
+            .limit(30)
+        )
+    ).all()
+
+    return AdminUserDetailOut(
+        id=target.id,
+        email=target.email,
+        name=target.name,
+        plan=target.plan,
+        status=target.status,
+        credits=target.credits,
+        monthly_used=target.monthly_used,
+        monthly_limit=target.monthly_limit,
+        email_verified=target.email_verified,
+        two_factor_enabled=target.two_factor_enabled,
+        is_admin=target.is_admin,
+        joined_at=target.created_at,
+        last_active_at=target.last_active_at,
+        locked_until=target.locked_until,
+        failed_login_attempts=target.failed_login_attempts,
+        deletion_requested_at=target.deletion_requested_at,
+        subscription=(
+            {
+                "planCode": sub.plan_code,
+                "status": sub.status,
+                "currentPeriodEnd": (
+                    sub.current_period_end.isoformat() if sub.current_period_end else None
+                ),
+            }
+            if sub
+            else None
+        ),
+        projects=[
+            {
+                "id": p.id,
+                "name": p.name,
+                "status": p.status,
+                "platform": p.platform,
+                "updatedAt": p.updated_at.isoformat() if p.updated_at else None,
+            }
+            for p in projects
+        ],
+        generations={
+            "total": len(gens),
+            "done": sum(1 for g in gens if g.status == "Done"),
+            "failed": sum(1 for g in gens if g.status == "Failed"),
+            "warning": sum(1 for g in gens if g.is_warning),
+        },
+        recent_activity=[_to_log_out(r, target.email) for r in activity],
+        sessions=sessions,
+        api_keys=api_keys,
+    )
+
+
+@router.post("/users/{user_id}/unlock", response_model=Message)
+async def unlock_user(user_id: str, admin: AdminUser, db: DbDep):
+    """브루트포스 방어로 잠긴 계정을 관리자가 해제한다.
+
+    잠금은 시간이 지나면 자동으로 풀리지만, 정당한 사용자가 즉시 들어와야 하는
+    상황(오타 반복·공유 계정)에서 15분을 기다리게 할 이유는 없다.
+    """
+    target = await db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    target.failed_login_attempts = 0
+    target.locked_until = None
+    db.add(target)
+    await _log(db, admin, "user.unlock", target.email, "warning")
+    return Message(detail="계정 잠금을 해제했습니다.")

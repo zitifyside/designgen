@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.observability import log_event
 from app.core.config import settings
 from app.models.design import DesignSystem, Mockup
 from app.models.platform import EXPORT_TTL_DAYS, ExportHistory
@@ -142,6 +143,15 @@ async def create_export(
     db.add(row)
     await db.flush()
     row.download_url = f"{settings.api_v1_prefix}/exports/{row.id}/download"
+    log_event(
+        kind="export.created",
+        message=f"Export 생성 ({body.format})",
+        user_id=user.id,
+        payload={
+            "projectId": project.id, "format": body.format, "scope": body.scope,
+            "watermark": watermark, "sizeBytes": row.size_bytes,
+        },
+    )
     return ExportOut.model_validate(row)
 
 

@@ -8,6 +8,7 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 import { api, type AdminUser } from "@/lib/api";
 import type { Plan } from "@/lib/types";
 
@@ -28,6 +29,7 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
   const [target, setTarget] = useState<AdminUser | null>(null);
+  const [detailUserId, setDetailUserId] = useState<string | null>(null);
   const [suspendReason, setSuspendReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -141,8 +143,16 @@ export default function AdminUsersPage() {
             {users.map((u) => (
               <tr key={u.id} className="border-b border-ink-100">
                 <td className="px-4 py-3">
-                  <div className="font-medium text-ink-900">{u.name}</div>
-                  <div className="text-[10px] text-ink-500">{u.email}</div>
+                  <button
+                    className="text-left"
+                    onClick={() => setDetailUserId(u.id)}
+                    title="상세 보기"
+                  >
+                    <div className="font-medium text-ink-900 hover:underline">
+                      {u.name}
+                    </div>
+                    <div className="text-[10px] text-ink-500">{u.email}</div>
+                  </button>
                 </td>
                 <td className="px-4 py-3">
                   <select
@@ -173,13 +183,22 @@ export default function AdminUsersPage() {
                     : "—"}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setTarget(u)}
-                  >
-                    {u.status === "Suspended" ? "정지 해제" : "정지"}
-                  </Button>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDetailUserId(u.id)}
+                    >
+                      상세
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setTarget(u)}
+                    >
+                      {u.status === "Suspended" ? "정지 해제" : "정지"}
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -193,6 +212,12 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
       </Card>
+
+      <UserDetailDrawer
+        userId={detailUserId}
+        onClose={() => setDetailUserId(null)}
+        onChanged={() => void load()}
+      />
 
       <Modal
         open={!!target}

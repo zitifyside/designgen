@@ -108,3 +108,59 @@ class HealthComponentOut(CamelModel):
     status: str
     detail: str = ""
     latency_ms: int | None = None
+
+
+class LogEventOut(CamelModel):
+    id: str
+    event_id: str
+    occurred_at: dt.datetime
+    level: str
+    tier: str
+    kind: str
+    message: str | None = None
+    trace_id: str | None = None
+    user_id: str | None = None
+    user_email: str | None = None
+    source: str | None = None
+    method: str | None = None
+    path: str | None = None
+    status_code: int | None = None
+    duration_ms: int | None = None
+    payload: dict | None = None
+    stack: str | None = None
+
+
+class LogStatsOut(CamelModel):
+    """운영 콘솔용 로그 요약. forwarder 는 허브 전송기 상태다."""
+
+    range_hours: int
+    total: int
+    by_level: dict[str, int]
+    top_kinds: list[dict]
+    error_rate: float
+    forwarder: dict
+
+
+class AdminUserDetailOut(CamelModel):
+    id: str
+    email: str
+    name: str
+    plan: str
+    status: str
+    credits: int
+    monthly_used: int
+    monthly_limit: int
+    email_verified: bool
+    two_factor_enabled: bool
+    is_admin: bool
+    joined_at: dt.datetime
+    last_active_at: dt.datetime | None = None
+    locked_until: dt.datetime | None = None
+    failed_login_attempts: int = 0
+    deletion_requested_at: dt.datetime | None = None
+    subscription: dict | None = None
+    projects: list[dict] = []
+    generations: dict = {}
+    recent_activity: list[LogEventOut] = []
+    sessions: int = 0
+    api_keys: int = 0

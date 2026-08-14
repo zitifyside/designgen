@@ -9,6 +9,7 @@ from app.models.billing import (
 )
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import Generation
+from app.models.logging import AppLogEvent
 from app.models.notification import Notification
 from app.models.platform import ApiKey, ExportHistory, Team, TeamMembership
 from app.models.project import Project
@@ -23,6 +24,7 @@ from app.models.user import (
 __all__ = [
     "Announcement",
     "ApiKey",
+    "AppLogEvent",
     "AuditLog",
     "CreditTransaction",
     "DesignSystem",

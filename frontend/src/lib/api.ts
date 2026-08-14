@@ -70,6 +70,25 @@ export function writeTokens(tokens: TokenPair | null) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+/**
+ * 세션이 완전히 끊겼을 때(갱신까지 실패) 앱에 알리는 훅.
+ * auth-store 가 등록해 로그인 상태를 내리고, AppShell 이 로그인 화면으로 보낸다.
+ */
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
+  unauthorizedHandler = handler;
+}
+
+function notifyUnauthorized() {
+  try {
+    unauthorizedHandler?.();
+  } catch {
+    /* 알림 실패가 원래 오류를 덮지 않게 한다. */
+  }
+}
+
 type Query = Record<string, string | number | boolean | undefined | null>;
 
 interface RequestOptions {
@@ -143,11 +162,15 @@ export async function request<T>(
     );
   }
 
-  if (res.status === 401 && auth && !retried) {
-    if (await refreshTokens()) {
+  if (res.status === 401 && auth) {
+    if (!retried && (await refreshTokens())) {
       return request<T>(path, { method, body, query, auth, retried: true });
     }
+    // 갱신까지 실패하면 세션이 끝난 것이다. 토큰을 지우고 앱에 알려
+    // 로그인 화면으로 돌려보낸다 — 백엔드 원문 메시지를 그대로 보여주지 않는다.
     writeTokens(null);
+    notifyUnauthorized();
+    throw new ApiError(401, "세션이 만료되었습니다. 다시 로그인해 주세요.");
   }
 
   if (!res.ok) {
@@ -559,6 +582,23 @@ export const api = {
         method: "PATCH",
         body: { status, adminResponse },
       }),
+    logs: (query?: {
+      level?: string;
+      kind?: string;
+      q?: string;
+      userId?: string;
+      traceId?: string;
+      hours?: number;
+      limit?: number;
+    }) => request<LogEventRecord[]>("/admin/logs", { query }),
+    logStats: (hours: number) =>
+      request<LogStats>("/admin/logs/stats", { query: { hours } }),
+    userDetail: (userId: string) =>
+      request<AdminUserDetail>(`/admin/users/${userId}`),
+    unlockUser: (userId: string) =>
+      request<{ detail: string }>(`/admin/users/${userId}/unlock`, {
+        method: "POST",
+      }),
     stats: (rangeDays: number) =>
       request<AdminStats>("/admin/stats", { query: { range: rangeDays } }),
     health: () => request<HealthComponent[]>("/admin/health"),
@@ -652,6 +692,68 @@ export interface HealthComponent {
   status: "operational" | "degraded" | "down" | "not_configured";
   detail: string;
   latencyMs?: number | null;
+}
+
+export interface LogEventRecord {
+  id: string;
+  eventId: string;
+  occurredAt: string;
+  level: "debug" | "info" | "warn" | "error" | "fatal";
+  tier: string;
+  kind: string;
+  message?: string | null;
+  traceId?: string | null;
+  userId?: string | null;
+  userEmail?: string | null;
+  source?: string | null;
+  method?: string | null;
+  path?: string | null;
+  statusCode?: number | null;
+  durationMs?: number | null;
+  payload?: Record<string, unknown> | null;
+  stack?: string | null;
+}
+
+export interface LogStats {
+  rangeHours: number;
+  total: number;
+  byLevel: Record<string, number>;
+  topKinds: Array<{ kind: string; count: number }>;
+  errorRate: number;
+  forwarder: {
+    enabled: boolean;
+    mode: string;
+    projectId: string;
+    environment: string;
+    buffered: number;
+    dropped: number;
+    circuitOpen: boolean;
+  };
+}
+
+export interface AdminUserDetail {
+  id: string;
+  email: string;
+  name: string;
+  plan: string;
+  status: string;
+  credits: number;
+  monthlyUsed: number;
+  monthlyLimit: number;
+  emailVerified: boolean;
+  twoFactorEnabled: boolean;
+  isAdmin: boolean;
+  joinedAt: string;
+  lastActiveAt?: string | null;
+  lockedUntil?: string | null;
+  failedLoginAttempts: number;
+  deletionRequestedAt?: string | null;
+  subscription?: { planCode: string; status: string; currentPeriodEnd?: string | null } | null;
+  projects: Array<{ id: string; name: string; status: string; platform: string; updatedAt?: string | null }>;
+  generations: { total: number; done: number; failed: number; warning: number };
+  recentActivity: LogEventRecord[];
+  sessions: number;
+  apiKeys: number;
 }
 
 export interface FeedbackRecord {

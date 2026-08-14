@@ -1,7 +1,13 @@
 "use client";
 
 import { create } from "zustand";
-import { ApiError, api, readTokens, writeTokens } from "@/lib/api";
+import {
+  ApiError,
+  api,
+  readTokens,
+  setUnauthorizedHandler,
+  writeTokens,
+} from "@/lib/api";
 import type { User } from "@/lib/types";
 
 interface AuthState {
@@ -28,6 +34,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   hydrate: async () => {
     if (get().hydrated) return;
+    // 세션이 끊기면(갱신 실패) 즉시 비로그인 상태로 내린다 — AppShell 이 로그인으로 보낸다.
+    setUnauthorizedHandler(() => {
+      set({ user: null, isAuthenticated: false, hydrated: true });
+    });
     const tokens = readTokens();
     if (!tokens?.accessToken) {
       set({ hydrated: true, isAuthenticated: false, user: null });

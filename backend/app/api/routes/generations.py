@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.observability import log_event
 from app.models.generation import GEN_KIND_FULL, Generation
 from app.models.project import Project
 from app.schemas.common import Message
@@ -41,6 +42,13 @@ async def assert_no_active_generation(db, user_id: str) -> None:
         )
     )
     if active is not None:
+        log_event(
+            kind="generation.blocked_concurrent",
+            level="warn",
+            message="동시 생성 제한으로 차단",
+            user_id=user_id,
+            payload={"activeGenerationId": active.id},
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="이미 진행 중인 생성이 있습니다. 완료 후 새 생성을 시작해 주세요.",
@@ -122,6 +130,21 @@ async def start_generation(
     # 워커가 볼 수 있도록 응답 전에 선점 + 작업 행을 커밋한다.
     await db.commit()
 
+    log_event(
+        kind="generation.started",
+        message="전체 생성 시작",
+        user_id=user.id,
+        payload={
+            "generationId": gen_id,
+            "projectId": project.id,
+            "concepts": concepts,
+            "variants": variants,
+            "dsMode": ds_mode,
+            "targetScreen": target_screen or "(ai)",
+        },
+    )
+    await db.commit()
+
     background.add_task(
         run_generation,
         gen_id,
@@ -194,6 +217,14 @@ async def retry_generation(
     retry_id = retry.id
     await db.commit()
 
+    log_event(
+        kind="generation.free_retry",
+        message="CSS Fallback 건 무차감 재시도",
+        user_id=user.id,
+        payload={"originGenerationId": origin.id, "retryId": retry_id},
+    )
+    await db.commit()
+
     background.add_task(
         run_generation,
         retry_id,
@@ -229,8 +260,16 @@ async def cancel_generation(generation_id: str, user: CurrentUser, db: DbDep):
             "ConceptLocked" if project.confirmed_concept_label else "Cancelled"
         )
     # 환불 정책: 진행률 <30% → 전액 환불(단순화). 무차감 재시도 건은 환불 대상이 아니다.
-    if gen.progress < 30 and not gen.free_retry_used:
+    refunded = gen.progress < 30 and not gen.free_retry_used
+    if refunded:
         refund_generation(user)
+    log_event(
+        kind="generation.cancelled",
+        level="warn",
+        message="생성 취소",
+        user_id=user.id,
+        payload={"generationId": gen.id, "progress": gen.progress, "refunded": refunded},
+    )
     return Message(detail="Generation cancelled")
 
 

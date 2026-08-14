@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 
+from app.core.observability import log_event
 from app.models.billing import CreditTransaction
 from app.models.project import DS_MODE_PER_CONCEPT, DS_MODE_UNIFIED
 from app.models.user import User
@@ -108,6 +109,13 @@ async def consume_generation(db, user: User, *, note: str = "generation") -> Non
         return
 
     # 3) 차단.
+    log_event(
+        kind="quota.exhausted",
+        level="warn",
+        message="월간 한도·크레딧 소진으로 생성 차단",
+        user_id=user.id,
+        payload={"plan": user.plan, "monthlyUsed": user.monthly_used, "credits": user.credits},
+    )
     raise HTTPException(
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
         detail="Monthly generation limit reached and no credits left. "

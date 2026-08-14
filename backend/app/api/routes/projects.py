@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from sqlalchemy import select, update
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.observability import log_event
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import GEN_KIND_SCREEN, Generation
 from app.models.project import Project
@@ -239,6 +240,12 @@ async def confirm_concept(
     project.status = "ConceptLocked"
     project.thumbnail_concept = label
     db.add(project)
+    log_event(
+        kind="project.concept_confirmed",
+        message="컨셉 확정",
+        user_id=user.id,
+        payload={"projectId": project.id, "conceptLabel": label},
+    )
     return ProjectOut.model_validate(project)
 
 
@@ -261,6 +268,12 @@ async def unlock_concept(project_id: str, user: CurrentUser, db: DbDep):
     project.locked_at = None
     project.status = "Completed"
     db.add(project)
+    log_event(
+        kind="project.concept_unlocked",
+        message="컨셉 확정 해제",
+        user_id=user.id,
+        payload={"projectId": project.id},
+    )
     return ProjectOut.model_validate(project)
 
 
@@ -353,6 +366,12 @@ async def add_screen(
     db.add(gen)
     await db.flush()
     gen_id = gen.id
+    log_event(
+        kind="generation.screen_added",
+        message="화면 추가 생성 시작",
+        user_id=user.id,
+        payload={"projectId": project.id, "screen": screen, "generationId": gen_id},
+    )
     await db.commit()
 
     background.add_task(

@@ -45,6 +45,29 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
 
+    # 관측 (로깅 + 중앙 로그 허브)
+    service_name: str = "adg-api"
+    service_version: str = "0.2.0"
+    log_level: str = "INFO"
+    # 로컬 DB 로그 보존 일수. 0 이면 정리하지 않는다.
+    log_retention_days: int = 14
+    # 중앙 로그 허브 (마에 loghub). 값은 Secrets/env/designgenerator/loghub.env 에 있다.
+    mae_loghub_url: str = ""
+    mae_loghub_key: str = ""
+    mae_loghub_project_id: str = "designgenerator"
+    mae_loghub_env: str = ""  # 미지정 시 environment 를 따른다
+    # off = 전송 안 함 / dual = DB + 허브 / local = DB 만
+    log_sink_mode: str = "dual"
+
+    @property
+    def loghub_environment(self) -> str:
+        """허브가 받는 environment 는 production·staging·local 세 값뿐이다."""
+        value = (self.mae_loghub_env or self.environment).strip().lower()
+        if value in ("production", "staging", "local"):
+            return value
+        # development·test 등 내부 명칭은 허브 계약상 local 로 접는다.
+        return "local"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, v: object) -> object:
