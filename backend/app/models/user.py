@@ -5,6 +5,7 @@ import datetime as dt
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
 
 from app.core.database import Base
 from app.models.base import TimestampMixin, id_column
@@ -36,6 +37,13 @@ class User(Base, TimestampMixin):
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     two_factor_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     two_factor_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 백업 코드 10개 (기능정의서 v0.2.0 §3.1 '보안 — 2FA').
+    two_factor_backup_codes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+    # 계정 삭제 요청 시각. 30일 유예 후 hard delete 대상이 된다.
+    deletion_requested_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     language: Mapped[str] = mapped_column(String(8), default="ko")
     theme: Mapped[str] = mapped_column(String(8), default="system")

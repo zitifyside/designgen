@@ -10,6 +10,7 @@ from app.models.billing import (
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import Generation
 from app.models.notification import Notification
+from app.models.platform import ApiKey, ExportHistory, Team, TeamMembership
 from app.models.project import Project
 from app.models.template import Template, TemplatePurchase, TemplateReview
 from app.models.user import (
@@ -21,10 +22,12 @@ from app.models.user import (
 
 __all__ = [
     "Announcement",
+    "ApiKey",
     "AuditLog",
     "CreditTransaction",
     "DesignSystem",
     "EmailVerification",
+    "ExportHistory",
     "Feedback",
     "Generation",
     "Mockup",
@@ -36,6 +39,8 @@ __all__ = [
     "Refund",
     "Session",
     "Subscription",
+    "Team",
+    "TeamMembership",
     "Template",
     "TemplatePurchase",
     "TemplateReview",

@@ -20,6 +20,10 @@ class DesignSystemOut(CamelModel):
     description: str
     tokens: dict[str, Any]
     is_modified: bool
+    is_archived: bool
+    ds_mode: str
+    base_ds_id: str | None = None
+    overridden_fields: dict[str, Any] | None = None
 
 
 class DesignSystemUpdate(CamelModel):
@@ -34,7 +38,12 @@ class MockupOut(CamelModel):
     project_id: str
     concept_label: str
     index: int
+    screen: str
+    screen_title: str
+    screen_order: int
     kind: str
     title: str
+    variant_label: str
     image_url: str | None = None
+    is_fallback: bool
     is_favorite: bool

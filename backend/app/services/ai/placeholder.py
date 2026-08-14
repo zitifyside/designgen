@@ -1,10 +1,18 @@
 """FAKE_AI_PIPELINE=true일 때 사용되는 결정론적 placeholder 출력.
 
-프론트엔드의 목 컨셉(Modern Minimal / Bold Vibrant / Soft Pastel)과 5가지
-목업 종류를 그대로 반영하여, 실제 Gemini / Codex 프롬프트가 작성되기 전에도
-앱 전체를 처음부터 끝까지 실행할 수 있게 한다.
+기획서 v0.5.0 §4 F-002 의 시안 정의를 그대로 따른다 —
+**시안은 단일 대표 화면의 레이아웃 구조 변형이며, 서로 다른 화면의 집합이 아니다.**
+따라서 한 번의 생성은 (컨셉 N종) × (동일 화면의 구조 변형 3·5종) 을 만든다.
+
+DS 생성 방식 2종도 여기서 분기한다.
+  · per_concept : 컨셉마다 전 Token 카테고리를 독립 생성 (Primary Hue 60도 이상 구별)
+  · unified     : Base Token 1벌 공통 고정 + 컨셉별 강조색만 변주 (강조색 Hue 60도 이상 구별)
 """
 from __future__ import annotations
+
+import colorsys
+
+from app.models.project import DS_MODE_UNIFIED
 
 CONCEPTS = [
     {
@@ -75,19 +83,196 @@ CONCEPTS = [
     },
 ]
 
-MOCKUP_KINDS = [
-    {"kind": "landing", "title": "랜딩 페이지"},
-    {"kind": "dashboard", "title": "대시보드"},
-    {"kind": "pricing", "title": "Pricing"},
-    {"kind": "signup", "title": "회원가입"},
-    {"kind": "settings", "title": "설정"},
+# 요건 입력의 '생성 화면' 프리셋 (기능정의서 v0.2.0 §4.1).
+SCREEN_PRESETS: dict[str, str] = {
+    "landing": "랜딩",
+    "login": "로그인",
+    "dashboard": "대시보드",
+    "list": "목록",
+    "detail": "상세",
+}
+
+# 화면 아키타입별 구조 변형 라벨 — 시안은 이 축으로만 달라진다.
+VARIANT_LABELS: dict[str, list[str]] = {
+    "landing": [
+        "히어로 중앙 정렬 + 3열 특징 카드",
+        "히어로 좌우 분할 + 우측 제품 프리뷰",
+        "상단 풀블리드 배너 + 2열 본문",
+        "좌측 고정 내비 + 세로 스크롤 섹션",
+        "카드 그리드 우선 + 히어로 축약",
+    ],
+    "login": [
+        "중앙 단일 카드 + 소셜 로그인 상단",
+        "좌우 분할 (브랜드 패널 + 폼)",
+        "상단 로고 + 폭 넓은 단일 컬럼",
+        "카드 없는 전면 폼 + 하단 보조 링크",
+        "우측 폼 고정 + 좌측 이미지 배경",
+    ],
+    "dashboard": [
+        "지표 4열 + 대형 차트 1 + 보조 1",
+        "지표 2열 + 차트 2분할 균등",
+        "좌측 사이드바 + 지표 3열",
+        "상단 필터 바 + 표 중심 레이아웃",
+        "카드 대시보드 (지표·차트 혼합 그리드)",
+    ],
+    "list": [
+        "표 형식 + 상단 필터 바",
+        "카드 그리드 3열",
+        "좌측 필터 패널 + 우측 리스트",
+        "밀집 리스트 + 우측 미리보기",
+        "섹션 그룹 리스트 + 상단 탭",
+    ],
+    "detail": [
+        "좌측 내비 + 우측 상세 카드",
+        "상단 요약 + 탭 분할 본문",
+        "2열 (본문 + 사이드 메타)",
+        "단일 컬럼 롱폼 + 고정 액션 바",
+        "히어로 요약 + 아코디언 섹션",
+    ],
+}
+
+# 자유 입력 화면명 → 아키타입 추론 키워드.
+_ARCHETYPE_HINTS: list[tuple[tuple[str, ...], str]] = [
+    (("로그인", "login", "signin", "sign in", "가입", "signup", "인증", "auth"), "login"),
+    (("대시보드", "dashboard", "통계", "분석", "analytics", "리포트", "report"), "dashboard"),
+    (("목록", "리스트", "list", "table", "표", "검색", "search", "관리"), "list"),
+    (("상세", "detail", "설정", "settings", "프로필", "profile", "편집", "edit"), "detail"),
+    (("랜딩", "landing", "홈", "home", "메인", "main", "소개", "intro"), "landing"),
 ]
 
 
-def placeholder_concepts(n: int) -> list[dict]:
-    return [dict(c) for c in CONCEPTS[: max(1, min(n, len(CONCEPTS)))]]
+def archetype_for(screen: str, title: str = "") -> str:
+    """화면 키·표시명에서 렌더 아키타입을 정한다."""
+    if screen in SCREEN_PRESETS:
+        return screen
+    haystack = f"{screen} {title}".lower()
+    for keywords, archetype in _ARCHETYPE_HINTS:
+        if any(k in haystack for k in keywords):
+            return archetype
+    return "landing"
 
 
-def placeholder_layouts(variants: int) -> list[dict]:
-    kinds = MOCKUP_KINDS[: max(1, min(variants, len(MOCKUP_KINDS)))]
-    return [{"kind": k["kind"], "title": k["title"], "nodeTree": None} for k in kinds]
+def infer_target_screen(requirements: str, platform: str) -> tuple[str, str]:
+    """Input Analyzer 의 대표 화면 추론 (미지정 시 호출).
+
+    반환: (screen key, screen title)
+    """
+    text = (requirements or "").lower()
+    for keywords, archetype in _ARCHETYPE_HINTS:
+        if any(k in text for k in keywords):
+            return archetype, SCREEN_PRESETS[archetype]
+    # 단서가 없으면 플랫폼 기본 대표 화면을 쓴다.
+    default = "dashboard" if platform == "Mobile" else "landing"
+    return default, SCREEN_PRESETS[default]
+
+
+# --- 컬러 유틸 (unified 모드의 강조색 Hue 회전에 사용) -------------------------
+
+
+def _hex_to_rgb(value: str) -> tuple[float, float, float]:
+    v = value.lstrip("#")
+    return tuple(int(v[i : i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
+
+
+def _rgb_to_hex(rgb: tuple[float, float, float]) -> str:
+    return "#" + "".join(f"{max(0, min(255, round(c * 255))):02X}" for c in rgb)
+
+
+def rotate_hue(value: str, degrees: float) -> str:
+    """HEX 컬러의 Hue 만 회전한다 (채도·명도 유지)."""
+    r, g, b = _hex_to_rgb(value)
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    h = (h + degrees / 360.0) % 1.0
+    return _rgb_to_hex(colorsys.hls_to_rgb(h, l, s))
+
+
+# --- Concept Engine ----------------------------------------------------------
+
+
+def placeholder_concepts(
+    n: int, ds_mode: str = "per_concept", briefs: list[dict] | None = None
+) -> list[dict]:
+    """컨셉 N종의 DS Token 세트를 만든다.
+
+    unified 모드는 A 컨셉의 Token 을 Base 로 삼아 전 컨셉이 공유하고,
+    강조색(secondary·info)만 Hue 120도씩 회전시켜 구별성을 확보한다.
+    briefs 가 있으면(컨셉 직접 입력 모드) 컨셉 이름·방향성을 사용자 값으로 덮는다.
+    """
+    count = max(1, min(n, len(CONCEPTS)))
+    if ds_mode != DS_MODE_UNIFIED:
+        return _apply_briefs([_deep_copy(c) for c in CONCEPTS[:count]], briefs)
+
+    base = _deep_copy(CONCEPTS[0])
+    out: list[dict] = []
+    for i in range(count):
+        concept = _deep_copy(base)
+        concept["conceptLabel"] = CONCEPTS[i]["conceptLabel"]
+        secondary = rotate_hue(base["tokens"]["color"]["secondary"], 120 * i)
+        info = rotate_hue(base["tokens"]["color"]["info"], 120 * i)
+        concept["tokens"]["color"]["secondary"] = secondary
+        concept["tokens"]["color"]["info"] = info
+        if i == 0:
+            concept["conceptName"] = f"{base['conceptName']} (Base)"
+            concept["description"] = (
+                "단일 DS 통일 — Base Token 원본. Typography·Spacing 등은 전 컨셉 공통 고정이다."
+            )
+        else:
+            concept["conceptName"] = f"{base['conceptName']} · Accent {i + 1}"
+            concept["description"] = (
+                "단일 DS 통일 — Base Token 공통, 강조색만 변주한 컨셉이다."
+            )
+        concept["dsMode"] = DS_MODE_UNIFIED
+        concept["baseConceptLabel"] = CONCEPTS[0]["conceptLabel"]
+        concept["overriddenFields"] = (
+            {} if i == 0 else {"color": {"secondary": secondary, "info": info}}
+        )
+        out.append(concept)
+    return _apply_briefs(out, briefs)
+
+
+def _apply_briefs(concepts: list[dict], briefs: list[dict] | None) -> list[dict]:
+    """컨셉 직접 입력 값을 생성 결과에 반영한다."""
+    if not briefs:
+        return concepts
+    for concept, brief in zip(concepts, briefs):
+        name = (brief.get("name") or "").strip()
+        direction = (brief.get("direction") or "").strip()
+        keywords = (brief.get("keywords") or "").strip()
+        if name:
+            concept["conceptName"] = name
+        if direction:
+            concept["description"] = direction
+        if keywords:
+            concept["keywords"] = keywords
+    return concepts
+
+
+# --- Layout Engine -----------------------------------------------------------
+
+
+def placeholder_layouts(
+    variants: int, screen: str = "landing", screen_title: str = "랜딩"
+) -> list[dict]:
+    """동일 화면(screen)의 구조 변형 N종을 만든다."""
+    archetype = archetype_for(screen, screen_title)
+    labels = VARIANT_LABELS[archetype]
+    count = max(1, min(variants, len(labels)))
+    return [
+        {
+            "kind": archetype,
+            "screen": screen,
+            "screenTitle": screen_title,
+            "title": f"{screen_title} · 변형 {i + 1}",
+            "variantLabel": labels[i],
+            "nodeTree": None,
+        }
+        for i in range(count)
+    ]
+
+
+def _deep_copy(value):
+    if isinstance(value, dict):
+        return {k: _deep_copy(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_deep_copy(v) for v in value]
+    return value

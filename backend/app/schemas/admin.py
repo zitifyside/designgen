@@ -79,3 +79,32 @@ class KpiOut(CamelModel):
     generations_total: int
     pending_refunds: int
     open_feedback: int
+
+
+class DailyPointOut(CamelModel):
+    date: str
+    generations: int
+    failures: int
+    ai_cost_cents: int
+    signups: int
+
+
+class StatsOut(CamelModel):
+    """DB 가 실제로 아는 값만 집계한다 — 결제 연동 전에는 매출 계열이 0 이다."""
+
+    range_days: int
+    daily: list[DailyPointOut]
+    plan_distribution: dict[str, int]
+    mrr_cents: int
+    paid_ratio: float
+    arpu_cents: int
+    error_rate: float
+    ai_cost_total_cents: int
+    payments_recorded: int
+
+
+class HealthComponentOut(CamelModel):
+    name: str
+    status: str
+    detail: str = ""
+    latency_ms: int | None = None

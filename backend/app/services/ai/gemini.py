@@ -18,6 +18,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.services.ai.base import AIProvider
+from app.services.ai.placeholder import archetype_for
 from app.services.ai.schemas import (
     ANALYSIS_SCHEMA,
     CONCEPTS_SCHEMA,
@@ -46,11 +47,13 @@ PROMPT_CONCEPT_ENGINE = (
 )
 
 PROMPT_LAYOUT_ENGINE = (
-    "당신은 정보 구조 설계자다. 주어진 디자인 컨셉과 프로젝트 분석을 바탕으로, "
-    "요청된 개수만큼의 목업 화면을 선정하라. kind는 반드시 허용된 목록 안에서만 "
-    "고르고, 같은 kind를 두 번 이상 배정하지 마라. 프로젝트의 목적과 핵심 기능에 "
-    "비추어 가장 먼저 필요한 화면부터 우선 배정하라. 각 화면에는 컨셉의 무드와 "
-    "잘 어울리는 짧은 한국어 title을 붙여라."
+    "당신은 정보 구조 설계자다. 주어진 디자인 컨셉과 대상 화면(targetScreen) 하나에 "
+    "대해, 요청된 개수만큼의 **레이아웃 구조 변형**을 설계하라. 변형은 서로 다른 "
+    "화면이 아니라 같은 화면을 다르게 구성한 안이므로 모든 항목의 kind는 "
+    "targetScreen 하나로 동일해야 한다. 각 변형은 섹션 배치·정렬·분할 구조가 "
+    "실제로 달라야 하며(구조적 유사도 70% 이하), variantLabel에 그 구조 차이를 "
+    "한국어 한 구절로 명시하라. title에는 컨셉의 무드와 어울리는 짧은 한국어 "
+    "제목을 붙여라."
 )
 
 # Stage 4(Renderer)는 아래 render() 독스트링 참고 — 현재 소비처가 없어 미호출.
@@ -123,11 +126,19 @@ class GeminiProvider(AIProvider):
     async def generate_layouts(self, concept: dict[str, Any], variants: int) -> list[dict[str, Any]]:
         result = await self._complete(
             PROMPT_LAYOUT_ENGINE,
-            {"concept": concept, "variantCount": variants},
+            {
+                "concept": concept,
+                "variantCount": variants,
+                "targetScreen": concept.get("targetScreen", "landing"),
+                "targetScreenTitle": concept.get("targetScreenTitle", ""),
+            },
             schema=LAYOUTS_SCHEMA,
         )
         layouts = result["layouts"]
-        validate_layouts(layouts, variants)
+        validate_layouts(layouts, variants, archetype_for(
+            concept.get("targetScreen", "landing"),
+            concept.get("targetScreenTitle", ""),
+        ))
         return [{**layout, "nodeTree": None} for layout in layouts]
 
     async def render(self, layout: dict[str, Any], tokens: dict[str, Any]) -> dict[str, Any]:

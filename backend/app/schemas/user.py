@@ -26,10 +26,12 @@ class UserOut(CamelModel):
     language: str
     theme: str
     created_at: dt.datetime
+    deletion_requested_at: dt.datetime | None = None
 
     @classmethod
     def from_model(cls, u) -> "UserOut":
         return cls(
+            deletion_requested_at=getattr(u, "deletion_requested_at", None),
             id=u.id,
             email=u.email,
             name=u.name,
@@ -79,6 +81,26 @@ class RefreshIn(CamelModel):
 class PasswordChangeIn(CamelModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class TwoFactorSetupOut(CamelModel):
+    secret: str
+    otpauth_uri: str
+    backup_codes: list[str]
+
+
+class TwoFactorVerifyIn(CamelModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
+class TwoFactorDisableIn(CamelModel):
+    password: str
+    code: str = Field(min_length=6, max_length=6)
+
+
+class AccountDeleteIn(CamelModel):
+    password: str
+    reason: str = Field(default="", max_length=500)
 
 
 class SessionOut(CamelModel):

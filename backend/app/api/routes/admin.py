@@ -8,12 +8,18 @@ from sqlalchemy import func, select
 
 from app.core.deps import AdminUser, DbDep
 from app.models.admin import Announcement, AuditLog, Feedback
-from app.models.billing import Refund
+from app.models.billing import Payment, Plan, Refund, Subscription
 from app.models.generation import Generation
+from app.models.notification import Notification
 from app.models.project import Project
+from app.models.template import Template
 from app.models.user import User
+from app.core.config import settings
 from app.schemas.admin import (
     AdminUserOut,
+    DailyPointOut,
+    HealthComponentOut,
+    StatsOut,
     AnnouncementIn,
     AnnouncementOut,
     AuditLogOut,
@@ -25,6 +31,7 @@ from app.schemas.admin import (
     TierChangeIn,
 )
 from app.schemas.common import Message
+from app.schemas.template import TemplateModerateIn, TemplateOut
 from app.services.quota import plan_limits
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -231,3 +238,182 @@ async def resolve_feedback(feedback_id: str, body: FeedbackResolveIn, admin: Adm
     f.admin_response = body.admin_response or f.admin_response
     db.add(f)
     return Message(detail="Feedback updated")
+
+
+# ── 템플릿 심사 ──────────────────────────────────────────────────
+@router.get("/templates", response_model=list[TemplateOut])
+async def list_templates_for_review(
+    admin: AdminUser,
+    db: DbDep,
+    status_filter: str | None = Query(default=None, alias="status"),
+):
+    """마켓 등록 템플릿 심사 큐 (기능정의서 v0.2.0 §3.3 '템플릿 심사')."""
+    stmt = select(Template).order_by(Template.created_at.desc())
+    if status_filter:
+        stmt = stmt.where(Template.status == status_filter)
+    rows = (await db.scalars(stmt)).all()
+    return [TemplateOut.model_validate(t) for t in rows]
+
+
+@router.patch("/templates/{template_id}", response_model=TemplateOut)
+async def moderate_template(
+    template_id: str, body: TemplateModerateIn, admin: AdminUser, db: DbDep
+):
+    t = await db.get(Template, template_id)
+    if t is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    if body.status in ("Rejected", "RequestChanges") and not body.reason.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="거부·수정 요청은 사유 입력이 필수입니다.",
+        )
+    t.status = body.status
+    db.add(t)
+    await _log(db, admin, f"template.{body.status.lower()}", t.name, "warning")
+    if t.author_id:
+        db.add(
+            Notification(
+                user_id=t.author_id,
+                category="system",
+                title=f"템플릿 심사 결과: {body.status}",
+                body=f"'{t.name}' 템플릿이 {body.status} 처리되었습니다. {body.reason}".strip(),
+                href="/templates",
+            )
+        )
+    return TemplateOut.model_validate(t)
+
+
+# ── 통계 ────────────────────────────────────────────────────────
+@router.get("/stats", response_model=StatsOut)
+async def stats(
+    admin: AdminUser,
+    db: DbDep,
+    range_days: int = Query(default=30, ge=1, le=365, alias="range"),
+):
+    """일별 생성·실패·AI 비용 + 플랜 분포 + 매출 지표.
+
+    결제(Stripe) 연동 전이므로 매출 계열은 실제 결제 레코드가 없으면 0 이다.
+    실측 없는 수치를 지어내지 않는다.
+    """
+    since = _now() - dt.timedelta(days=range_days)
+
+    gens = (
+        await db.scalars(select(Generation).where(Generation.created_at >= since))
+    ).all()
+    users = (await db.scalars(select(User))).all()
+    plans = {p.code: p for p in (await db.scalars(select(Plan))).all()}
+    subs = (
+        await db.scalars(select(Subscription).where(Subscription.status == "active"))
+    ).all()
+    payments = (
+        await db.scalars(select(Payment).where(Payment.created_at >= since))
+    ).all()
+
+    buckets: dict[str, dict[str, int]] = {}
+    for i in range(range_days):
+        day = (since + dt.timedelta(days=i + 1)).date().isoformat()
+        buckets[day] = {"generations": 0, "failures": 0, "aiCostCents": 0, "signups": 0}
+
+    def bucket_for(value: dt.datetime | None):
+        if value is None:
+            return None
+        return buckets.get(value.date().isoformat())
+
+    for g in gens:
+        b = bucket_for(g.created_at)
+        if b is None:
+            continue
+        b["generations"] += 1
+        b["aiCostCents"] += g.ai_cost_cents or 0
+        if g.status == "Failed":
+            b["failures"] += 1
+    for u in users:
+        b = bucket_for(u.created_at)
+        if b is not None:
+            b["signups"] += 1
+
+    plan_distribution: dict[str, int] = {}
+    for u in users:
+        plan_distribution[u.plan] = plan_distribution.get(u.plan, 0) + 1
+
+    mrr = sum(
+        (plans[s.plan_code].monthly_price_cents if s.plan_code in plans else 0)
+        for s in subs
+    )
+    paid_users = sum(1 for u in users if u.plan in ("Pro", "Team"))
+    total_gens = len(gens)
+    failures = sum(1 for g in gens if g.status == "Failed")
+
+    return StatsOut(
+        range_days=range_days,
+        daily=[
+            DailyPointOut(
+                date=day,
+                generations=v["generations"],
+                failures=v["failures"],
+                ai_cost_cents=v["aiCostCents"],
+                signups=v["signups"],
+            )
+            for day, v in buckets.items()
+        ],
+        plan_distribution=plan_distribution,
+        mrr_cents=mrr,
+        paid_ratio=(paid_users / len(users)) if users else 0.0,
+        arpu_cents=int(mrr / paid_users) if paid_users else 0,
+        error_rate=(failures / total_gens) if total_gens else 0.0,
+        ai_cost_total_cents=sum(g.ai_cost_cents or 0 for g in gens),
+        payments_recorded=len(payments),
+    )
+
+
+@router.get("/health", response_model=list[HealthComponentOut])
+async def health_components(admin: AdminUser, db: DbDep):
+    """주요 구성요소 상태 — 실제로 확인 가능한 항목만 점검한다."""
+    out: list[HealthComponentOut] = []
+
+    started = dt.datetime.now()
+    try:
+        await db.scalar(select(func.count()).select_from(User))
+        latency = int((dt.datetime.now() - started).total_seconds() * 1000)
+        out.append(
+            HealthComponentOut(
+                name="Database", status="operational",
+                detail=settings.database_url.split("://", 1)[0], latency_ms=latency,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        out.append(HealthComponentOut(name="Database", status="down", detail=str(exc)[:120]))
+
+    out.append(
+        HealthComponentOut(
+            name="AI Pipeline",
+            status="degraded" if settings.fake_ai_pipeline else "operational",
+            detail=(
+                "FAKE_AI_PIPELINE=true — placeholder 출력으로 동작 중"
+                if settings.fake_ai_pipeline
+                else f"provider 활성 ({settings.gemini_model})"
+            ),
+        )
+    )
+    out.append(
+        HealthComponentOut(
+            name="AI Provider Key",
+            status="operational" if (settings.gemini_api_key or settings.openai_api_key) else "not_configured",
+            detail="Gemini / OpenAI 키 설정 여부",
+        )
+    )
+    out.append(
+        HealthComponentOut(
+            name="Stripe",
+            status="operational" if settings.stripe_secret_key else "not_configured",
+            detail="결제 연동 미구성" if not settings.stripe_secret_key else "키 설정됨",
+        )
+    )
+    out.append(
+        HealthComponentOut(
+            name="Object Storage",
+            status="not_configured",
+            detail="Export 산출물은 현재 요청 시 생성되며 S3 미연동",
+        )
+    )
+    return out

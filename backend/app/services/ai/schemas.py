@@ -15,9 +15,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.ai.placeholder import MOCKUP_KINDS
+from app.services.ai.placeholder import SCREEN_PRESETS
 
-ALLOWED_KINDS: list[str] = [k["kind"] for k in MOCKUP_KINDS]
+# 렌더 아키타입 = 요건 입력의 '생성 화면' 프리셋과 동일한 5종.
+ALLOWED_KINDS: list[str] = list(SCREEN_PRESETS)
 
 ANALYSIS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -176,10 +177,19 @@ LAYOUTS_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "kind": {"type": "string", "enum": ALLOWED_KINDS},
-                    "title": {"type": "string", "description": "화면을 나타내는 짧은 한국어 제목."},
+                    "kind": {
+                        "type": "string",
+                        "enum": ALLOWED_KINDS,
+                        "description": "대상 화면의 아키타입. 모든 변형이 동일한 값이어야 한다.",
+                    },
+                    "title": {"type": "string", "description": "시안을 나타내는 짧은 한국어 제목."},
+                    "variantLabel": {
+                        "type": "string",
+                        "description": "이 변형의 레이아웃 구조를 설명하는 한국어 한 구절. "
+                        "예: '히어로 좌우 분할 + 우측 제품 프리뷰'.",
+                    },
                 },
-                "required": ["kind", "title"],
+                "required": ["kind", "title", "variantLabel"],
                 "additionalProperties": False,
             },
         },
@@ -199,11 +209,31 @@ def validate_concepts(concepts: list[dict[str, Any]], n: int) -> None:
         raise ValueError(f"expected conceptLabel order {expected_labels}, got {got_labels}")
 
 
-def validate_layouts(layouts: list[dict[str, Any]], variants: int) -> None:
-    """개수·kind 중복을 검증한다. variants가 사용 가능한 kind 수를 넘으면 그만큼만 허용."""
-    expected = min(variants, len(ALLOWED_KINDS))
-    if len(layouts) != expected:
-        raise ValueError(f"expected {expected} layouts, got {len(layouts)}")
-    kinds = [layout["kind"] for layout in layouts]
-    if len(set(kinds)) != len(kinds):
-        raise ValueError(f"duplicate kind in layouts: {kinds}")
+def validate_layouts(
+    layouts: list[dict[str, Any]], variants: int, expected_kind: str | None = None
+) -> None:
+    """시안은 **동일 화면의 구조 변형**이라는 정의를 강제한다.
+
+    (기획서 v0.5.0 §4 F-002 — 시안은 서로 다른 화면의 집합이 아니다.)
+      · 개수는 요청한 변형 수와 정확히 일치한다.
+      · 모든 변형의 kind 는 대상 화면 하나로 동일하다.
+      · 변형 라벨은 중복되지 않는다 (구조가 실제로 달라야 한다).
+    """
+    if len(layouts) != variants:
+        raise ValueError(f"expected {variants} layouts, got {len(layouts)}")
+
+    kinds = {layout["kind"] for layout in layouts}
+    if len(kinds) != 1:
+        raise ValueError(
+            f"layouts must all target one screen, got kinds={sorted(kinds)}"
+        )
+    if expected_kind is not None and kinds != {expected_kind}:
+        raise ValueError(
+            f"expected all layouts to target '{expected_kind}', got {sorted(kinds)}"
+        )
+
+    labels = [str(layout.get("variantLabel", "")).strip() for layout in layouts]
+    if any(not label for label in labels):
+        raise ValueError("every layout needs a non-empty variantLabel")
+    if len(set(labels)) != len(labels):
+        raise ValueError(f"duplicate variantLabel in layouts: {labels}")

@@ -25,12 +25,15 @@ async def list_mockups(
     user: CurrentUser,
     db: DbDep,
     concept: str | None = Query(default=None),
+    screen: str | None = Query(default=None),
 ):
     await _owned_project(db, project_id, user.id)
     stmt = select(Mockup).where(Mockup.project_id == project_id)
     if concept:
         stmt = stmt.where(Mockup.concept_label == concept.upper())
-    stmt = stmt.order_by(Mockup.concept_label, Mockup.index)
+    if screen:
+        stmt = stmt.where(Mockup.screen == screen)
+    stmt = stmt.order_by(Mockup.screen_order, Mockup.concept_label, Mockup.index)
     rows = (await db.scalars(stmt)).all()
     return [MockupOut.model_validate(m) for m in rows]
 
