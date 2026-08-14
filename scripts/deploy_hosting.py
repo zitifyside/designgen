@@ -54,6 +54,7 @@ def to_serving_config(hosting: dict) -> dict:
         for passthrough in ("path", "function", "run", "dynamicLinks"):
             if passthrough in rule:
                 out[passthrough] = rule[passthrough]
+        # Cloud Run rewrite 는 REST 에서 serviceId·region 을 그대로 받는다.
         rewrites.append(out)
     if rewrites:
         config["rewrites"] = rewrites

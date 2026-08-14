@@ -67,34 +67,53 @@ firebase deploy --only hosting --project design-gen-zitify
 
 ## 3. 백엔드 배포 (Cloud Run)
 
+서비스 `adg-api` (asia-northeast3) 가 이미 떠 있다. 코드 변경 후 재배포는 아래 한 줄이다.
+
 ```bash
-gcloud auth login
-gcloud config set project design-gen-zitify
-
-# 이미지 빌드 + 배포
-gcloud run deploy adg-api \
-  --source ./backend \
-  --region asia-northeast3 \
-  --allow-unauthenticated \
-  --set-env-vars "ENVIRONMENT=production,DEBUG=false,FAKE_AI_PIPELINE=true" \
-  --set-secrets "SECRET_KEY=adg-secret-key:latest,DATABASE_URL=adg-database-url:latest"
+gcloud run deploy adg-api --source ./backend \
+  --project design-gen-zitify --region asia-northeast3 --quiet
 ```
 
-. `SECRET_KEY` 는 반드시 교체한다 (기본값은 개발용 플레이스홀더).
-. `DATABASE_URL` 은 Cloud SQL(PostgreSQL) 연결 문자열로 바꾼다 —
-  SQLite 기본값은 컨테이너 재시작 시 데이터가 사라진다.
-. 실제 AI 생성을 켜려면 `FAKE_AI_PIPELINE=false` + `GEMINI_API_KEY`/`OPENAI_API_KEY` 를 넣는다.
+환경 변수까지 새로 지정하려면 (`^@^` 는 값 안의 쉼표를 구분자로 오인하지 않게 하는 gcloud 문법):
 
-배포 후 Hosting 에 rewrite 를 추가한다 (`firebase.json` → `hosting.rewrites` 맨 앞):
-
-```json
-{
-  "source": "/api/**",
-  "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
-}
+```bash
+SECRET=$(grep '^CLOUDRUN_SECRET_KEY=' backend/.env | cut -d= -f2-)
+gcloud run deploy adg-api --source ./backend \
+  --project design-gen-zitify --region asia-northeast3 \
+  --allow-unauthenticated --max-instances 1 --memory 512Mi \
+  --set-env-vars "^@^ENVIRONMENT=production@DEBUG=false@FAKE_AI_PIPELINE=true@SEED_ON_STARTUP=true@DATABASE_URL=sqlite+aiosqlite:////tmp/designgen.db@SECRET_KEY=$SECRET@CORS_ORIGINS=https://design-gen-zitify.web.app,https://design-gen-zitify.firebaseapp.com" \
+  --quiet
 ```
 
-⚠ 이 rewrite 는 Cloud Run 서비스가 존재해야 배포가 통과한다. 그래서 기본 `firebase.json` 에는 넣지 않았다.
+Hosting 의 `/api/**` rewrite 가 이 서비스로 넘긴다 (`firebase.json`), 따라서 브라우저는
+같은 출처로 API 를 호출하고 CORS 를 타지 않는다.
+
+### 최초 구성에서 걸렸던 것 (재구축 시 참고)
+
+. **결제** — Firebase Spark 로는 Cloud Run 을 못 만든다. `zitifycorp` 결제 계정은
+  연결 가능한 프로젝트 5개 상한에 걸려 있어 슬롯을 하나 비운 뒤 연결했다.
+. **IAM** — 첫 `gcloud run deploy --source` 는 Compute 기본 서비스 계정의
+  소스 버킷 읽기 권한이 없어 403 으로 끊긴다. 아래 4개 역할을 부여하면 통과한다.
+
+```bash
+SA="$(gcloud projects describe design-gen-zitify --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+for r in roles/cloudbuild.builds.builder roles/storage.objectViewer \
+         roles/artifactregistry.writer roles/logging.logWriter; do
+  gcloud projects add-iam-policy-binding design-gen-zitify \
+    --member="serviceAccount:$SA" --role="$r" --condition=None --quiet
+done
+```
+
+### 운영 전환 시 반드시 바꿀 것
+
+. `DATABASE_URL` → PostgreSQL (Neon·Supabase·Cloud SQL).
+  현재는 컨테이너 `/tmp` 의 SQLite 라 **콜드 스타트·재배포 때 데이터가 사라진다**.
+  `SEED_ON_STARTUP=true` 라 데모 계정·플랜은 매번 다시 채워진다.
+. `SECRET_KEY` — `backend/.env`(Secrets SSOT 링크) 의 `CLOUDRUN_SECRET_KEY` 를 쓴다.
+  값이 바뀌면 기존 토큰이 전부 무효가 된다.
+. 실제 AI 생성 — `FAKE_AI_PIPELINE=false` + `GEMINI_API_KEY`/`OPENAI_API_KEY`.
+. `--max-instances 1` — SQLite 를 쓰는 동안은 인스턴스가 늘면 DB 가 갈라진다.
+  Postgres 로 옮긴 뒤에 상한을 올린다.
 
 ---
 
@@ -112,18 +131,20 @@ gcloud run deploy adg-api \
 
 | 구성 | 상태 |
 |---|---|
-| 프론트 정적 export | ✅ 빌드 검증 완료 (30 라우트) |
-| Firebase Hosting | ✅ 배포됨 — https://design-gen-zitify.web.app |
-| 백엔드 Cloud Run | ⛔ **미배포 — 프로젝트 결제(Blaze) 미연결** |
-| DB | ⏸ 로컬 SQLite. 운영은 PostgreSQL 로 전환 필요 |
+| 프론트 정적 export | ✅ 30 라우트 |
+| Firebase Hosting | ✅ https://design-gen-zitify.web.app |
+| 백엔드 Cloud Run | ✅ `adg-api` (asia-northeast3) — Hosting `/api/**` rewrite 연결 |
+| 결제 | ✅ Blaze — `zitifycorp` 결제 계정 |
+| DB | ⚠ 컨테이너 `/tmp` SQLite — **콜드 스타트·재배포 시 초기화** |
+| AI 생성 | ⚠ `FAKE_AI_PIPELINE=true` — placeholder 출력 |
 
-⚠ **현재 배포본은 UI 만 동작한다.** `design-gen-zitify` 는 Spark(무료) 요금제라
-Cloud Run·Functions 를 만들 수 없어 API 백엔드가 없다. 로그인·생성·Export 등
-서버가 필요한 기능은 "서버에 연결하지 못했습니다" 로 끝난다.
+라이브 E2E 확인 (2026-08-14): 로그인 → 프로젝트 생성(단일 DS·대시보드) → 생성 완료
+(15 시안, 화면축 단일·구조 변형 5종) → 컨셉 확정 → 화면 추가(로그인 3종) → Export(json).
 
-기능을 살리려면 둘 중 하나가 필요하다.
+### 남은 일
 
-1. **Blaze 요금제 연결** 후 §3 절차로 Cloud Run 배포 + Hosting `/api/**` rewrite 추가
-2. 백엔드를 **다른 호스트**(Render·Railway·Fly.io·자체 서버)에 올리고
-   `NEXT_PUBLIC_API_BASE_URL=https://<백엔드>/api/v1` 로 다시 빌드 + 백엔드
-   `CORS_ORIGINS` 에 `https://design-gen-zitify.web.app` 추가
+1. **DB 를 PostgreSQL 로** — 지금은 사용자가 만든 프로젝트가 콜드 스타트 후 사라진다.
+   Neon 무료 티어에 DB 를 만들고 `DATABASE_URL` 만 바꿔 재배포하면 된다
+   (`asyncpg` 는 `requirements.txt` 에 주석으로 준비돼 있으니 주석을 푼다).
+2. **실제 AI 생성** — `FAKE_AI_PIPELINE=false` + 프로바이더 키.
+3. **커스텀 도메인** — Hosting 에 도메인 연결 시 백엔드 `CORS_ORIGINS` 에도 추가.

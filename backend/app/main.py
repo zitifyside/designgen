@@ -17,6 +17,11 @@ async def lifespan(app: FastAPI):
     # 대신 Alembic 마이그레이션을 실행하고 이 호출을 제거하거나 가드 처리하세요.
     if settings.database_url.startswith("sqlite"):
         await init_db()
+    if settings.seed_on_startup:
+        # 컨테이너는 매번 빈 파일시스템으로 뜨므로 플랜·데모 계정을 채운다 (멱등).
+        from app.seed import seed
+
+        await seed()
     yield
 
 

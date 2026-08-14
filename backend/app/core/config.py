@@ -24,6 +24,9 @@ class Settings(BaseSettings):
 
     # 데이터베이스
     database_url: str = "sqlite+aiosqlite:///./designgen.db"
+    # 기동 시 플랜·데모 계정을 시드한다 (멱등). 컨테이너처럼 매번 새 파일시스템에서
+    # 뜨는 환경에서 켠다 — 로컬은 `python -m app.seed` 를 직접 부르므로 기본값 False.
+    seed_on_startup: bool = False
 
     # 인증 / JWT
     secret_key: str = "change-me-please-use-a-long-random-string"

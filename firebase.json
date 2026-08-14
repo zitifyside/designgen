@@ -6,6 +6,10 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
+        "source": "/api/**",
+        "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
+      },
+      {
         "source": "/projects/*/export",
         "destination": "/projects/__id__/export.html"
       },
