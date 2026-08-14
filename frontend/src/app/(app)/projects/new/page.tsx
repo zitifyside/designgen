@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -51,6 +51,45 @@ const CONCEPT_PLACEHOLDERS: ConceptBrief[] = [
 
 type ConceptMode = "auto" | "manual";
 
+/**
+ * 요건 입력 자동 저장 (기능정의서 v0.2.0 §3.1 '자동 저장').
+ * 30초마다 브라우저에 보관하고, 재진입 시 복원한다. 서버에 빈 Draft 프로젝트를
+ * 만들지 않는 이유는 생성 전 이탈이 훨씬 잦아 껍데기 프로젝트만 쌓이기 때문이다.
+ */
+const DRAFT_KEY = "adg.newProject.draft.v1";
+const DRAFT_INTERVAL_MS = 30_000;
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface Draft {
+  savedAt: number;
+  name: string;
+  requirements: string;
+  platform: Platform;
+  conceptCount: 1 | 2 | 3;
+  variantCount: 3 | 5;
+  dsMode: DsMode;
+  screenPreset: string;
+  customScreen: string;
+  conceptMode: ConceptMode;
+  concepts: ConceptBrief[];
+}
+
+function readDraft(): Draft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as Draft;
+    if (Date.now() - draft.savedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(DRAFT_KEY);
+      return null;
+    }
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
 export default function NewProjectPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -77,6 +116,52 @@ export default function NewProjectPage() {
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState<Date | null>(null);
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const stateRef = useRef<Record<string, unknown>>({});
+
+  // 현재 입력값을 ref 에 담아 두어, 저장 타이머가 매번 재생성되지 않게 한다.
+  stateRef.current = {
+    name, requirements, platform, conceptCount, variantCount,
+    dsMode, screenPreset, customScreen, conceptMode, concepts,
+  };
+
+  // 재진입 시 복원 (한 번만).
+  useEffect(() => {
+    const draft = readDraft();
+    if (!draft) return;
+    setName(draft.name ?? "");
+    setRequirements(draft.requirements ?? "");
+    setPlatform(draft.platform ?? "Web");
+    setConceptCount(draft.conceptCount ?? 1);
+    setVariantCount(draft.variantCount ?? 3);
+    setDsMode(draft.dsMode ?? "per_concept");
+    setScreenPreset(draft.screenPreset ?? "");
+    setCustomScreen(draft.customScreen ?? "");
+    setConceptMode(draft.conceptMode ?? "auto");
+    if (Array.isArray(draft.concepts) && draft.concepts.length === 3) {
+      setConcepts(draft.concepts);
+    }
+    setDraftRestored(new Date(draft.savedAt));
+  }, []);
+
+  // 30초마다 자동 저장 — 입력이 없으면 저장하지 않는다.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const current = stateRef.current as unknown as Omit<Draft, "savedAt">;
+      if (!current.name?.trim() && !current.requirements?.trim()) return;
+      try {
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ ...current, savedAt: Date.now() }),
+        );
+        setDraftSavedAt(new Date());
+      } catch {
+        /* 저장 실패(용량·프라이빗 모드)는 입력을 막지 않는다. */
+      }
+    }, DRAFT_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   const updateConcept = (idx: number, patch: Partial<ConceptBrief>) => {
     setConcepts((arr) => arr.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
@@ -135,6 +220,12 @@ export default function NewProjectPage() {
         targetScreen: targetScreen || undefined,
         conceptBriefs: briefs,
       });
+      // 생성까지 갔으면 임시 저장본은 역할을 다했다.
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        /* noop */
+      }
       void refreshUser();
       router.push(
         `/projects/new/generating?projectId=${project.id}&generationId=${generation.id}`,
@@ -158,6 +249,31 @@ export default function NewProjectPage() {
           </>
         }
       />
+
+      {draftRestored && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-700">
+          <span>
+            {draftRestored.toLocaleString("ko-KR")} 에 자동 저장된 입력을 복원했다.
+          </span>
+          <button
+            className="font-medium underline"
+            onClick={() => {
+              try {
+                localStorage.removeItem(DRAFT_KEY);
+              } catch {
+                /* noop */
+              }
+              setName("");
+              setRequirements("");
+              setCustomScreen("");
+              setConcepts([{ ...EMPTY_CONCEPT }, { ...EMPTY_CONCEPT }, { ...EMPTY_CONCEPT }]);
+              setDraftRestored(null);
+            }}
+          >
+            새로 작성
+          </button>
+        </div>
+      )}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <Card>
@@ -525,6 +641,11 @@ export default function NewProjectPage() {
         <div className="sticky bottom-0 -mx-6 mt-6 border-t border-ink-200 bg-white/90 px-6 py-4 backdrop-blur md:mx-0 md:rounded-xl md:border">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-ink-500">
+              {draftSavedAt && (
+                <span className="mr-2 text-[10px] text-ink-400">
+                  자동 저장 {draftSavedAt.toLocaleTimeString("ko-KR")}
+                </span>
+              )}
               컨셉 {conceptCount} × 구조 변형 {variantCount} ={" "}
               {conceptCount * variantCount}종 시안 · 예상 소요 2~3분 · 월간 생성
               한도 <span className="font-medium text-ink-700">1회 차감</span>

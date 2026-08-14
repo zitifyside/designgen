@@ -45,6 +45,10 @@ class User(Base, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
 
+    # 카테고리별 인앱·이메일 수신 설정 (기능정의서 v0.2.0 §3.1 '알림 설정').
+    # 미설정 키는 서버 기본값을 따르므로 부분 저장이 가능하다.
+    notification_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     language: Mapped[str] = mapped_column(String(8), default="ko")
     theme: Mapped[str] = mapped_column(String(8), default="system")
 

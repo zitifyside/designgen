@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
+import { FeedbackWidget } from "./FeedbackWidget";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -41,6 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <FeedbackWidget />
     </div>
   );
 }

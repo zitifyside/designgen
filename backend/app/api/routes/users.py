@@ -18,8 +18,11 @@ from app.models.platform import ExportHistory
 from app.models.project import Project
 from app.models.user import Session
 from app.schemas.common import Message
+from app.core.observability import log_event
 from app.schemas.user import (
     AccountDeleteIn,
+    NotificationPrefsOut,
+    NotificationPrefsUpdate,
     PasswordChangeIn,
     SessionOut,
     TwoFactorDisableIn,
@@ -245,3 +248,58 @@ async def cancel_account_deletion(user: CurrentUser, db: DbDep):
     user.deletion_requested_at = None
     db.add(user)
     return Message(detail="계정 삭제 요청이 취소되었습니다.")
+
+
+# ── 알림 설정 ────────────────────────────────────────────────────
+# 카테고리 기본값. 사용자가 저장하지 않은 항목은 이 값을 따른다.
+DEFAULT_NOTIFICATION_PREFS: dict[str, dict[str, bool]] = {
+    "generation_done": {"inApp": True, "email": True},
+    "generation_failed": {"inApp": True, "email": True},
+    "billing": {"inApp": True, "email": True},
+    "security": {"inApp": True, "email": True},
+    "announcement": {"inApp": True, "email": False},
+    "marketing": {"inApp": False, "email": False},
+}
+
+
+def _merged_prefs(stored: dict | None) -> dict:
+    merged = {k: dict(v) for k, v in DEFAULT_NOTIFICATION_PREFS.items()}
+    for key, value in (stored or {}).items():
+        if key in merged and isinstance(value, dict):
+            merged[key].update(
+                {k: bool(v) for k, v in value.items() if k in ("inApp", "email")}
+            )
+    return merged
+
+
+@router.get("/notification-prefs", response_model=NotificationPrefsOut)
+async def get_notification_prefs(user: CurrentUser):
+    return NotificationPrefsOut.model_validate(
+        {"prefs": _merged_prefs(user.notification_prefs)}
+    )
+
+
+@router.patch("/notification-prefs", response_model=NotificationPrefsOut)
+async def update_notification_prefs(
+    body: NotificationPrefsUpdate, user: CurrentUser, db: DbDep
+):
+    """부분 갱신 — 보낸 카테고리만 덮어쓴다."""
+    incoming = {
+        key: value.model_dump(by_alias=True)
+        for key, value in body.prefs.items()
+        if key in DEFAULT_NOTIFICATION_PREFS
+    }
+    if not incoming:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="알 수 없는 알림 카테고리입니다.",
+        )
+    user.notification_prefs = _merged_prefs({**(user.notification_prefs or {}), **incoming})
+    db.add(user)
+    log_event(
+        kind="user.notification_prefs_updated",
+        message="알림 설정 변경",
+        user_id=user.id,
+        payload={"categories": sorted(incoming)},
+    )
+    return NotificationPrefsOut.model_validate({"prefs": user.notification_prefs})

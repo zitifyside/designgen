@@ -83,6 +83,21 @@ class PasswordChangeIn(CamelModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class NotificationChannelPref(CamelModel):
+    in_app: bool = True
+    email: bool = True
+
+
+class NotificationPrefsOut(CamelModel):
+    """카테고리 → 채널별 수신 여부."""
+
+    prefs: dict[str, NotificationChannelPref]
+
+
+class NotificationPrefsUpdate(CamelModel):
+    prefs: dict[str, NotificationChannelPref]
+
+
 class TwoFactorSetupOut(CamelModel):
     secret: str
     otpauth_uri: str

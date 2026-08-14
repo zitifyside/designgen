@@ -339,6 +339,13 @@ export const api = {
         method: "POST",
         body: { password, code },
       }),
+    notificationPrefs: () =>
+      request<{ prefs: NotificationPrefs }>("/users/notification-prefs"),
+    updateNotificationPrefs: (prefs: NotificationPrefs) =>
+      request<{ prefs: NotificationPrefs }>("/users/notification-prefs", {
+        method: "PATCH",
+        body: { prefs },
+      }),
     gdprExport: () => request<Record<string, unknown>>("/users/data-export"),
     requestDeletion: (password: string, reason: string) =>
       request<{ detail: string }>("/users/delete-account", {
@@ -734,6 +741,12 @@ export interface HealthComponent {
   detail: string;
   latencyMs?: number | null;
 }
+
+/** 카테고리 → 채널별 알림 수신 여부. */
+export type NotificationPrefs = Record<
+  string,
+  { inApp: boolean; email: boolean }
+>;
 
 export interface LogEventRecord {
   id: string;
