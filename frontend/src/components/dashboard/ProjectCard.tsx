@@ -49,14 +49,14 @@ export function ProjectCard({ project }: { project: Project }) {
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="group relative block overflow-hidden rounded-xl border border-ink-200 bg-white transition hover:border-ink-300 hover:shadow-md"
+      className="group relative block overflow-hidden rounded-xl border border-ink-200 bg-surface transition hover:border-ink-300 hover:shadow-md"
     >
       <button
         onClick={(e) => {
           e.preventDefault();
           void toggle(project.id);
         }}
-        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-sm shadow-sm backdrop-blur"
+        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-surface/80 text-sm shadow-sm backdrop-blur"
         aria-label="즐겨찾기"
       >
         {project.isFavorite ? "⭐" : "☆"}
@@ -95,7 +95,7 @@ export function ProjectCard({ project }: { project: Project }) {
         </div>
 
         {!hasDesign && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-[11px] font-medium text-ink-500">
+          <div className="absolute inset-0 flex items-center justify-center bg-surface/70 text-[11px] font-medium text-ink-500">
             아직 생성 전
           </div>
         )}

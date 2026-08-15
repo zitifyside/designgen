@@ -303,3 +303,21 @@ async def update_notification_prefs(
         payload={"categories": sorted(incoming)},
     )
     return NotificationPrefsOut.model_validate({"prefs": user.notification_prefs})
+
+
+@router.post("/onboarding/complete", response_model=UserOut)
+async def complete_onboarding(user: CurrentUser, db: DbDep):
+    """온보딩 투어를 마쳤거나 건너뛰었음을 기록한다 (기능정의서 v0.2.0 §6).
+
+    완료와 스킵을 구분하지 않는다 — 둘 다 '이 사용자에게 다시 보여 주지 않는다' 는
+    같은 결론이고, 굳이 나눠 두면 스킵한 사람에게 계속 띄우고 싶은 유혹이 생긴다.
+    """
+    if user.onboarded_at is None:
+        user.onboarded_at = dt.datetime.now(dt.timezone.utc)
+        db.add(user)
+        log_event(
+            kind="user.onboarding_completed",
+            message="온보딩 투어 완료",
+            user_id=user.id,
+        )
+    return UserOut.from_model(user)

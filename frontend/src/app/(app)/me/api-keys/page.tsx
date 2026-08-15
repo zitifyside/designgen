@@ -105,7 +105,7 @@ export default function ApiKeysPage() {
               발급된 키 — 지금 복사해 보관한다. 다시 표시되지 않는다.
             </div>
             <div className="mt-1.5 flex items-center gap-2">
-              <code className="flex-1 break-all rounded bg-white px-2 py-1.5 font-mono text-[11px] text-ink-900">
+              <code className="flex-1 break-all rounded bg-surface px-2 py-1.5 font-mono text-[11px] text-ink-900">
                 {issued}
               </code>
               <Button
@@ -230,7 +230,7 @@ curl -H "X-API-Key: 발급받은 키" \\
                 onClick={() => setTab(t)}
                 className={
                   "rounded-md px-2.5 py-1 text-[11px] font-medium transition " +
-                  (tab === t ? "bg-white text-ink-900 shadow-sm" : "text-ink-500")
+                  (tab === t ? "bg-surface text-ink-900 shadow-sm" : "text-ink-500")
                 }
               >
                 {t === "mcp" ? "MCP 설정" : "REST"}

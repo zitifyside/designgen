@@ -179,7 +179,7 @@ function Toggle({
     >
       <span
         className={cn(
-          "h-4 w-4 rounded-full bg-white shadow-sm transition",
+          "h-4 w-4 rounded-full bg-surface shadow-sm transition",
           checked && "translate-x-4",
         )}
       />

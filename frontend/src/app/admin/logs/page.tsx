@@ -185,7 +185,7 @@ export default function AdminLogsPage() {
               <button
                 key={k.kind}
                 onClick={() => setKind(k.kind)}
-                className="rounded-full border border-ink-200 bg-white px-2.5 py-1 text-[11px] text-ink-600 hover:bg-ink-50"
+                className="rounded-full border border-ink-200 bg-surface px-2.5 py-1 text-[11px] text-ink-600 hover:bg-ink-50"
               >
                 {k.kind} <span className="text-ink-400">{k.count}</span>
               </button>
@@ -340,7 +340,7 @@ function Metric({
   tone?: "default" | "warning" | "danger";
 }) {
   return (
-    <div className="rounded-xl border border-ink-200 bg-white p-4">
+    <div className="rounded-xl border border-ink-200 bg-surface p-4">
       <div className="text-[11px] text-ink-500">{label}</div>
       <div
         className={cn(

@@ -73,7 +73,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   // Admin 권한 가드. 서버(RBAC)가 최종 판정하며, 여기서는 화면 접근만 막는다.
   if (user.plan !== "Admin") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-ink-900 p-6">
+      <div className="palette-fixed-light flex min-h-screen items-center justify-center bg-ink-900 p-6">
         <div className="w-full max-w-md rounded-2xl border border-ink-800 bg-ink-950 p-6 text-center text-white">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 text-2xl">
             🛡
@@ -100,7 +100,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-ink-950 text-ink-100">
+    <div className="palette-fixed-light flex h-screen overflow-hidden bg-ink-950 text-ink-100">
       <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-ink-800 bg-ink-900">
         <div className="flex h-14 items-center justify-between border-b border-ink-800 px-4">
           <div className="flex items-center gap-2">

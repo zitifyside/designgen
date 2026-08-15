@@ -42,7 +42,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-ink-200 bg-surface p-6 shadow-sm">
       <h1 className="text-base font-semibold text-ink-900">회원가입</h1>
       <p className="mt-1 text-xs text-ink-500">
         Free 등급으로 시작한다 · 월 3회 생성, Color Token 만 수정 가능.

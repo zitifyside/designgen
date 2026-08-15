@@ -63,6 +63,9 @@ export default function WorkspaceClient() {
   const unlockConcept = useWorkspaceStore((s) => s.unlockConcept);
   const addScreen = useWorkspaceStore((s) => s.addScreen);
   const screenMockups = useWorkspaceStore((s) => s.screenMockups);
+  const undoTokens = useWorkspaceStore((s) => s.undoTokens);
+  const canUndo = useWorkspaceStore((s) => s.canUndo);
+  const tokenHistory = useWorkspaceStore((s) => s.tokenHistory);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [screenModal, setScreenModal] = useState(false);
@@ -75,6 +78,8 @@ export default function WorkspaceClient() {
   const [warningGeneration, setWarningGeneration] = useState<Generation | null>(
     null,
   );
+  const [shortcutHelp, setShortcutHelp] = useState(false);
+  const [saveHint, setSaveHint] = useState(false);
 
   useEffect(() => {
     if (projectId) void loadWorkspace(projectId);
@@ -134,25 +139,84 @@ export default function WorkspaceClient() {
     project?.status === "CompletedWarning" ||
     project?.status === "ConceptLocked";
 
-  // 단축키 — 1~5 시안 전환 / 0 = 100% / Ctrl+0 = Fit.
+  // 단축키 (기능정의서 v0.2.0 §6 '단축키').
+  // 입력 요소 안에서는 1~5·0·? 를 가로채지 않는다 — 글자를 못 치게 되기 때문이다.
+  // 반면 Ctrl/Cmd 조합은 입력 중에도 동작해야 자연스럽다.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+      const typing =
+        !!target &&
+        (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+          target.isContentEditable);
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        // Token 되돌리기. 편집 중인 입력값이 아니라 디자인 시스템을 되돌린다.
+        if (canUndo(activeConcept)) {
+          e.preventDefault();
+          undoTokens(activeConcept);
+        }
         return;
       }
+      if (mod && e.key.toLowerCase() === "s") {
+        // 자동 저장이라 따로 저장할 것은 없지만, 사용자는 확인을 원한다.
+        e.preventDefault();
+        setSaveHint(true);
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        if (project) router.push(`/projects/${project.id}/export`);
+        return;
+      }
+      if (mod && e.key === "0") {
+        e.preventDefault();
+        setZoom(55); // Fit to Screen
+        return;
+      }
+      if (mod || e.altKey) return;
+
+      if (e.key === "Escape") {
+        // Esc 는 입력 중에도 받는다 — 열린 것을 닫는 키이기 때문이다.
+        if (shortcutHelp) setShortcutHelp(false);
+        else if (screenModal) setScreenModal(false);
+        else selectElement(null);
+        return;
+      }
+      if (typing) return;
+
       if (e.key >= "1" && e.key <= "5") {
         const idx = Number(e.key) - 1;
         if (idx < conceptMockups.length) setMockup(idx);
       } else if (e.key === "0") {
-        setZoom(e.metaKey || e.ctrlKey ? 55 : 100);
-      } else if (e.key === "Escape") {
-        selectElement(null);
+        setZoom(100);
+      } else if (e.key === "?") {
+        setShortcutHelp((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [conceptMockups.length, setMockup, setZoom, selectElement]);
+  }, [
+    activeConcept,
+    canUndo,
+    conceptMockups.length,
+    project,
+    router,
+    screenModal,
+    selectElement,
+    setMockup,
+    setZoom,
+    shortcutHelp,
+    undoTokens,
+  ]);
+
+  // 저장 안내는 잠깐만 띄운다.
+  useEffect(() => {
+    if (!saveHint) return;
+    const t = setTimeout(() => setSaveHint(false), 1800);
+    return () => clearTimeout(t);
+  }, [saveHint]);
 
   if (loading && !project) {
     return (
@@ -237,7 +301,7 @@ export default function WorkspaceClient() {
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
       {/* Top bar */}
-      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-ink-200 bg-white px-5 py-3">
+      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-ink-200 bg-surface px-5 py-3">
         <div className="flex items-center gap-3">
           <Link
             href="/dashboard"
@@ -268,14 +332,36 @@ export default function WorkspaceClient() {
 
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-ink-400">
-            {syncState === "saving"
-              ? "동기화 중…"
-              : syncState === "saved"
-                ? "저장됨"
-                : syncState === "error"
-                  ? "동기화 실패"
-                  : ""}
+            {saveHint
+              ? "자동 저장된다"
+              : syncState === "saving"
+                ? "동기화 중…"
+                : syncState === "saved"
+                  ? "저장됨"
+                  : syncState === "error"
+                    ? "동기화 실패"
+                    : ""}
           </span>
+          <button
+            onClick={() => undoTokens(activeConcept)}
+            disabled={(tokenHistory[activeConcept]?.length ?? 0) === 0}
+            title="Token 수정 되돌리기 (Ctrl/Cmd+Z)"
+            className={cn(
+              "rounded-lg border border-ink-200 bg-surface px-2 py-1 text-xs transition",
+              (tokenHistory[activeConcept]?.length ?? 0) === 0
+                ? "cursor-not-allowed text-ink-300"
+                : "text-ink-600 hover:bg-ink-50 hover:text-ink-900",
+            )}
+          >
+            ↩ 되돌리기
+          </button>
+          <button
+            onClick={() => setShortcutHelp(true)}
+            title="단축키 (?)"
+            className="rounded-lg border border-ink-200 bg-surface px-2 py-1 text-xs text-ink-600 transition hover:bg-ink-50 hover:text-ink-900"
+          >
+            ?
+          </button>
           <Tabs
             size="sm"
             value={viewport}
@@ -286,7 +372,7 @@ export default function WorkspaceClient() {
               { value: "Mobile", label: "Mobile" },
             ]}
           />
-          <div className="flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-1 text-xs">
+          <div className="flex items-center gap-1 rounded-lg border border-ink-200 bg-surface px-1 text-xs">
             <button
               onClick={() => setZoom(zoom - 10)}
               className="px-2 py-1 text-ink-500 hover:text-ink-900"
@@ -380,7 +466,7 @@ export default function WorkspaceClient() {
       ) : (
         <div className="flex min-h-0 flex-1">
           {/* Left controller */}
-          <div className="w-80 shrink-0 border-r border-ink-200 bg-white">
+          <div className="w-80 shrink-0 border-r border-ink-200 bg-surface">
             {activeDS && (
               <DSController
                 concept={activeDS.conceptLabel}
@@ -395,7 +481,7 @@ export default function WorkspaceClient() {
           {/* Center canvas + footer */}
           <div className="flex min-w-0 flex-1 flex-col bg-ink-100/40">
             {/* Concept tabs */}
-            <div className="flex items-center justify-between gap-3 border-b border-ink-200 bg-white px-5 py-2">
+            <div className="flex items-center justify-between gap-3 border-b border-ink-200 bg-surface px-5 py-2">
               <div className="flex items-center gap-1 overflow-x-auto scrollbar-thin">
                 {designSystems.map((d) => {
                   const active = d.conceptLabel === activeConcept;
@@ -406,7 +492,7 @@ export default function WorkspaceClient() {
                       className={cn(
                         "flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition",
                         active
-                          ? "bg-ink-900 text-white"
+                          ? "bg-ink-900 text-ink-50"
                           : "text-ink-600 hover:bg-ink-100",
                         d.isArchived && !active && "opacity-60",
                       )}
@@ -435,7 +521,7 @@ export default function WorkspaceClient() {
             </div>
 
             {/* Screen tabs */}
-            <div className="flex items-center gap-2 border-b border-ink-200 bg-white px-5 py-2">
+            <div className="flex items-center gap-2 border-b border-ink-200 bg-surface px-5 py-2">
               <span className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
                 화면
               </span>
@@ -448,7 +534,7 @@ export default function WorkspaceClient() {
                       "flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition",
                       s.screen === activeScreen
                         ? "border-brand-500 bg-brand-50 text-brand-700"
-                        : "border-ink-200 bg-white text-ink-600 hover:bg-ink-50",
+                        : "border-ink-200 bg-surface text-ink-600 hover:bg-ink-50",
                     )}
                   >
                     {s.screenTitle}
@@ -521,7 +607,7 @@ export default function WorkspaceClient() {
             </div>
 
             {/* Mockup thumbnails */}
-            <div className="flex shrink-0 items-center gap-3 border-t border-ink-200 bg-white px-5 py-3">
+            <div className="flex shrink-0 items-center gap-3 border-t border-ink-200 bg-surface px-5 py-3">
               <span className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
                 구조 변형
               </span>
@@ -536,7 +622,7 @@ export default function WorkspaceClient() {
                         "flex shrink-0 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition",
                         active
                           ? "border-brand-500 bg-brand-50"
-                          : "border-ink-200 bg-white hover:bg-ink-50",
+                          : "border-ink-200 bg-surface hover:bg-ink-50",
                       )}
                     >
                       <span
@@ -567,7 +653,7 @@ export default function WorkspaceClient() {
           </div>
 
           {/* Right inspector */}
-          <div className="hidden w-72 shrink-0 border-l border-ink-200 bg-white xl:block">
+          <div className="hidden w-72 shrink-0 border-l border-ink-200 bg-surface xl:block">
             <div className="border-b border-ink-200 px-4 py-3">
               <div className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
                 요소 상세
@@ -664,7 +750,7 @@ export default function WorkspaceClient() {
                 "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                 screenPreset === s.value
                   ? "border-brand-500 bg-brand-50 text-brand-700"
-                  : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                  : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
               )}
             >
               {s.label}
@@ -677,7 +763,7 @@ export default function WorkspaceClient() {
               "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
               screenPreset === "custom"
                 ? "border-brand-500 bg-brand-50 text-brand-700"
-                : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
             )}
           >
             직접 입력
@@ -708,6 +794,50 @@ export default function WorkspaceClient() {
           />
         </div>
       </Modal>
+
+      <Modal
+        open={shortcutHelp}
+        onClose={() => setShortcutHelp(false)}
+        title="단축키"
+        description="입력창 안에서는 숫자·? 단축키가 동작하지 않는다."
+        size="sm"
+      >
+        <div className="overflow-hidden rounded-lg border border-ink-200">
+          {SHORTCUTS.map(([keys, label], i) => (
+            <div
+              key={label}
+              className={cn(
+                "flex items-center justify-between gap-3 px-3 py-2 text-xs",
+                i % 2 === 1 && "bg-ink-50",
+              )}
+            >
+              <span className="text-ink-700">{label}</span>
+              <span className="flex shrink-0 gap-1">
+                {keys.map((k) => (
+                  <kbd
+                    key={k}
+                    className="rounded border border-ink-300 bg-surface px-1.5 py-0.5 font-mono text-[10px] text-ink-700 shadow-sm"
+                  >
+                    {k}
+                  </kbd>
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Modal>
     </div>
   );
 }
+
+/** 기능정의서 v0.2.0 §6 '단축키' 정의와 1:1 로 맞춘다. */
+const SHORTCUTS: Array<[string[], string]> = [
+  [["1", "~", "5"], "시안 전환"],
+  [["0"], "Zoom 100%"],
+  [["Ctrl/Cmd", "0"], "Fit to Screen"],
+  [["Ctrl/Cmd", "Z"], "Token 수정 되돌리기"],
+  [["Ctrl/Cmd", "S"], "저장 (자동 저장 확인)"],
+  [["Ctrl/Cmd", "E"], "Export 화면 열기"],
+  [["Esc"], "선택 해제 · 창 닫기"],
+  [["?"], "이 도움말 열기"],
+];

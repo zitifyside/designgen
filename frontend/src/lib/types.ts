@@ -46,6 +46,7 @@ export interface User {
   theme: "light" | "dark" | "system";
   createdAt: string;
   deletionRequestedAt?: string | null;
+  onboardedAt?: string | null;
 }
 
 export interface ColorToken {

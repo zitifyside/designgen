@@ -203,7 +203,7 @@ export default function AdminAnnouncementsPage() {
                   className={`rounded-lg border py-2 text-[11px] font-medium ${
                     (form.audience ?? []).includes(a)
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                      : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                   }`}
                 >
                   {a}
@@ -224,7 +224,7 @@ export default function AdminAnnouncementsPage() {
                   className={`rounded-lg border py-2 text-[11px] font-medium ${
                     form.priority === p
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                      : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                   }`}
                 >
                   {p}
@@ -272,7 +272,7 @@ export default function AdminAnnouncementsPage() {
                 className={`rounded-lg border py-2 text-[11px] font-medium ${
                   form.status === s
                     ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                    : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                 }`}
               >
                 {s}

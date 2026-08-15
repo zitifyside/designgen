@@ -21,12 +21,12 @@ export function Header() {
   const unread = notifications.filter((n) => !n.read).length;
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-ink-200 bg-white/80 px-5 backdrop-blur">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-ink-200 bg-surface/80 px-5 backdrop-blur">
       <div className="flex-1">
         <input
           type="search"
           placeholder="프로젝트 검색…"
-          className="block w-full max-w-sm rounded-lg border border-ink-200 bg-ink-50 px-3 py-1.5 text-sm placeholder:text-ink-400 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className="block w-full max-w-sm rounded-lg border border-ink-200 bg-ink-50 px-3 py-1.5 text-sm placeholder:text-ink-400 focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
       </div>
 
@@ -64,7 +64,7 @@ export function Header() {
         {menuOpen && (
           <div
             onMouseLeave={() => setMenuOpen(false)}
-            className="absolute right-0 top-full z-40 mt-1 w-52 rounded-xl border border-ink-200 bg-white py-1.5 shadow-lg"
+            className="absolute right-0 top-full z-40 mt-1 w-52 rounded-xl border border-ink-200 bg-surface py-1.5 shadow-lg"
           >
             <Link
               href="/me/profile"

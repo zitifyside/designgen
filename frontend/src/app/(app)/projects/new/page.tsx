@@ -328,7 +328,7 @@ export default function NewProjectPage() {
               {files.map((f) => (
                 <li
                   key={f.name}
-                  className="flex items-center justify-between rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs"
+                  className="flex items-center justify-between rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs"
                 >
                   <span className="truncate text-ink-700">{f.name}</span>
                   <span className="shrink-0 text-[10px] text-ink-400">
@@ -357,7 +357,7 @@ export default function NewProjectPage() {
                 className={`rounded-lg border px-3 py-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   platform === p.value
                     ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                    : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                 }`}
               >
                 {p.label}
@@ -388,7 +388,7 @@ export default function NewProjectPage() {
                 className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                   screenPreset === s.value
                     ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                    : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                 }`}
               >
                 {s.label}
@@ -400,7 +400,7 @@ export default function NewProjectPage() {
               className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                 screenPreset === "custom"
                   ? "border-brand-500 bg-brand-50 text-brand-700"
-                  : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                  : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
               }`}
             >
               직접 입력
@@ -436,7 +436,7 @@ export default function NewProjectPage() {
                     className={`rounded-lg border py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                       conceptCount === n
                         ? "border-brand-500 bg-brand-50 text-brand-700"
-                        : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                        : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                     }`}
                   >
                     {n}종
@@ -462,7 +462,7 @@ export default function NewProjectPage() {
                     className={`rounded-lg border py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                       variantCount === n
                         ? "border-brand-500 bg-brand-50 text-brand-700"
-                        : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                        : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                     }`}
                   >
                     {n}종
@@ -482,7 +482,7 @@ export default function NewProjectPage() {
               className={`rounded-xl border p-3 text-left transition ${
                 dsMode === "per_concept"
                   ? "border-brand-500 bg-brand-50"
-                  : "border-ink-200 bg-white hover:bg-ink-50"
+                  : "border-ink-200 bg-surface hover:bg-ink-50"
               }`}
             >
               <div className="text-xs font-semibold text-ink-900">
@@ -509,7 +509,7 @@ export default function NewProjectPage() {
               className={`relative rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
                 dsMode === "unified"
                   ? "border-brand-500 bg-brand-50"
-                  : "border-ink-200 bg-white hover:bg-ink-50"
+                  : "border-ink-200 bg-surface hover:bg-ink-50"
               }`}
             >
               <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-900">
@@ -539,7 +539,7 @@ export default function NewProjectPage() {
                 onClick={() => setConceptMode("auto")}
                 className={`rounded-md px-2.5 py-1 font-medium transition ${
                   conceptMode === "auto"
-                    ? "bg-white text-ink-900 shadow-sm"
+                    ? "bg-surface text-ink-900 shadow-sm"
                     : "text-ink-500 hover:text-ink-800"
                 }`}
               >
@@ -550,7 +550,7 @@ export default function NewProjectPage() {
                 onClick={() => setConceptMode("manual")}
                 className={`rounded-md px-2.5 py-1 font-medium transition ${
                   conceptMode === "manual"
-                    ? "bg-white text-ink-900 shadow-sm"
+                    ? "bg-surface text-ink-900 shadow-sm"
                     : "text-ink-500 hover:text-ink-800"
                 }`}
               >
@@ -571,11 +571,11 @@ export default function NewProjectPage() {
                 return (
                   <div
                     key={idx}
-                    className="rounded-xl border border-ink-200 bg-white p-3"
+                    className="rounded-xl border border-ink-200 bg-surface p-3"
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-[11px] font-semibold text-white">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-[11px] font-semibold text-ink-50">
                           {label}
                         </span>
                         <span className="text-xs font-medium text-ink-700">
@@ -638,7 +638,7 @@ export default function NewProjectPage() {
           </div>
         )}
 
-        <div className="sticky bottom-0 -mx-6 mt-6 border-t border-ink-200 bg-white/90 px-6 py-4 backdrop-blur md:mx-0 md:rounded-xl md:border">
+        <div className="sticky bottom-0 -mx-6 mt-6 border-t border-ink-200 bg-surface/90 px-6 py-4 backdrop-blur md:mx-0 md:rounded-xl md:border">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-ink-500">
               {draftSavedAt && (

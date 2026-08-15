@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tabs } from "@/components/ui/Tabs";
+import { AnnouncementBanner } from "@/components/dashboard/AnnouncementBanner";
 import { ProjectCard } from "@/components/dashboard/ProjectCard";
 import { UsageCard } from "@/components/dashboard/UsageCard";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -64,6 +65,7 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
+      <AnnouncementBanner />
       <PageHeader
         title={`반갑다, ${user?.name ?? "Designer"}.`}
         description="진행 중인 프로젝트와 사용량을 한눈에 확인한다."
@@ -124,7 +126,7 @@ export default function DashboardPage() {
               <Link
                 key={p.id}
                 href={`/projects/${p.id}`}
-                className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-surface px-3 py-2 text-xs text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
               >
                 <span className="font-medium text-ink-900">{p.name}</span>
                 <span className="text-[10px] text-ink-400">
@@ -160,7 +162,7 @@ export default function DashboardPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="이름으로 검색"
-              className="w-44 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className="w-44 rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
             <Tabs
               size="sm"
@@ -176,7 +178,7 @@ export default function DashboardPage() {
         </div>
 
         {loading && projects.length === 0 ? (
-          <div className="rounded-xl border border-ink-200 bg-white px-4 py-10 text-center text-sm text-ink-400">
+          <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-400">
             프로젝트를 불러오는 중…
           </div>
         ) : others.length === 0 ? (

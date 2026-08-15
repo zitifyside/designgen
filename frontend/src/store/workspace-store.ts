@@ -51,10 +51,15 @@ interface WorkspaceState {
   selectElement: (el: SelectedElement | null) => void;
   clearError: () => void;
 
+  /** 컨셉별 Token 되돌리기 스택 (기능정의서 v0.2.0 §6 '버전 관리 / Undo'). */
+  tokenHistory: Record<string, DesignTokens[]>;
+
   updateTokens: (
     conceptLabel: ConceptLabel,
     patch: DeepPartial<DesignTokens>,
   ) => void;
+  undoTokens: (conceptLabel: ConceptLabel) => void;
+  canUndo: (conceptLabel: ConceptLabel) => boolean;
   resetTokens: (conceptLabel: ConceptLabel) => Promise<void>;
 
   confirmConcept: (conceptLabel: ConceptLabel) => Promise<void>;
@@ -93,6 +98,9 @@ function mergeDeep<T>(base: T, patch: DeepPartial<T>): T {
 const SYNC_DEBOUNCE_MS = 300;
 const pendingPatches = new Map<string, DeepPartial<DesignTokens>>();
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** 되돌리기 스택 깊이. 슬라이더를 오래 만져도 메모리가 늘지 않게 잘라 둔다. */
+const MAX_HISTORY = 50;
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   projectId: null,
@@ -138,6 +146,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         activeMockupIndex: 0,
         compareSelection: [],
         selectedElement: null,
+        tokenHistory: {},
         loading: false,
       });
     } catch (e) {
@@ -169,9 +178,29 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selectElement: (el) => set({ selectedElement: el }),
   clearError: () => set({ error: null }),
 
+  tokenHistory: {},
+
   updateTokens: (conceptLabel, patch) => {
     const projectId = get().projectId;
     if (!projectId) return;
+
+    const key = `${projectId}:${conceptLabel}`;
+    const before = get().designSystems.find(
+      (d) => d.conceptLabel === conceptLabel,
+    )?.tokens;
+
+    // 0) 되돌리기 지점을 남긴다 — 단, 연속 편집(슬라이더 드래그) 한 번은 한 지점이다.
+    //    동기화 타이머가 살아 있으면 아직 같은 편집 흐름 안이라는 뜻이라 건너뛴다.
+    //    한 픽셀마다 스택을 쌓으면 Ctrl+Z 를 수십 번 눌러야 원래대로 돌아간다.
+    if (before && !timers.has(key)) {
+      const stack = [...(get().tokenHistory[conceptLabel] ?? []), before];
+      set({
+        tokenHistory: {
+          ...get().tokenHistory,
+          [conceptLabel]: stack.slice(-MAX_HISTORY),
+        },
+      });
+    }
 
     // 1) 로컬 즉시 반영 — 캔버스는 CSS 변수 바인딩이라 리렌더가 곧 반영이다.
     set({
@@ -184,7 +213,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     });
 
     // 2) 서버 동기화는 debounce 로 묶어 보낸다.
-    const key = `${projectId}:${conceptLabel}`;
     pendingPatches.set(key, mergeDeep(pendingPatches.get(key) ?? {}, patch));
     const existing = timers.get(key);
     if (existing) clearTimeout(existing);
@@ -232,6 +260,58 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     );
   },
 
+  canUndo: (conceptLabel) => (get().tokenHistory[conceptLabel]?.length ?? 0) > 0,
+
+  undoTokens: (conceptLabel) => {
+    const projectId = get().projectId;
+    const stack = get().tokenHistory[conceptLabel] ?? [];
+    if (!projectId || stack.length === 0) return;
+
+    const previous = stack[stack.length - 1];
+
+    // 화면을 먼저 되돌리고, 서버에는 스냅샷 전체를 보낸다. 부분 patch 로는
+    // '지웠던 값'을 되살릴 수 없다 — 없는 키는 변경으로 취급되지 않기 때문이다.
+    set({
+      tokenHistory: { ...get().tokenHistory, [conceptLabel]: stack.slice(0, -1) },
+      designSystems: get().designSystems.map((ds) =>
+        ds.conceptLabel === conceptLabel ? { ...ds, tokens: previous } : ds,
+      ),
+      syncState: "saving",
+    });
+
+    const key = `${projectId}:${conceptLabel}`;
+    const existing = timers.get(key);
+    if (existing) clearTimeout(existing);
+    pendingPatches.delete(key);
+    timers.delete(key);
+
+    void (async () => {
+      try {
+        const updated = await api.designSystems.patch(
+          projectId,
+          conceptLabel,
+          previous as DeepPartial<DesignTokens>,
+        );
+        if (get().project?.dsMode === "unified") {
+          const fresh = await api.designSystems.list(projectId);
+          set({ designSystems: fresh, syncState: "saved" });
+          return;
+        }
+        set({
+          designSystems: get().designSystems.map((ds) =>
+            ds.conceptLabel === conceptLabel ? updated : ds,
+          ),
+          syncState: "saved",
+        });
+      } catch (e) {
+        set({
+          syncState: "error",
+          error: e instanceof Error ? e.message : "되돌리기에 실패했습니다.",
+        });
+      }
+    })();
+  },
+
   resetTokens: async (conceptLabel) => {
     const projectId = get().projectId;
     if (!projectId) return;
@@ -240,6 +320,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       designSystems: fresh,
       syncState: "idle",
       activeConcept: conceptLabel,
+      // 초기화한 뒤의 되돌리기는 의미가 없다 — 서버 값이 곧 기준이다.
+      tokenHistory: { ...get().tokenHistory, [conceptLabel]: [] },
     });
   },
 

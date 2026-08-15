@@ -21,7 +21,7 @@ export function UsageCard({
     limit && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
   return (
-    <div className="rounded-xl border border-ink-200 bg-white p-4">
+    <div className="rounded-xl border border-ink-200 bg-surface p-4">
       <div className="text-xs font-medium text-ink-500">{title}</div>
       <div className="mt-2 flex items-baseline gap-1">
         <span className="text-2xl font-semibold text-ink-900">{used}</span>

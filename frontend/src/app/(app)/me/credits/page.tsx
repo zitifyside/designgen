@@ -93,7 +93,7 @@ export default function CreditsPage() {
                 "rounded-lg border py-3 text-center transition",
                 selected === n
                   ? "border-brand-500 bg-brand-50"
-                  : "border-ink-200 bg-white hover:bg-ink-50",
+                  : "border-ink-200 bg-surface hover:bg-ink-50",
               )}
             >
               <div className="text-sm font-semibold text-ink-900">{n}회</div>

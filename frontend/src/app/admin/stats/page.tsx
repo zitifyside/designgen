@@ -205,7 +205,7 @@ function KpiBox({
   sub: string;
 }) {
   return (
-    <div className="rounded-xl border border-ink-200 bg-white p-4">
+    <div className="rounded-xl border border-ink-200 bg-surface p-4">
       <div className="text-[11px] text-ink-500">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-ink-900">{value}</div>
       <div className="mt-1 text-[10px] text-ink-400">{sub}</div>

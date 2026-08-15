@@ -183,7 +183,7 @@ export default function ExportClient() {
                   "rounded-lg border p-3 text-left transition",
                   scope === s.v
                     ? "border-brand-500 bg-brand-50"
-                    : "border-ink-200 bg-white hover:bg-ink-50",
+                    : "border-ink-200 bg-surface hover:bg-ink-50",
                 )}
               >
                 <div
@@ -209,7 +209,7 @@ export default function ExportClient() {
                     "rounded-lg border px-2.5 py-1 text-[11px] font-medium transition",
                     screen === s.screen
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-ink-200 bg-white text-ink-600 hover:bg-ink-50",
+                      : "border-ink-200 bg-surface text-ink-600 hover:bg-ink-50",
                   )}
                 >
                   {s.screenTitle}
@@ -234,7 +234,7 @@ export default function ExportClient() {
                     "relative rounded-lg border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50",
                     selected
                       ? "border-brand-500 bg-brand-50"
-                      : "border-ink-200 bg-white hover:bg-ink-50",
+                      : "border-ink-200 bg-surface hover:bg-ink-50",
                   )}
                 >
                   {f.proOnly && (
@@ -278,7 +278,7 @@ export default function ExportClient() {
                     "rounded-lg border py-3 text-sm font-medium transition",
                     resolution === r
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                      : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
                   )}
                 >
                   {r}
@@ -301,7 +301,7 @@ export default function ExportClient() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-200 bg-surface px-5 py-4">
           <div className="text-xs text-ink-500">
             Export 파일은 생성 후 7일 경과 시 자동 삭제된다.
           </div>

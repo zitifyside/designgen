@@ -49,6 +49,13 @@ class User(Base, TimestampMixin):
     # 미설정 키는 서버 기본값을 따르므로 부분 저장이 가능하다.
     notification_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    # 온보딩 투어 완료(또는 스킵) 시각 (기능정의서 v0.2.0 §6 '온보딩 투어').
+    # 로컬 저장이 아니라 서버에 두는 이유는, 기기를 옮길 때마다 투어가 다시 뜨면
+    # 이미 아는 내용을 또 보게 되기 때문이다.
+    onboarded_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     language: Mapped[str] = mapped_column(String(8), default="ko")
     theme: Mapped[str] = mapped_column(String(8), default="system")
 

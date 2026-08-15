@@ -186,7 +186,7 @@ export function DSController({
                     typography: { fontFamily: e.target.value },
                   })
                 }
-                className="block w-full rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-ink-50 disabled:text-ink-400"
+                className="block w-full rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-ink-50 disabled:text-ink-400"
               >
                 {FONT_FAMILIES.map((f) => (
                   <option key={f}>{f}</option>
@@ -342,7 +342,7 @@ export function DSController({
                   "rounded-lg border px-2 py-2.5 text-[11px] font-medium uppercase disabled:cursor-not-allowed disabled:opacity-50",
                   tokens.shadow.preset === p
                     ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                    : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
                 )}
               >
                 {p}
@@ -475,7 +475,7 @@ function SegmentControl<T extends string>({
               "rounded-lg border py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50",
               value === o.v
                 ? "border-brand-500 bg-brand-50 text-brand-700"
-                : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
             )}
           >
             {o.l}

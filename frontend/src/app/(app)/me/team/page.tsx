@@ -162,7 +162,7 @@ export default function TeamPage() {
                         className={`rounded-lg border py-2 text-xs font-medium ${
                           inviteRole === r
                             ? "border-brand-500 bg-brand-50 text-brand-700"
-                            : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                            : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                         }`}
                       >
                         {r}

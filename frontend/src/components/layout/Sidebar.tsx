@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 
+// tour: 온보딩 투어가 가리키는 앵커 (components/layout/OnboardingTour.tsx STEPS 와 짝)
 const NAV = [
   { href: "/dashboard", label: "대시보드", icon: "📊" },
-  { href: "/projects/new", label: "새 프로젝트", icon: "✨" },
-  { href: "/templates", label: "템플릿 마켓", icon: "🧩" },
+  { href: "/projects/new", label: "새 프로젝트", icon: "✨", tour: "new-project" },
+  { href: "/templates", label: "템플릿 마켓", icon: "🧩", tour: "templates" },
   { href: "/notifications", label: "알림 센터", icon: "🔔" },
+  { href: "/help", label: "도움말", icon: "❓", tour: "help" },
 ] as const;
 
 const ME_NAV = [
@@ -18,13 +20,14 @@ const ME_NAV = [
   { href: "/me/usage", label: "사용량" },
   { href: "/me/security", label: "보안" },
   { href: "/me/notifications", label: "알림 설정" },
+  { href: "/me/api-keys", label: "API Key" },
 ] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden h-screen w-60 shrink-0 border-r border-ink-200 bg-white md:flex md:flex-col">
+    <aside className="hidden h-screen w-60 shrink-0 border-r border-ink-200 bg-surface md:flex md:flex-col">
       <div className="flex h-14 items-center gap-2 border-b border-ink-100 px-4">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-xs font-bold text-white">
           DG
@@ -40,7 +43,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin">
-        <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-ink-400">
+        <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
           작업
         </div>
         <ul className="space-y-0.5">
@@ -50,10 +53,11 @@ export function Sidebar() {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  data-tour={"tour" in item ? item.tour : undefined}
                   className={cn(
                     "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition",
                     active
-                      ? "bg-ink-900 text-white"
+                      ? "bg-ink-900 text-ink-50"
                       : "text-ink-700 hover:bg-ink-100",
                   )}
                 >
@@ -65,7 +69,7 @@ export function Sidebar() {
           })}
         </ul>
 
-        <div className="mb-1 mt-5 px-2 text-[10px] font-semibold uppercase tracking-wider text-ink-400">
+        <div className="mb-1 mt-5 px-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
           마이페이지
         </div>
         <ul className="space-y-0.5">
@@ -97,7 +101,7 @@ export function Sidebar() {
         >
           <div className="font-semibold text-brand-700">Pro 업그레이드</div>
           <div className="mt-0.5 text-brand-600">
-            월 30회 → 무제한 생성 + 전체 Export
+            월 3회 → 30회 생성 + 전체 Export
           </div>
         </Link>
       </div>

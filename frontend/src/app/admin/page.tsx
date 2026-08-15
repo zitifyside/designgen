@@ -167,7 +167,7 @@ function Kpi({
   tone?: "default" | "warning" | "danger";
 }) {
   return (
-    <div className="rounded-xl border border-ink-200 bg-white p-4">
+    <div className="rounded-xl border border-ink-200 bg-surface p-4">
       <div className="text-[11px] text-ink-500">{label}</div>
       <div
         className={

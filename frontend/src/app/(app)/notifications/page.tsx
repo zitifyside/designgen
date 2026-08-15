@@ -74,7 +74,7 @@ export default function NotificationsPage() {
               key={n.id}
               className={`flex gap-3 rounded-xl border p-4 transition ${
                 n.read
-                  ? "border-ink-200 bg-white"
+                  ? "border-ink-200 bg-surface"
                   : "border-brand-200 bg-brand-50/40"
               }`}
             >

@@ -159,7 +159,7 @@ export default function AdminUsersPage() {
                     value={u.plan}
                     disabled={busy === u.id}
                     onChange={(e) => void changePlan(u.id, e.target.value as Plan)}
-                    className="rounded-lg border border-ink-200 bg-white px-2 py-1 text-xs"
+                    className="rounded-lg border border-ink-200 bg-surface px-2 py-1 text-xs"
                   >
                     {PLANS.map((p) => (
                       <option key={p} value={p}>

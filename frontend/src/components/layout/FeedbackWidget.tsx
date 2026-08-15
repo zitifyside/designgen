@@ -74,7 +74,7 @@ export function FeedbackWidget() {
         onClick={() => setOpen(true)}
         className={cn(
           "fixed bottom-5 right-5 z-30 flex items-center gap-1.5 rounded-full border border-ink-200",
-          "bg-white px-3.5 py-2 text-xs font-medium text-ink-700 shadow-lg",
+          "bg-surface px-3.5 py-2 text-xs font-medium text-ink-700 shadow-lg",
           "transition hover:border-ink-300 hover:bg-ink-50",
         )}
         aria-label="피드백 보내기"
@@ -133,7 +133,7 @@ export function FeedbackWidget() {
                     "rounded-lg border py-2 text-xs font-medium transition",
                     category === c.value
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                      : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
                   )}
                 >
                   {c.label}

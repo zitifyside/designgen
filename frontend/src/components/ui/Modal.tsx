@@ -34,12 +34,12 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-ink-900/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
         onClick={onClose}
       />
       <div
         className={cn(
-          "relative w-full overflow-hidden rounded-2xl bg-white shadow-2xl",
+          "relative w-full overflow-hidden rounded-2xl bg-surface shadow-2xl",
           size === "sm" && "max-w-md",
           size === "md" && "max-w-xl",
           size === "lg" && "max-w-3xl",

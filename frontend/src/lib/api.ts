@@ -319,6 +319,8 @@ export const api = {
         method: "POST",
         body: { currentPassword, newPassword },
       }),
+    completeOnboarding: () =>
+      request<User>("/users/onboarding/complete", { method: "POST" }),
     sessions: () => request<SessionDevice[]>("/users/sessions"),
     revokeSession: (id: string) =>
       request<{ detail: string }>(`/users/sessions/${id}/logout`, {

@@ -84,7 +84,7 @@ export default function TemplateDetailClient() {
         <div className="lg:col-span-2">
           <Card padded={false}>
             <div className="aspect-[16/9] w-full rounded-t-xl bg-gradient-to-br from-brand-100 via-white to-brand-50 p-6">
-              <div className="flex h-full flex-col justify-between rounded-lg bg-white p-5 shadow-sm">
+              <div className="flex h-full flex-col justify-between rounded-lg bg-surface p-5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="h-3 w-32 rounded bg-brand-500" />
                   <div className="flex gap-1">
@@ -116,7 +116,7 @@ export default function TemplateDetailClient() {
                   key={i}
                   className="aspect-square rounded-md bg-ink-100 p-2"
                 >
-                  <div className="h-full w-full rounded bg-white" />
+                  <div className="h-full w-full rounded bg-surface" />
                 </div>
               ))}
             </div>

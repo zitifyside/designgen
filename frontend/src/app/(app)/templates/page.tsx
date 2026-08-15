@@ -163,8 +163,8 @@ export default function TemplatesPage() {
               onClick={() => setCategory(c.value)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                 category === c.value
-                  ? "bg-ink-900 text-white"
-                  : "bg-white text-ink-700 hover:bg-ink-100"
+                  ? "bg-ink-900 text-ink-50"
+                  : "bg-surface text-ink-700 hover:bg-ink-100"
               }`}
             >
               {c.label}
@@ -185,11 +185,11 @@ export default function TemplatesPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-ink-200 bg-white px-4 py-10 text-center text-sm text-ink-400">
+        <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-400">
           템플릿을 불러오는 중…
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-ink-200 bg-white px-4 py-10 text-center text-sm text-ink-400">
+        <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-400">
           게시된 템플릿이 없다.
         </div>
       ) : (
@@ -198,10 +198,10 @@ export default function TemplatesPage() {
             <Link
               key={t.id}
               href={`/templates/${t.id}`}
-              className="group block overflow-hidden rounded-xl border border-ink-200 bg-white transition hover:shadow-md"
+              className="group block overflow-hidden rounded-xl border border-ink-200 bg-surface transition hover:shadow-md"
             >
               <div className="aspect-[16/10] w-full bg-gradient-to-br from-brand-100 via-white to-brand-50 p-4">
-                <div className="flex h-full flex-col justify-between rounded-md bg-white p-3 shadow-sm">
+                <div className="flex h-full flex-col justify-between rounded-md bg-surface p-3 shadow-sm">
                   <div className="flex items-center gap-1">
                     <div className="h-2 w-12 rounded bg-brand-500" />
                     <div className="h-2 w-8 rounded bg-ink-200" />
@@ -323,7 +323,7 @@ export default function TemplatesPage() {
                 className={`rounded-lg border py-2 text-xs font-medium transition ${
                   form.category === c.value
                     ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                    : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                 }`}
               >
                 {c.label}
@@ -338,7 +338,7 @@ export default function TemplatesPage() {
           <select
             value={form.projectId}
             onChange={(e) => setForm({ ...form, projectId: e.target.value })}
-            className="w-full rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-xs"
+            className="w-full rounded-lg border border-ink-200 bg-surface px-2.5 py-2 text-xs"
           >
             <option value="">선택 안 함 (Token 미포함)</option>
             {publishable.map((p) => (

@@ -1,8 +1,10 @@
 """공개 시스템 엔드포인트: 헬스 체크, 활성 공지, 피드백 제출."""
 from __future__ import annotations
 
+import datetime as dt
+
 from fastapi import APIRouter
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 
 from app.core.config import settings
 from app.core.deps import CurrentUser, DbDep
@@ -43,10 +45,21 @@ async def health(db: DbDep):
 
 @router.get("/announcements", response_model=list[AnnouncementOut])
 async def active_announcements(db: DbDep):
+    """지금 노출해야 할 공지만 돌려준다 (기능정의서 v0.2.0 §6 '공지사항 노출').
+
+    게시 상태만 보고 내보내면 **예약 공지가 미리 뜨고 종료된 공지가 계속 남는다.**
+    관리자가 기간을 지정한 이상 그 기간이 곧 노출 조건이므로 여기서 거른다.
+    기간을 비워 둔 공지는 상시 노출로 본다.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
     rows = (
         await db.scalars(
             select(Announcement)
-            .where(Announcement.status == "Published")
+            .where(
+                Announcement.status == "Published",
+                or_(Announcement.starts_at.is_(None), Announcement.starts_at <= now),
+                or_(Announcement.ends_at.is_(None), Announcement.ends_at >= now),
+            )
             .order_by(Announcement.starts_at.desc())
         )
     ).all()

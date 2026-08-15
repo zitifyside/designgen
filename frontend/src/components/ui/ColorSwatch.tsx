@@ -29,7 +29,7 @@ export function ColorSwatch({
         type="color"
         value={value}
         onChange={handle}
-        className="h-9 w-9 cursor-pointer rounded-lg border border-ink-200 bg-white"
+        className="h-9 w-9 cursor-pointer rounded-lg border border-ink-200 bg-surface"
         aria-label={label}
       />
       <div className="min-w-0 flex-1">

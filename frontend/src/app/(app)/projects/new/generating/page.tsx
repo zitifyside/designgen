@@ -181,7 +181,7 @@ export default function GeneratingPage() {
                     ? "border-brand-300 bg-brand-50"
                     : completed
                       ? "border-emerald-200 bg-emerald-50/40"
-                      : "border-ink-200 bg-white"
+                      : "border-ink-200 bg-surface"
                 }`}
               >
                 <div

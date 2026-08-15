@@ -27,11 +27,13 @@ class UserOut(CamelModel):
     theme: str
     created_at: dt.datetime
     deletion_requested_at: dt.datetime | None = None
+    onboarded_at: dt.datetime | None = None
 
     @classmethod
     def from_model(cls, u) -> "UserOut":
         return cls(
             deletion_requested_at=getattr(u, "deletion_requested_at", None),
+            onboarded_at=getattr(u, "onboarded_at", None),
             id=u.id,
             email=u.email,
             name=u.name,

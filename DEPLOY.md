@@ -237,6 +237,8 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
 | 보안 하드닝 | ✅ 인증·레이트리밋·헤더·CSP·크롤 차단 (§3.5) |
 | Public API · MCP | ✅ Tool 4종 동작 · `subscribe_token_changes` 만 미구현 (§3.6) |
+| 공통 기능 | ✅ 도움말·FAQ · 온보딩 투어 · 단축키·Undo · 공지 배너 · 테마(Light·Dark·System) |
+| i18n (ko/en) | ⛔ 출시 전 작업으로 유예 |
 
 라이브 E2E 확인 (2026-08-14): 로그인 → 프로젝트 생성(단일 DS·대시보드) → 생성 완료
 (15 시안, 화면축 단일·구조 변형 5종) → 컨셉 확정 → 화면 추가(로그인 3종) → Export(json).
@@ -254,6 +256,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
    받는 일뿐이며, 그 뒤로는 `DATABASE_URL` 교체 + 재배포 한 번이다.
 3. **실제 AI 생성** — `FAKE_AI_PIPELINE=false` + 프로바이더 키.
 4. **커스텀 도메인** — Hosting 에 도메인 연결 시 백엔드 `CORS_ORIGINS` 에도 추가.
+5. **i18n (ko/en)** — 출시 전 작업. 번역은 Codex 전담 규약을 따른다.
 
 ---
 

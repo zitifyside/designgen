@@ -37,7 +37,7 @@ export default function MeLayout({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "block rounded-lg px-3 py-2 transition",
                   active
-                    ? "bg-ink-900 text-white"
+                    ? "bg-ink-900 text-ink-50"
                     : "text-ink-700 hover:bg-ink-100",
                 )}
               >

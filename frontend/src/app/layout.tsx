@@ -1,4 +1,8 @@
 import type { Metadata } from "next";
+import {
+  ThemeProvider,
+  THEME_INIT_SCRIPT,
+} from "@/components/layout/ThemeProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,8 +17,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
-      <body>{children}</body>
+    <html lang="ko" suppressHydrationWarning>
+      <head>
+        {/* 첫 페인트 전에 테마를 입힌다 — 다크 사용자가 흰 화면을 한 번 보지 않도록. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

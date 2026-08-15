@@ -34,7 +34,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-ink-200 bg-surface p-6 shadow-sm">
       <h1 className="text-base font-semibold text-ink-900">로그인</h1>
       <p className="mt-1 text-xs text-ink-500">
         Free 등급은 회원가입만으로 즉시 시작 가능하다.
@@ -81,7 +81,7 @@ export default function LoginPage() {
             key={p}
             type="button"
             disabled
-            className="rounded-lg border border-ink-200 bg-white py-2 text-xs font-medium text-ink-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg border border-ink-200 bg-surface py-2 text-xs font-medium text-ink-500 disabled:cursor-not-allowed disabled:opacity-60"
             title={`${p} OAuth — v1.0 출시 시 활성화`}
           >
             {p}

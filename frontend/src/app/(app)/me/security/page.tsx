@@ -208,7 +208,7 @@ export default function SecurityPage() {
                 {setup.backupCodes.map((c) => (
                   <span
                     key={c}
-                    className="rounded border border-ink-200 bg-white px-1.5 py-1 text-center font-mono text-[10px]"
+                    className="rounded border border-ink-200 bg-surface px-1.5 py-1 text-center font-mono text-[10px]"
                   >
                     {c}
                   </span>

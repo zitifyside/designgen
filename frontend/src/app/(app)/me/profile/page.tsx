@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { applyTheme } from "@/components/layout/ThemeProvider";
 import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -101,7 +102,7 @@ export default function ProfilePage() {
                     "rounded-lg border py-2 text-xs font-medium",
                     language === o.v
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                      : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
                   )}
                 >
                   {o.l}
@@ -126,12 +127,16 @@ export default function ProfilePage() {
                 <button
                   key={o.v}
                   type="button"
-                  onClick={() => setTheme(o.v)}
+                  onClick={() => {
+                    setTheme(o.v);
+                    // 저장 전에 바로 보여 준다 — 고르고 나서 결과를 봐야 고를 수 있다.
+                    applyTheme(o.v);
+                  }}
                   className={cn(
                     "rounded-lg border py-2 text-xs font-medium",
                     theme === o.v
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                      : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
                   )}
                 >
                   {o.l}

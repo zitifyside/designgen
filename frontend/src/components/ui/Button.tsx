@@ -15,15 +15,15 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLS: Record<Variant, string> = {
   primary:
-    "bg-brand-600 text-white hover:bg-brand-700 disabled:bg-ink-300 disabled:text-white",
+    "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-ink-300 disabled:text-white",
   secondary:
-    "bg-ink-900 text-white hover:bg-ink-800 disabled:bg-ink-300",
+    "bg-ink-900 text-ink-50 hover:bg-ink-800 disabled:bg-ink-300",
   ghost:
     "text-ink-700 hover:bg-ink-100 disabled:text-ink-400",
   danger:
     "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300",
   outline:
-    "border border-ink-200 bg-white text-ink-800 hover:bg-ink-50 disabled:text-ink-400",
+    "border border-ink-200 bg-surface text-ink-800 hover:bg-ink-50 disabled:text-ink-400",
 };
 
 const SIZE_CLS: Record<Size, string> = {
