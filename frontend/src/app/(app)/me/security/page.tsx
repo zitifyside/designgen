@@ -262,6 +262,24 @@ export default function SecurityPage() {
         <CardHeader
           title="로그인 세션"
           description="현재 로그인된 기기 목록이다. 의심스러운 세션은 종료한다."
+          action={
+            sessions.length > 1 ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  run("sessions-all", async () => {
+                    // 기기를 잃어버렸을 때 하나씩 지우게 하면 늦는다.
+                    const res = await api.users.revokeOtherSessions();
+                    await load();
+                    return res.detail;
+                  })
+                }
+              >
+                다른 기기 전체 종료
+              </Button>
+            ) : undefined
+          }
         />
         {sessions.length === 0 ? (
           <p className="py-3 text-xs text-ink-500">활성 세션이 없다.</p>
@@ -273,8 +291,15 @@ export default function SecurityPage() {
                 className="flex items-center justify-between gap-3 rounded-lg border border-ink-200 px-3 py-2"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-xs font-medium text-ink-900">
-                    {s.device}
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-xs font-medium text-ink-900">
+                      {s.device}
+                    </span>
+                    {s.current && (
+                      <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700">
+                        현재 기기
+                      </span>
+                    )}
                   </div>
                   <div className="mt-0.5 text-[10px] text-ink-500">
                     {s.location ?? "위치 미상"} ·{" "}
@@ -286,6 +311,8 @@ export default function SecurityPage() {
                 <Button
                   size="sm"
                   variant="ghost"
+                  disabled={s.current}
+                  title={s.current ? "지금 쓰는 기기는 여기서 끊지 않는다" : undefined}
                   onClick={() =>
                     run(`session-${s.id}`, async () => {
                       const res = await api.users.revokeSession(s.id);

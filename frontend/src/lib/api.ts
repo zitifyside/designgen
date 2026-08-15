@@ -321,9 +321,17 @@ export const api = {
       }),
     completeOnboarding: () =>
       request<User>("/users/onboarding/complete", { method: "POST" }),
+    usage: (granularity: "day" | "week" | "month", periods: number) =>
+      request<UsageSummary>(
+        `/users/usage?granularity=${granularity}&periods=${periods}`,
+      ),
     sessions: () => request<SessionDevice[]>("/users/sessions"),
     revokeSession: (id: string) =>
       request<{ detail: string }>(`/users/sessions/${id}/logout`, {
+        method: "POST",
+      }),
+    revokeOtherSessions: () =>
+      request<{ detail: string }>("/users/sessions/logout-all", {
         method: "POST",
       }),
     setup2fa: () =>
@@ -532,6 +540,8 @@ export const api = {
       projectId?: string;
       conceptLabel?: ConceptLabel;
     }) => request<Template>("/templates", { method: "POST", body }),
+    reviews: (id: string) =>
+      request<TemplateReviews>(`/templates/${id}/reviews`, { auth: false }),
     review: (id: string, rating: number, comment: string) =>
       request<{ detail: string }>(`/templates/${id}/reviews`, {
         method: "POST",
@@ -694,6 +704,33 @@ export interface AdminRefund {
   reason: string;
   status: string;
   createdAt: string;
+}
+
+export interface TemplateReviews {
+  average: number;
+  total: number;
+  distribution: Record<string, number>;
+  reviews: Array<{
+    id: string;
+    authorName: string;
+    rating: number;
+    comment: string;
+    createdAt: string;
+  }>;
+}
+
+export interface UsageSummary {
+  granularity: "day" | "week" | "month";
+  buckets: Array<{ label: string; generations: number; screenAdds: number }>;
+  totalGenerations: number;
+  totalScreenAdds: number;
+  failures: number;
+  warnings: number;
+  exportTotal: number;
+  exportFormats: Array<{ format: string; count: number }>;
+  projectCount: number;
+  thisMonth: number;
+  lastMonth: number;
 }
 
 export interface AnnouncementRecord {

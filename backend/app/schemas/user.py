@@ -126,3 +126,33 @@ class SessionOut(CamelModel):
     location: str | None = None
     last_active: dt.datetime | None = Field(default=None, alias="lastActive")
     current: bool = False
+
+
+class UsageBucket(CamelModel):
+    """집계 구간 하나 — 라벨은 화면에 그대로 쓴다."""
+
+    label: str
+    generations: int
+    screen_adds: int
+
+
+class UsageFormatShare(CamelModel):
+    format: str
+    count: int
+
+
+class UsageSummaryOut(CamelModel):
+    """사용량 대시보드 집계 (기능정의서 v0.2.0 §3.1 '사용량 대시보드')."""
+
+    granularity: str  # day | week | month
+    buckets: list[UsageBucket]
+    total_generations: int
+    total_screen_adds: int
+    failures: int
+    warnings: int
+    export_total: int
+    export_formats: list[UsageFormatShare]
+    project_count: int
+    # 전월 대비 증감 — 이번 달과 지난달의 생성 횟수.
+    this_month: int
+    last_month: int

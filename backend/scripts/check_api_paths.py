@@ -27,8 +27,12 @@ TEMPLATE_RE = re.compile(r"\$\{[^}]+\}")
 
 
 def normalize(path: str) -> str:
-    """템플릿 자리표시자를 FastAPI 경로 파라미터 형태로 바꾼다."""
-    return TEMPLATE_RE.sub("{}", path)
+    """템플릿 자리표시자를 FastAPI 경로 파라미터 형태로 바꾼다.
+
+    쿼리스트링은 떼어 낸다 — 라우트 등록에는 없는 부분이라 그대로 두면
+    `/users/usage?granularity={}` 같은 정상 호출이 '없는 경로'로 잡힌다.
+    """
+    return TEMPLATE_RE.sub("{}", path).split("?", 1)[0]
 
 
 def backend_paths() -> set[str]:

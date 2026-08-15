@@ -7,9 +7,16 @@ from sqlalchemy import select
 from app.core.deps import CurrentUser, DbDep
 from app.models.design import DesignSystem
 from app.models.project import Project
+from app.models.user import User
 from app.models.template import Template, TemplateReview
 from app.schemas.common import Message
-from app.schemas.template import TemplateCreate, TemplateOut, TemplateReviewIn
+from app.schemas.template import (
+    TemplateCreate,
+    TemplateOut,
+    TemplateReviewIn,
+    TemplateReviewOut,
+    TemplateReviewsOut,
+)
 from app.services.quota import require_plan
 
 router = APIRouter(prefix="/templates", tags=["templates"])
@@ -112,6 +119,54 @@ async def add_review(
         )
     )
     return Message(detail="Review submitted")
+
+
+@router.get("/{template_id}/reviews", response_model=TemplateReviewsOut)
+async def list_reviews(template_id: str, db: DbDep):
+    """리뷰와 평점 분포. 분포는 화면에서 다시 세지 않도록 서버가 만든다."""
+    t = await db.get(Template, template_id)
+    if t is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+
+    rows = (
+        await db.scalars(
+            select(TemplateReview)
+            .where(TemplateReview.template_id == template_id)
+            .order_by(TemplateReview.created_at.desc())
+            .limit(50)
+        )
+    ).all()
+
+    # 작성자 이름을 한 번에 읽는다 (리뷰마다 조회하면 N+1 이다).
+    names: dict[str, str] = {}
+    if rows:
+        users = (
+            await db.scalars(
+                select(User).where(User.id.in_({r.user_id for r in rows}))
+            )
+        ).all()
+        names = {u.id: u.name for u in users}
+
+    dist = {str(i): 0 for i in range(1, 6)}
+    for r in rows:
+        key = str(max(1, min(5, r.rating)))
+        dist[key] += 1
+
+    return TemplateReviewsOut(
+        average=round(sum(r.rating for r in rows) / len(rows), 2) if rows else 0.0,
+        total=len(rows),
+        distribution=dist,
+        reviews=[
+            TemplateReviewOut(
+                id=r.id,
+                author_name=names.get(r.user_id, "알 수 없음"),
+                rating=r.rating,
+                comment=r.comment,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ],
+    )
 
 
 @router.post("/{template_id}/purchase", response_model=Message)

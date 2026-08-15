@@ -30,7 +30,9 @@ def _now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-def _create_token(subject: str, token_type: str, expires: dt.timedelta) -> str:
+def _create_token(
+    subject: str, token_type: str, expires: dt.timedelta, *, sid: str | None = None
+) -> str:
     payload = {
         "sub": subject,
         "type": token_type,
@@ -38,14 +40,19 @@ def _create_token(subject: str, token_type: str, expires: dt.timedelta) -> str:
         "exp": _now() + expires,
         "jti": secrets.token_urlsafe(16),
     }
+    # 세션 식별자. 이게 없으면 '지금 쓰는 기기'를 서버가 알 수 없어 세션 목록의
+    # 현재 표시도, '나머지 기기 로그아웃'도 만들 수 없다.
+    if sid:
+        payload["sid"] = sid
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(subject: str, *, sid: str | None = None) -> str:
     return _create_token(
         subject,
         ACCESS_TOKEN,
         dt.timedelta(minutes=settings.access_token_expire_minutes),
+        sid=sid,
     )
 
 

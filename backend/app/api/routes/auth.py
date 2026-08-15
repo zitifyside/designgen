@@ -54,18 +54,19 @@ def _aware(value: dt.datetime | None) -> dt.datetime | None:
 
 
 async def _issue_tokens(db: DbDep, user: User, device: str | None) -> TokenPair:
-    access = create_access_token(user.id)
     refresh = create_refresh_token(user.id)
     jti = decode_token(refresh)["jti"]
-    db.add(
-        Session(
-            user_id=user.id,
-            refresh_jti=jti,
-            device=device or "Unknown device",
-            last_active_at=_now(),
-            expires_at=_now() + dt.timedelta(days=settings.refresh_token_expire_days),
-        )
+    session = Session(
+        user_id=user.id,
+        refresh_jti=jti,
+        device=device or "Unknown device",
+        last_active_at=_now(),
+        expires_at=_now() + dt.timedelta(days=settings.refresh_token_expire_days),
     )
+    db.add(session)
+    # access token 에 세션 ID 를 실어, 서버가 '지금 이 기기'를 알아볼 수 있게 한다.
+    await db.flush()
+    access = create_access_token(user.id, sid=session.id)
     user.last_active_at = _now()
     return TokenPair(
         access_token=access, refresh_token=refresh, user=UserOut.from_model(user)

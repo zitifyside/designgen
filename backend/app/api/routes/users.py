@@ -5,14 +5,14 @@ import datetime as dt
 import secrets
 
 import pyotp
-from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, Query, Request, status
+from sqlalchemy import func, select
 
 from app.core.deps import CurrentUser, DbDep
 from app.core.security import hash_password, verify_password
 from app.core.security_middleware import validate_password_strength
 from app.models.design import DesignSystem, Mockup
-from app.models.generation import Generation
+from app.models.generation import GEN_KIND_SCREEN, Generation
 from app.models.notification import Notification
 from app.models.platform import ExportHistory
 from app.models.project import Project
@@ -20,6 +20,9 @@ from app.models.user import Session
 from app.schemas.common import Message
 from app.core.observability import log_event
 from app.schemas.user import (
+    UsageBucket,
+    UsageFormatShare,
+    UsageSummaryOut,
     AccountDeleteIn,
     NotificationPrefsOut,
     NotificationPrefsUpdate,
@@ -60,8 +63,22 @@ async def change_password(body: PasswordChangeIn, user: CurrentUser, db: DbDep):
     return Message(detail="Password updated")
 
 
+def _current_sid(request: Request) -> str | None:
+    """요청에 실린 access token 의 세션 ID. 서명 검증은 이미 인증 단계에서 끝났다."""
+    from app.core.security import decode_token
+
+    raw = (request.headers.get("authorization") or "").removeprefix("Bearer ").strip()
+    if not raw:
+        return None
+    try:
+        return decode_token(raw).get("sid")
+    except Exception:
+        return None
+
+
 @router.get("/sessions", response_model=list[SessionOut])
-async def list_sessions(user: CurrentUser, db: DbDep):
+async def list_sessions(user: CurrentUser, db: DbDep, request: Request):
+    current = _current_sid(request)
     rows = (
         await db.scalars(
             select(Session)
@@ -75,7 +92,7 @@ async def list_sessions(user: CurrentUser, db: DbDep):
             device=s.device,
             location=s.location,
             lastActive=s.last_active_at,
-            current=False,
+            current=s.id == current,
         )
         for s in rows
     ]
@@ -88,6 +105,35 @@ async def revoke_session(session_id: str, user: CurrentUser, db: DbDep):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     session.revoked = True
     return Message(detail="Session revoked")
+
+
+@router.post("/sessions/logout-all", response_model=Message)
+async def revoke_other_sessions(user: CurrentUser, db: DbDep, request: Request):
+    """현재 기기를 제외한 모든 세션을 끊는다 (기능정의서 v0.2.0 §3.1 '세션 관리').
+
+    기기를 잃어버렸을 때 하나씩 지우게 하면 늦는다. 현재 세션까지 끊으면 조치 직후
+    로그아웃돼 후속 조치(비밀번호 변경)를 못 하므로 지금 쓰는 세션은 남긴다.
+    """
+    current = _current_sid(request)
+    rows = (
+        await db.scalars(
+            select(Session).where(Session.user_id == user.id, Session.revoked.is_(False))
+        )
+    ).all()
+    revoked = 0
+    for row in rows:
+        if current and row.id == current:
+            continue
+        row.revoked = True
+        db.add(row)
+        revoked += 1
+    log_event(
+        kind="user.sessions_revoked",
+        message="다른 기기 세션 전체 종료",
+        user_id=user.id,
+        payload={"count": revoked},
+    )
+    return Message(detail=f"{revoked}개 세션을 종료했습니다.")
 
 
 @router.post("/2fa/setup", response_model=TwoFactorSetupOut)
@@ -321,3 +367,117 @@ async def complete_onboarding(user: CurrentUser, db: DbDep):
             user_id=user.id,
         )
     return UserOut.from_model(user)
+
+
+@router.get("/usage", response_model=UsageSummaryOut)
+async def usage_summary(
+    user: CurrentUser,
+    db: DbDep,
+    granularity: str = Query(default="day", pattern="^(day|week|month)$"),
+    periods: int = Query(default=30, ge=1, le=365),
+):
+    """사용량 집계 (기능정의서 v0.2.0 §3.1 '사용량 대시보드').
+
+    화면이 프로젝트마다 이력을 따로 부르면 프로젝트 수만큼 요청이 늘고, 정작
+    합계는 클라이언트가 다시 계산한다. 집계는 데이터가 있는 쪽에서 한 번에 한다.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+
+    # 구간 경계를 먼저 만든다 — 빈 구간도 0 으로 남아야 그래프가 끊기지 않는다.
+    def start_of(d: dt.datetime) -> dt.datetime:
+        if granularity == "day":
+            return d.replace(hour=0, minute=0, second=0, microsecond=0)
+        if granularity == "week":
+            base = d.replace(hour=0, minute=0, second=0, microsecond=0)
+            return base - dt.timedelta(days=base.weekday())
+        return d.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    def step_back(d: dt.datetime, n: int) -> dt.datetime:
+        if granularity == "day":
+            return d - dt.timedelta(days=n)
+        if granularity == "week":
+            return d - dt.timedelta(weeks=n)
+        month = d.month - n
+        year = d.year + (month - 1) // 12
+        return d.replace(year=year, month=(month - 1) % 12 + 1)
+
+    edges = [start_of(step_back(now, i)) for i in range(periods - 1, -1, -1)]
+    window_start = edges[0]
+
+    rows = (
+        await db.scalars(
+            select(Generation).where(
+                Generation.user_id == user.id,
+                Generation.created_at >= window_start,
+            )
+        )
+    ).all()
+
+    def bucket_index(when: dt.datetime) -> int | None:
+        """구간 경계는 정렬돼 있으므로 뒤에서부터 찾으면 첫 일치가 답이다."""
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=dt.timezone.utc)
+        for i in range(len(edges) - 1, -1, -1):
+            if when >= edges[i]:
+                return i
+        return None
+
+    gen_counts = [0] * len(edges)
+    add_counts = [0] * len(edges)
+    for g in rows:
+        idx = bucket_index(g.created_at)
+        if idx is None:
+            continue
+        gen_counts[idx] += 1
+        if g.kind == GEN_KIND_SCREEN:
+            add_counts[idx] += 1
+
+    fmt = {"day": "%m-%d", "week": "%m-%d~", "month": "%Y-%m"}[granularity]
+    buckets = [
+        UsageBucket(label=e.strftime(fmt), generations=gen_counts[i], screen_adds=add_counts[i])
+        for i, e in enumerate(edges)
+    ]
+
+    # Export 형식 분포
+    export_rows = (
+        await db.execute(
+            select(ExportHistory.format, func.count())
+            .where(ExportHistory.user_id == user.id)
+            .group_by(ExportHistory.format)
+        )
+    ).all()
+
+    # 전월 대비 — 이번 달 1일과 지난달 1일을 경계로 센다.
+    this_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_start = (this_start - dt.timedelta(days=1)).replace(day=1)
+    this_month = await db.scalar(
+        select(func.count())
+        .select_from(Generation)
+        .where(Generation.user_id == user.id, Generation.created_at >= this_start)
+    )
+    last_month = await db.scalar(
+        select(func.count())
+        .select_from(Generation)
+        .where(
+            Generation.user_id == user.id,
+            Generation.created_at >= last_start,
+            Generation.created_at < this_start,
+        )
+    )
+    project_count = await db.scalar(
+        select(func.count()).select_from(Project).where(Project.owner_id == user.id)
+    )
+
+    return UsageSummaryOut(
+        granularity=granularity,
+        buckets=buckets,
+        total_generations=sum(gen_counts),
+        total_screen_adds=sum(add_counts),
+        failures=sum(1 for g in rows if g.status == "Failed"),
+        warnings=sum(1 for g in rows if g.is_warning),
+        export_total=sum(c for _, c in export_rows),
+        export_formats=[UsageFormatShare(format=f, count=c) for f, c in export_rows],
+        project_count=project_count or 0,
+        this_month=this_month or 0,
+        last_month=last_month or 0,
+    )

@@ -197,6 +197,22 @@ async def main() -> None:
         r = await c.get(f"{API}/projects/{pid}/tokens.json", headers=h)
         check("DTCG tokens", r.status_code == 200 and "$schema" in r.text)
 
+        # 10-b) 사용량 집계 — 화면이 아니라 서버가 합산한다.
+        r = await c.get(f"{API}/users/usage?granularity=day&periods=14", headers=h)
+        usage = r.json() if r.status_code == 200 else {}
+        check("사용량 집계", r.status_code == 200 and len(usage.get("buckets", [])) == 14, r.text[:160])
+        check("  생성 횟수 집계", usage.get("totalGenerations", 0) >= 1, str(usage.get("totalGenerations")))
+        check(
+            "  Export 형식 분포",
+            {f["format"] for f in usage.get("exportFormats", [])} >= {"json"},
+            json.dumps(usage.get("exportFormats"), ensure_ascii=False),
+        )
+        check("  전월 대비 기준", "thisMonth" in usage and "lastMonth" in usage, str(list(usage)[:6]))
+        r = await c.get(f"{API}/users/usage?granularity=month&periods=6", headers=h)
+        check("  월별 집계", r.status_code == 200 and len(r.json()["buckets"]) == 6, str(r.status_code))
+        r = await c.get(f"{API}/users/usage?granularity=bogus", headers=h)
+        check("  잘못된 단위 거부(422)", r.status_code == 422, str(r.status_code))
+
         # 11) API Key (Pro+) → Public API (MCP Tool 대응 표면)
         r = await c.post(f"{API}/users/api-keys", headers=h, json={"label": "MCP local"})
         check("api key 발급", r.status_code == 201 and r.json()["key"].startswith("adg_"), r.text[:160])
@@ -251,6 +267,23 @@ async def main() -> None:
         r = await c.get(f"{API}/public/projects", headers=kh)
         check("public: 회수된 키 401", r.status_code == 401, str(r.status_code))
 
+        # 11-b) 세션 — 현재 기기 표시와 다른 기기 전체 종료
+        r = await c.get(f"{API}/users/sessions", headers=h)
+        sess = r.json()
+        check("세션 목록", r.status_code == 200 and len(sess) >= 1, str(r.status_code))
+        check("  현재 기기 표시", sum(1 for s2 in sess if s2["current"]) == 1,
+              str([(s2["device"], s2["current"]) for s2 in sess]))
+        # 다른 기기에서 한 번 더 로그인한 뒤 전체 종료
+        r2 = await c.post(f"{API}/auth/login", headers={"User-Agent": "OtherDevice/1.0"},
+                          json={"email": "demo@designgenerator.io", "password": "demo1234"})
+        check("  다른 기기 로그인", r2.status_code == 200, str(r2.status_code))
+        r = await c.get(f"{API}/users/sessions", headers=h)
+        check("  세션 2개 이상", len(r.json()) >= 2, str(len(r.json())))
+        r = await c.post(f"{API}/users/sessions/logout-all", headers=h)
+        check("  다른 기기 전체 종료", r.status_code == 200, r.text[:120])
+        r = await c.get(f"{API}/users/sessions", headers=h)
+        check("  현재 기기만 남음", len(r.json()) == 1, str(len(r.json())))
+
         # 12) 템플릿 등록 → 심사
         r = await c.post(
             f"{API}/templates",
@@ -267,6 +300,23 @@ async def main() -> None:
         check("  Admin 승인", r.status_code == 200 and r.json()["status"] == "Approved", r.text[:160])
         r = await c.get(f"{API}/templates", headers=h)
         check("  승인 후 노출", any(t["id"] == tid for t in r.json()))
+
+        # 12-b) 리뷰 — 목록·평점 분포
+        r = await c.get(f"{API}/templates/{tid}/reviews")
+        check("리뷰 목록 (빈 상태)", r.status_code == 200 and r.json()["total"] == 0, r.text[:120])
+        r = await c.post(f"{API}/templates/{tid}/reviews", headers=h,
+                         json={"rating": 5, "comment": "초기 시안 시간이 줄었다."})
+        check("  리뷰 등록", r.status_code == 201, r.text[:120])
+        r = await c.post(f"{API}/templates/{tid}/reviews", headers=ah,
+                         json={"rating": 3, "comment": "무난하다."})
+        check("  두 번째 리뷰", r.status_code == 201, r.text[:120])
+        r = await c.get(f"{API}/templates/{tid}/reviews")
+        rv = r.json()
+        check("  평균 계산", rv["average"] == 4.0, str(rv["average"]))
+        check("  평점 분포", rv["distribution"]["5"] == 1 and rv["distribution"]["3"] == 1,
+              json.dumps(rv["distribution"]))
+        check("  작성자 이름 채움", all(x["authorName"] != "알 수 없음" for x in rv["reviews"]),
+              str([x["authorName"] for x in rv["reviews"]]))
 
         # 12-b) 비밀번호 정책 (약한 값 거부)
         r = await c.post(f"{API}/auth/signup", json={"email": "weak.smoke@test.io", "password": "12345678", "name": "약한"})

@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { api } from "@/lib/api";
+import { Textarea } from "@/components/ui/Input";
+import { api, type TemplateReviews } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { useRouteId } from "@/lib/route-id";
 import type { Template } from "@/lib/types";
 
@@ -14,6 +16,24 @@ export default function TemplateDetailClient() {
   const id = useRouteId(1);
   const [template, setTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reviews, setReviews] = useState<TemplateReviews | null>(null);
+  const [myRating, setMyRating] = useState(5);
+  const [myComment, setMyComment] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+
+  const loadReviews = useCallback(async () => {
+    if (!id) return;
+    try {
+      setReviews(await api.templates.reviews(id));
+    } catch {
+      setReviews(null); // 리뷰를 못 불러왔다고 상세 화면을 막지 않는다
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void loadReviews();
+  }, [loadReviews]);
 
   useEffect(() => {
     if (!id) return;
@@ -123,61 +143,136 @@ export default function TemplateDetailClient() {
           </Card>
 
           <Card className="mt-5">
-            <h3 className="text-sm font-semibold text-ink-900">리뷰</h3>
-            <div className="mt-4 flex items-center gap-4">
-              <div className="text-3xl font-semibold">
-                {template.rating.toFixed(1)}
-              </div>
-              <div className="flex-1">
-                {[5, 4, 3, 2, 1].map((s) => (
-                  <div key={s} className="flex items-center gap-2 text-[11px]">
-                    <span className="w-3 text-ink-500">{s}</span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-100">
-                      <div
-                        className="h-full bg-amber-400"
-                        style={{
-                          width:
-                            s === 5
-                              ? "72%"
-                              : s === 4
-                                ? "20%"
-                                : s === 3
-                                  ? "6%"
-                                  : "2%",
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <h3 className="text-sm font-semibold text-ink-900">
+              리뷰{reviews ? ` · ${reviews.total}건` : ""}
+            </h3>
 
-            <div className="mt-6 space-y-3">
-              {[
-                {
-                  who: "지영",
-                  body: "Pro 업그레이드 후 처음 받은 프리셋. 초기 시안 작업 시간이 절반으로 줄었다.",
-                  rating: 5,
-                },
-                {
-                  who: "Junho",
-                  body: "DS Token 호환이 깔끔하고 다크모드도 깨지지 않는다.",
-                  rating: 5,
-                },
-              ].map((r) => (
-                <div
-                  key={r.who}
-                  className="rounded-lg border border-ink-100 p-3 text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-ink-800">{r.who}</span>
-                    <span className="text-amber-500">
-                      {"★".repeat(r.rating)}
-                    </span>
+            {reviews === null ? (
+              <p className="py-6 text-center text-xs text-ink-500">
+                리뷰를 불러오는 중…
+              </p>
+            ) : (
+              <>
+                <div className="mt-4 flex items-center gap-4">
+                  <div className="text-3xl font-semibold text-ink-900">
+                    {reviews.total > 0 ? reviews.average.toFixed(1) : "—"}
                   </div>
-                  <p className="mt-1 text-ink-600">{r.body}</p>
+                  <div className="flex-1">
+                    {[5, 4, 3, 2, 1].map((s) => {
+                      const count = reviews.distribution[String(s)] ?? 0;
+                      const pct = reviews.total ? (count / reviews.total) * 100 : 0;
+                      return (
+                        <div key={s} className="flex items-center gap-2 text-[11px]">
+                          <span className="w-3 text-ink-500">{s}</span>
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-100">
+                            <div
+                              className="h-full bg-amber-400"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="w-6 text-right text-ink-500">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
+
+                <div className="mt-5 space-y-3">
+                  {reviews.reviews.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-ink-200 py-5 text-center text-xs text-ink-500">
+                      아직 리뷰가 없다. 먼저 사용해 보고 남겨 보라.
+                    </p>
+                  ) : (
+                    reviews.reviews.map((r) => (
+                      <div
+                        key={r.id}
+                        className="rounded-lg border border-ink-100 p-3 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-ink-800">
+                            {r.authorName}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <span className="text-amber-500">
+                              {"★".repeat(r.rating)}
+                              <span className="text-ink-300">
+                                {"★".repeat(5 - r.rating)}
+                              </span>
+                            </span>
+                            <span className="text-[10px] text-ink-500">
+                              {new Date(r.createdAt).toLocaleDateString("ko-KR")}
+                            </span>
+                          </span>
+                        </div>
+                        {r.comment && (
+                          <p className="mt-1 whitespace-pre-line text-ink-600">
+                            {r.comment}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+
+            <div className="mt-5 border-t border-ink-100 pt-4">
+              <div className="text-xs font-medium text-ink-800">리뷰 남기기</div>
+              <div className="mt-2 flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setMyRating(n)}
+                    aria-label={`${n}점`}
+                    className={cn(
+                      "text-lg transition",
+                      n <= myRating ? "text-amber-500" : "text-ink-300",
+                    )}
+                  >
+                    ★
+                  </button>
+                ))}
+                <span className="ml-1 text-[11px] text-ink-500">{myRating}점</span>
+              </div>
+              <div className="mt-2">
+                <Textarea
+                  value={myComment}
+                  onChange={(e) => setMyComment(e.target.value)}
+                  rows={3}
+                  maxLength={1000}
+                  countMax={1000}
+                  placeholder="어떤 작업에 썼고 무엇이 좋았는지 적으면 다른 사람에게 도움이 된다."
+                />
+              </div>
+              {postError && (
+                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                  {postError}
+                </div>
+              )}
+              <div className="mt-2 flex justify-end">
+                <Button
+                  size="sm"
+                  loading={posting}
+                  onClick={async () => {
+                    setPosting(true);
+                    setPostError(null);
+                    try {
+                      await api.templates.review(id!, myRating, myComment.trim());
+                      setMyComment("");
+                      await loadReviews();
+                    } catch (e) {
+                      setPostError(
+                        e instanceof Error ? e.message : "등록에 실패했다.",
+                      );
+                    } finally {
+                      setPosting(false);
+                    }
+                  }}
+                >
+                  등록
+                </Button>
+              </div>
             </div>
           </Card>
         </div>

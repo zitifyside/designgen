@@ -42,3 +42,21 @@ class TemplateReviewIn(CamelModel):
 class TemplateModerateIn(CamelModel):
     status: str = Field(pattern="^(Approved|Rejected|RequestChanges)$")
     reason: str = Field(default="", max_length=500)
+
+
+class TemplateReviewOut(CamelModel):
+    id: str
+    author_name: str
+    rating: int
+    comment: str
+    created_at: dt.datetime
+
+
+class TemplateReviewsOut(CamelModel):
+    """리뷰 목록 + 평점 분포 (기능정의서 v0.2.0 §3.1 '템플릿 상세 — 리뷰 섹션')."""
+
+    average: float
+    total: int
+    # 1~5점 각각의 개수. 분포를 화면에서 다시 세지 않게 서버가 만들어 준다.
+    distribution: dict[str, int]
+    reviews: list[TemplateReviewOut]
