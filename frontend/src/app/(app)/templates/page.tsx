@@ -16,6 +16,9 @@ import type { Template, TemplateCategory, TemplateStatus } from "@/lib/types";
 
 type Category = "all" | TemplateCategory;
 type Sort = "popular" | "newest" | "rating" | "price";
+/** 가격·평점 필터 (기능정의서 v0.2.0 §3.1 '템플릿 조회 — 필터'). */
+type PriceFilter = "all" | "free" | "paid";
+type RatingFilter = "all" | "3" | "4";
 
 const CATEGORIES: Array<{ value: Category; label: string }> = [
   { value: "all", label: "전체" },
@@ -49,6 +52,8 @@ export default function TemplatesPage() {
 
   const [category, setCategory] = useState<Category>("all");
   const [sort, setSort] = useState<Sort>("popular");
+  const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
+  const [ratingFilter, setRatingFilter] = useState<RatingFilter>("all");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [mine, setMine] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +101,12 @@ export default function TemplatesPage() {
   const filtered = useMemo(() => {
     let list = templates;
     if (category !== "all") list = list.filter((t) => t.category === category);
+    if (priceFilter === "free") list = list.filter((t) => t.price === 0);
+    if (priceFilter === "paid") list = list.filter((t) => t.price > 0);
+    if (ratingFilter !== "all") {
+      const min = Number(ratingFilter);
+      list = list.filter((t) => t.rating >= min);
+    }
     const copy = [...list];
     copy.sort((a, b) => {
       if (sort === "rating") return b.rating - a.rating;
@@ -104,7 +115,7 @@ export default function TemplatesPage() {
       return b.downloads - a.downloads;
     });
     return copy;
-  }, [templates, category, sort]);
+  }, [templates, category, sort, priceFilter, ratingFilter]);
 
   const publishable = projects.filter(
     (p) => p.status === "ConceptLocked" || p.status === "Completed",
@@ -171,17 +182,39 @@ export default function TemplatesPage() {
             </button>
           ))}
         </div>
-        <Tabs
-          size="sm"
-          value={sort}
-          onChange={(v) => setSort(v as Sort)}
-          items={[
-            { value: "popular", label: "인기" },
-            { value: "newest", label: "최신" },
-            { value: "rating", label: "평점" },
-            { value: "price", label: "가격" },
-          ]}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Tabs
+            size="sm"
+            value={priceFilter}
+            onChange={(v) => setPriceFilter(v as PriceFilter)}
+            items={[
+              { value: "all", label: "전체" },
+              { value: "free", label: "무료" },
+              { value: "paid", label: "유료" },
+            ]}
+          />
+          <Tabs
+            size="sm"
+            value={ratingFilter}
+            onChange={(v) => setRatingFilter(v as RatingFilter)}
+            items={[
+              { value: "all", label: "평점 전체" },
+              { value: "3", label: "3점+" },
+              { value: "4", label: "4점+" },
+            ]}
+          />
+          <Tabs
+            size="sm"
+            value={sort}
+            onChange={(v) => setSort(v as Sort)}
+            items={[
+              { value: "popular", label: "인기" },
+              { value: "newest", label: "최신" },
+              { value: "rating", label: "평점" },
+              { value: "price", label: "가격" },
+            ]}
+          />
+        </div>
       </div>
 
       {loading ? (
@@ -190,7 +223,9 @@ export default function TemplatesPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-500">
-          게시된 템플릿이 없다.
+          {templates.length === 0
+            ? "게시된 템플릿이 없다."
+            : "조건에 맞는 템플릿이 없다. 필터를 넓혀 보라."}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

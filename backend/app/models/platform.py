@@ -35,6 +35,9 @@ class ExportHistory(Base, TimestampMixin):
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     download_url: Mapped[str] = mapped_column(String(512), default="")
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    # 만료 24시간 전 안내를 이미 보냈는지 (기능정의서 v0.2.0 §3.1 '자동 만료').
+    # 보낸 사실을 기록하지 않으면 화면을 열 때마다 같은 알림이 쌓인다.
+    expiry_notified: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class ApiKey(Base, TimestampMixin):

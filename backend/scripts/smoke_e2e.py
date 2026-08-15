@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
 import sys
@@ -266,6 +267,49 @@ async def main() -> None:
         check("api key 회수", r.status_code == 200)
         r = await c.get(f"{API}/public/projects", headers=kh)
         check("public: 회수된 키 401", r.status_code == 401, str(r.status_code))
+
+        # 10-c) Export 미리보기 — 실제로 만들어 재 본다
+        r = await c.post(f"{API}/projects/{pid}/exports/estimate", headers=h,
+                         json={"format": "json", "scope": "concept"})
+        est = r.json() if r.status_code == 200 else {}
+        check("Export 미리보기", r.status_code == 200 and est.get("sizeBytes", 0) > 0,
+              r.text[:160])
+        check("  대상 시안 수", est.get("mockupCount", 0) >= 1, str(est.get("mockupCount")))
+        check("  이력에는 남기지 않는다", True)
+        r2 = await c.get(f"{API}/exports?projectId={pid}", headers=h)
+        before_hist = len(r2.json())
+        await c.post(f"{API}/projects/{pid}/exports/estimate", headers=h,
+                     json={"format": "css", "scope": "concept"})
+        r2 = await c.get(f"{API}/exports?projectId={pid}", headers=h)
+        check("    미리보기 후 이력 불변", len(r2.json()) == before_hist,
+              f"{before_hist} → {len(r2.json())}")
+        r = await c.post(f"{API}/projects/{pid}/exports/estimate", headers=h,
+                         json={"format": "fig", "scope": "concept"})
+        check("  .fig 대체 안내 경고", any("png" in w for w in r.json().get("warnings", [])),
+              json.dumps(r.json().get("warnings"), ensure_ascii=False)[:160])
+
+        # 10-d) 만료 임박 Export 안내
+        from app.core.database import AsyncSessionLocal
+        from app.models.platform import ExportHistory as _EH
+
+        async with AsyncSessionLocal() as db2:
+            from sqlalchemy import select as _sel
+            row = await db2.scalar(
+                _sel(_EH).where(_EH.project_id == pid).order_by(_EH.created_at.desc())
+            )
+            if row is not None:
+                row.expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=5)
+                row.expiry_notified = False
+                db2.add(row)
+                await db2.commit()
+        r = await c.get(f"{API}/notifications", headers=h)
+        rows_n = r.json() if isinstance(r.json(), list) else []
+        expiring = [n for n in rows_n if "만료 예정" in n["title"]]
+        check("만료 임박 안내 생성", len(expiring) == 1, f"{r.status_code} {r.text[:200]}")
+        r = await c.get(f"{API}/notifications", headers=h)
+        rows_n2 = r.json() if isinstance(r.json(), list) else []
+        again = [n for n in rows_n2 if "만료 예정" in n["title"]]
+        check("  다시 열어도 중복 생성 안 함", len(again) == 1, str(len(again)))
 
         # 11-b) 세션 — 현재 기기 표시와 다른 기기 전체 종료
         r = await c.get(f"{API}/users/sessions", headers=h)

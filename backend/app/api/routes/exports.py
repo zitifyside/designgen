@@ -17,7 +17,7 @@ from app.models.design import DesignSystem, Mockup
 from app.models.platform import EXPORT_TTL_DAYS, ExportHistory
 from app.models.project import Project
 from app.schemas.common import Message
-from app.schemas.platform import ExportCreate, ExportOut
+from app.schemas.platform import ExportCreate, ExportEstimateOut, ExportOut
 from app.services.export import (
     CONTENT_TYPES,
     FILE_SUFFIX,
@@ -105,6 +105,52 @@ def _render(fmt: str, project: Project, ds: DesignSystem, mockups, watermark: bo
         tokens=ds.tokens or {},
         mockups=payload,
         watermark=watermark,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/exports/estimate", response_model=ExportEstimateOut
+)
+async def estimate_export(
+    project_id: str, body: ExportCreate, user: CurrentUser, db: DbDep
+):
+    """내보내기 전에 크기와 호환성을 알려 준다. 이력에는 남기지 않는다."""
+    project = await _owned_project(db, project_id, user.id)
+    ds, mockups = await _collect(db, project, body)
+
+    watermark = body.format == "png" and user.plan not in PRO_PLANS
+    # 등급 제한은 여기서 막지 않는다 — 고르기 전에 무엇을 얻는지 보여 주는 게 목적이고,
+    # 실제 차단은 생성 시점(create_export)이 한다.
+    content = _render(body.format, project, ds, mockups, watermark)
+
+    warnings: list[str] = []
+    if body.format in PRO_ONLY_FORMATS and user.plan not in PRO_PLANS:
+        warnings.append("이 형식은 Pro 이상에서 내려받을 수 있습니다.")
+    if not mockups:
+        warnings.append("대상 시안이 없습니다. 먼저 시안을 생성해 주세요.")
+    if body.format == "json":
+        missing = [
+            k for k in ("color", "typography", "spacing") if k not in (ds.tokens or {})
+        ]
+        if missing:
+            warnings.append(
+                "DTCG 필수 카테고리가 비어 있습니다: " + ", ".join(missing)
+            )
+    if body.format == "fig":
+        warnings.append(
+            "현재 빌드의 .fig 는 SVG + 메타데이터로 산출됩니다. "
+            "Figma 에서 열리지 않으면 .png 로 대신 받을 수 있습니다."
+        )
+    if watermark:
+        warnings.append("Free 등급 PNG 에는 워터마크가 들어갑니다.")
+
+    return ExportEstimateOut(
+        format=body.format,
+        scope=body.scope,
+        mockup_count=len(mockups),
+        size_bytes=len(content.encode("utf-8")),
+        watermark=watermark,
+        warnings=warnings,
     )
 
 

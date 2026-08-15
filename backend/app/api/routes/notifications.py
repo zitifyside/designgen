@@ -8,12 +8,16 @@ from app.core.deps import CurrentUser, DbDep
 from app.models.notification import Notification
 from app.schemas.common import Message
 from app.schemas.notification import NotificationOut
+from app.services.expiry import notify_expiring_exports
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 @router.get("", response_model=list[NotificationOut])
 async def list_notifications(user: CurrentUser, db: DbDep):
+    # 목록을 만들기 전에 만료 임박 안내를 채운다. 주기 잡 없이도 사용자가 볼 때는
+    # 최신 상태가 되며, 이미 보낸 건은 다시 만들지 않는다.
+    await notify_expiring_exports(db, user.id)
     rows = (
         await db.scalars(
             select(Notification)

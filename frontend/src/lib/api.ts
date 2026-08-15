@@ -516,6 +516,19 @@ export const api = {
         method: "POST",
         body,
       }),
+    estimate: (
+      projectId: string,
+      body: {
+        format: ExportFormat;
+        scope: ExportScope;
+        conceptLabel?: ConceptLabel;
+        screen?: string;
+      },
+    ) =>
+      request<ExportEstimate>(`/projects/${projectId}/exports/estimate`, {
+        method: "POST",
+        body,
+      }),
     history: (projectId?: string) =>
       request<ExportRecord[]>("/exports", { query: { projectId } }),
     remove: (id: string) =>
@@ -704,6 +717,15 @@ export interface AdminRefund {
   reason: string;
   status: string;
   createdAt: string;
+}
+
+export interface ExportEstimate {
+  format: string;
+  scope: string;
+  mockupCount: number;
+  sizeBytes: number;
+  watermark: boolean;
+  warnings: string[];
 }
 
 export interface TemplateReviews {

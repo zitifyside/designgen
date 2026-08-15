@@ -83,3 +83,19 @@ class TeamOut(CamelModel):
     seats_used: int
     my_role: str
     members: list[TeamMemberOut] = []
+
+
+class ExportEstimateOut(CamelModel):
+    """실행 전 미리보기 (기능정의서 v0.2.0 §3.1 'Export 형식 선택 — 미리보기·검증').
+
+    크기를 어림하지 않고 실제로 만들어 재 본다. 어림값은 형식·시안 수에 따라 크게
+    빗나가고, 빗나간 예상은 없느니만 못하다.
+    """
+
+    format: str
+    scope: str
+    mockup_count: int
+    size_bytes: int
+    watermark: bool
+    # 호환성 경고 — 비어 있으면 그대로 내보내도 된다.
+    warnings: list[str]

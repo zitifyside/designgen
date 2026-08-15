@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { api, downloadFile } from "@/lib/api";
+import { api, downloadFile, type ExportEstimate } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useRouteId } from "@/lib/route-id";
 import { useAuthStore } from "@/store/auth-store";
@@ -78,6 +78,9 @@ export default function ExportClient() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [estimate, setEstimate] = useState<ExportEstimate | null>(null);
+  // .fig 가 실패했을 때만 켠다 — 문서 정의상 PNG 대체를 제안한다.
+  const [figFallback, setFigFallback] = useState(false);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -97,6 +100,32 @@ export default function ExportClient() {
   useEffect(() => {
     if (!screen && screens.length > 0) setScreen(screens[0].screen);
   }, [screens, screen]);
+
+  // 형식·범위를 바꿀 때마다 실제로 만들어 재 본다. 어림값은 형식·시안 수에 따라
+  // 크게 빗나가고, 빗나간 예상은 없느니만 못하다.
+  const conceptForEstimate = project?.confirmedConceptLabel ?? activeConcept;
+  useEffect(() => {
+    if (!projectId || !project) return;
+    let cancelled = false;
+    setEstimate(null);
+    const timer = setTimeout(async () => {
+      try {
+        const est = await api.exports.estimate(projectId, {
+          format,
+          scope,
+          conceptLabel: conceptForEstimate,
+          screen: scope === "current" ? screen || undefined : undefined,
+        });
+        if (!cancelled) setEstimate(est);
+      } catch {
+        if (!cancelled) setEstimate(null); // 예상 실패가 Export 를 막지는 않는다
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [projectId, project, format, scope, screen, conceptForEstimate]);
 
   if (!project) {
     return (
@@ -133,6 +162,7 @@ export default function ExportClient() {
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export 에 실패했다.");
+      if (format === "fig") setFigFallback(true);
     } finally {
       setBusy(false);
     }
@@ -301,6 +331,58 @@ export default function ExportClient() {
           </div>
         )}
 
+        {figFallback && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <span className="text-xs text-amber-800">
+              .fig 생성에 실패했다. 같은 시안을 .png 로 대신 받을 수 있다.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setFormat("png");
+                setFigFallback(false);
+                setError(null);
+              }}
+            >
+              .png 로 바꾸기
+            </Button>
+          </div>
+        )}
+
+        <Card>
+          <CardHeader
+            title="미리보기 · 검증"
+            description="지금 설정으로 실제 만들어 재 본 결과다."
+          />
+          {estimate === null ? (
+            <p className="py-2 text-xs text-ink-500">확인하는 중…</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <Preview label="대상 시안" value={`${estimate.mockupCount}종`} />
+                <Preview label="예상 크기" value={formatBytes(estimate.sizeBytes)} />
+                <Preview
+                  label="워터마크"
+                  value={estimate.watermark ? "포함" : "없음"}
+                />
+              </div>
+              {estimate.warnings.length > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                  {estimate.warnings.map((w: string) => (
+                    <li
+                      key={w}
+                      className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800"
+                    >
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </Card>
+
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-200 bg-surface px-5 py-4">
           <div className="text-xs text-ink-500">
             Export 파일은 생성 후 7일 경과 시 자동 삭제된다.
@@ -406,4 +488,20 @@ function ExportBreadcrumb({ project }: { project: Project }) {
       <span className="text-ink-700">Export</span>
     </>
   );
+}
+
+function Preview({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-ink-200 p-3">
+      <div className="text-[11px] text-ink-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-ink-900">{value}</div>
+    </div>
+  );
+}
+
+/** 바이트를 사람이 읽는 단위로. 소수 한 자리면 충분하다. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
