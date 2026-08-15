@@ -16,6 +16,8 @@ type Sort = "updated" | "created" | "name";
 
 const RECENT_DAYS = 7;
 const RECENT_LIMIT = 5;
+/** 한 페이지에 보여 줄 프로젝트 수 (기능정의서 v0.2.0 §3.1 '내 프로젝트 목록'). */
+const PAGE_SIZE = 20;
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
@@ -26,6 +28,7 @@ export default function DashboardPage() {
   const error = useProjectStore((s) => s.error);
   const [sort, setSort] = useState<Sort>("updated");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     void load();
@@ -51,6 +54,10 @@ export default function DashboardPage() {
 
   const favorites = filtered.filter((p) => p.isFavorite);
   const others = filtered.filter((p) => !p.isFavorite);
+  const pageCount = Math.max(1, Math.ceil(others.length / PAGE_SIZE));
+  // 검색·정렬로 목록이 줄면 지금 페이지가 사라질 수 있다.
+  const safePage = Math.min(page, pageCount);
+  const pageItems = others.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   // 최근 작업 — 최근 7일 5건 (기능정의서 v0.2.0 §3.1).
   const recent = useMemo(() => {
@@ -192,11 +199,46 @@ export default function DashboardPage() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {others.map((p) => (
-              <ProjectCard key={p.id} project={p} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {pageItems.map((p) => (
+                <ProjectCard key={p.id} project={p} />
+              ))}
+            </div>
+
+            {pageCount > 1 && (
+              <div className="mt-5 flex items-center justify-center gap-1.5">
+                <button
+                  onClick={() => setPage(safePage - 1)}
+                  disabled={safePage === 1}
+                  className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs text-ink-600 transition hover:bg-ink-50 disabled:cursor-not-allowed disabled:text-ink-400"
+                >
+                  이전
+                </button>
+                {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setPage(n)}
+                    className={
+                      "min-w-[30px] rounded-lg border px-2 py-1.5 text-xs transition " +
+                      (n === safePage
+                        ? "border-ink-900 bg-ink-900 text-ink-50"
+                        : "border-ink-200 bg-surface text-ink-600 hover:bg-ink-50")
+                    }
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setPage(safePage + 1)}
+                  disabled={safePage === pageCount}
+                  className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs text-ink-600 transition hover:bg-ink-50 disabled:cursor-not-allowed disabled:text-ink-400"
+                >
+                  다음
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>

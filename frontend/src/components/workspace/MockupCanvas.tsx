@@ -5,19 +5,19 @@ import { tokensToCssVars } from "@/lib/token-utils";
 import type { DesignTokens, Mockup } from "@/lib/types";
 import { MockupRenderer, type ElementSelection } from "./MockupRenderer";
 
-const VP = {
+export const VIEWPORT_WIDTH = {
   Desktop: 1440,
   Tablet: 768,
   Mobile: 390,
 } as const;
 
-const CANVAS_HEIGHT = { Desktop: 900, Tablet: 900, Mobile: 720 } as const;
+export const CANVAS_HEIGHT = { Desktop: 900, Tablet: 900, Mobile: 720 } as const;
 
 interface Props {
   tokens: DesignTokens;
   mockup: Mockup;
   projectName: string;
-  viewport: keyof typeof VP;
+  viewport: keyof typeof VIEWPORT_WIDTH;
   zoom: number;
   caption?: string;
   selectable?: boolean;
@@ -35,7 +35,7 @@ export function MockupCanvas({
   onSelect,
 }: Props) {
   const vars = useMemo(() => tokensToCssVars(tokens), [tokens]);
-  const width = VP[viewport];
+  const width = VIEWPORT_WIDTH[viewport];
   const height = CANVAS_HEIGHT[viewport];
   const scale = zoom / 100;
 

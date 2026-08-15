@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { THEME_KEY } from "@/lib/theme-init";
 import { useAuthStore } from "@/store/auth-store";
-
-/** 로그인 전에도 테마를 유지하려고 마지막 선택을 브라우저에 남긴다. */
-const THEME_KEY = "adg.theme";
 
 export type ThemeChoice = "light" | "dark" | "system";
 
@@ -59,18 +57,3 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
-
-/**
- * 첫 페인트 전에 테마를 입히는 인라인 스크립트.
- *
- * React 가 붙기 전에 실행돼야 다크 사용자가 흰 화면을 한 번 보고 넘어가는 일이
- * 없다. 실패하면 조용히 라이트로 둔다 — 테마 때문에 앱이 멈추면 안 된다.
- */
-export const THEME_INIT_SCRIPT = `
-(function(){try{
-  var v = localStorage.getItem('${THEME_KEY}') || 'system';
-  var dark = v === 'dark' || (v === 'system' &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches);
-  if (dark) document.documentElement.classList.add('dark');
-}catch(e){}})();
-`.trim();

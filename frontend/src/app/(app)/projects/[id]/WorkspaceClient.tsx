@@ -9,7 +9,12 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
 import { DSController } from "@/components/workspace/DSController";
-import { MockupCanvas } from "@/components/workspace/MockupCanvas";
+import { CanvasStage } from "@/components/workspace/CanvasStage";
+import {
+  CANVAS_HEIGHT,
+  MockupCanvas,
+  VIEWPORT_WIDTH,
+} from "@/components/workspace/MockupCanvas";
 import type { ElementSelection } from "@/components/workspace/MockupRenderer";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -57,6 +62,9 @@ export default function WorkspaceClient() {
   const setViewport = useWorkspaceStore((s) => s.setViewport);
   const setZoom = useWorkspaceStore((s) => s.setZoom);
   const toggleCompare = useWorkspaceStore((s) => s.toggleCompare);
+  const compareSelection = useWorkspaceStore((s) => s.compareSelection);
+  const toggleCompareSelection = useWorkspaceStore((s) => s.toggleCompareSelection);
+  const clearCompareSelection = useWorkspaceStore((s) => s.clearCompareSelection);
   const selectElement = useWorkspaceStore((s) => s.selectElement);
   const clearError = useWorkspaceStore((s) => s.clearError);
   const confirmConcept = useWorkspaceStore((s) => s.confirmConcept);
@@ -79,6 +87,13 @@ export default function WorkspaceClient() {
     null,
   );
   const [shortcutHelp, setShortcutHelp] = useState(false);
+  // 값을 올려 CanvasStage 에 "화면에 맞춰라" 를 알린다 (맞춤 배율은 컨테이너
+  // 크기를 아는 쪽에서만 계산할 수 있다).
+  const [fitSignal, setFitSignal] = useState(0);
+  // 시안 비교 (기능정의서 §3.1 '비교 모드') — 분할 방향과 확대·이동 동기화.
+  const [compareDir, setCompareDir] = useState<"row" | "col">("row");
+  const [syncView, setSyncView] = useState(true);
+  const [syncOffset, setSyncOffset] = useState({ x: 0, y: 0 });
   const [saveHint, setSaveHint] = useState(false);
 
   useEffect(() => {
@@ -131,6 +146,10 @@ export default function WorkspaceClient() {
   }, [pendingGeneration, projectId, loadWorkspace, refreshUser, setScreen]);
 
   const conceptMockups = screenMockups();
+  // 존재하는 시안만 남긴다 — 화면을 바꾸면 인덱스가 범위를 벗어날 수 있다.
+  const variantCompare = compareSelection
+    .filter((i) => i < conceptMockups.length)
+    .slice(0, 3);
   const activeMockup = conceptMockups[activeMockupIndex];
   const activeDS = designSystems.find((d) => d.conceptLabel === activeConcept);
   const isLocked = project?.status === "ConceptLocked";
@@ -138,6 +157,13 @@ export default function WorkspaceClient() {
     project?.status === "Completed" ||
     project?.status === "CompletedWarning" ||
     project?.status === "ConceptLocked";
+
+  // 비교로 들어가고 나올 때, 그리고 분할 방향이 바뀔 때는 배율을 다시 맞춘다.
+  // 칸이 좁아졌는데 배율이 그대로면 시안이 잘려 비교 자체가 되지 않는다.
+  const compareCount = variantCompare.length;
+  useEffect(() => {
+    setFitSignal((n) => n + 1);
+  }, [compareCount, compareDir, viewport]);
 
   // 단축키 (기능정의서 v0.2.0 §6 '단축키').
   // 입력 요소 안에서는 1~5·0·? 를 가로채지 않는다 — 글자를 못 치게 되기 때문이다.
@@ -172,7 +198,17 @@ export default function WorkspaceClient() {
       }
       if (mod && e.key === "0") {
         e.preventDefault();
-        setZoom(55); // Fit to Screen
+        setFitSignal((n) => n + 1); // Fit to Screen
+        return;
+      }
+      if (mod && (e.key === "+" || e.key === "=")) {
+        e.preventDefault();
+        setZoom(Math.round(zoom * 1.25));
+        return;
+      }
+      if (mod && (e.key === "-" || e.key === "_")) {
+        e.preventDefault();
+        setZoom(Math.round(zoom / 1.25));
         return;
       }
       if (mod || e.altKey) return;
@@ -201,6 +237,7 @@ export default function WorkspaceClient() {
     activeConcept,
     canUndo,
     conceptMockups.length,
+    zoom,
     project,
     router,
     screenModal,
@@ -388,6 +425,13 @@ export default function WorkspaceClient() {
             >
               +
             </button>
+            <button
+              onClick={() => setFitSignal((n) => n + 1)}
+              title="화면에 맞춤 (Ctrl/Cmd+0)"
+              className="border-l border-ink-200 px-2 py-1 text-[11px] text-ink-500 hover:text-ink-900"
+            >
+              맞춤
+            </button>
           </div>
           <Button
             variant={compareMode ? "primary" : "outline"}
@@ -563,7 +607,7 @@ export default function WorkspaceClient() {
             </div>
 
             {/* Canvas */}
-            <div className="flex-1 overflow-auto p-6 scrollbar-thin">
+            <div className="relative flex-1 overflow-auto p-6 scrollbar-thin">
               {compareMode ? (
                 <div className="grid gap-6 lg:grid-cols-3">
                   {designSystems.map((d) => {
@@ -587,21 +631,122 @@ export default function WorkspaceClient() {
                     );
                   })}
                 </div>
+              ) : variantCompare.length >= 2 && activeDS ? (
+                <div className="absolute inset-0 flex flex-col">
+                  <div className="z-10 flex items-center justify-between gap-3 px-4 pt-3">
+                    <span className="text-[11px] font-medium text-ink-600">
+                      시안 비교 · {variantCompare.length}종
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-0.5 rounded-lg bg-ink-100 p-0.5">
+                        {(["row", "col"] as const).map((d) => (
+                          <button
+                            key={d}
+                            onClick={() => setCompareDir(d)}
+                            className={cn(
+                              "rounded-md px-2 py-1 text-[11px] font-medium transition",
+                              compareDir === d
+                                ? "bg-surface text-ink-900 shadow-sm"
+                                : "text-ink-500",
+                            )}
+                          >
+                            {d === "row" ? "가로 분할" : "세로 분할"}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setSyncView((v) => !v)}
+                        title="확대·이동을 모든 시안에 함께 적용한다"
+                        className={cn(
+                          "rounded-lg border px-2 py-1 text-[11px] font-medium transition",
+                          syncView
+                            ? "border-brand-500 bg-brand-50 text-brand-700"
+                            : "border-ink-200 bg-surface text-ink-600 hover:bg-ink-50",
+                        )}
+                      >
+                        {syncView ? "동기화 켜짐" : "동기화 꺼짐"}
+                      </button>
+                      <button
+                        onClick={clearCompareSelection}
+                        className="rounded-lg border border-ink-200 bg-surface px-2 py-1 text-[11px] text-ink-600 transition hover:bg-ink-50"
+                      >
+                        비교 종료
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    className={cn(
+                      "flex min-h-0 flex-1 gap-2 p-3",
+                      compareDir === "row" ? "flex-row" : "flex-col",
+                    )}
+                  >
+                    {variantCompare.map((idx) => {
+                      const m = conceptMockups[idx];
+                      if (!m) return null;
+                      return (
+                        <div
+                          key={m.id}
+                          className="flex min-h-0 min-w-0 flex-1 flex-col rounded-xl border border-ink-200 bg-ink-50"
+                        >
+                          <div className="shrink-0 truncate px-3 py-1.5 text-[10px] font-medium text-ink-600">
+                            #{idx + 1} {m.variantLabel || m.title}
+                          </div>
+                          <div className="min-h-0 flex-1">
+                            <CanvasStage
+                              contentWidth={VIEWPORT_WIDTH[viewport]}
+                              contentHeight={CANVAS_HEIGHT[viewport]}
+                              zoom={zoom}
+                              onZoomChange={setZoom}
+                              fitSignal={fitSignal}
+                              resetKey={`cmp:${activeConcept}:${activeScreen}:${viewport}:${compareDir}:${variantCompare.length}`}
+                              offset={syncView ? syncOffset : undefined}
+                              onOffsetChange={syncView ? setSyncOffset : undefined}
+                            >
+                              <MockupCanvas
+                                tokens={activeDS.tokens}
+                                mockup={m}
+                                projectName={project.name}
+                                viewport={viewport}
+                                zoom={zoom}
+                              />
+                            </CanvasStage>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : (
                 activeDS &&
                 activeMockup && (
-                  <MockupCanvas
-                    tokens={activeDS.tokens}
-                    mockup={activeMockup}
-                    projectName={project.name}
-                    viewport={viewport}
-                    zoom={zoom}
-                    selectable
-                    onSelect={(sel: ElementSelection) => selectElement(sel)}
-                    caption={`${activeMockup.screenTitle} · 변형 ${
-                      activeMockupIndex + 1
-                    } — ${activeMockup.variantLabel}`}
-                  />
+                  <div className="absolute inset-0 flex flex-col">
+                    {/* 설명은 화면에 고정한다 — 함께 움직이면 확대했을 때 사라진다. */}
+                    <div className="pointer-events-none z-10 pt-4 text-center text-[11px] font-medium uppercase tracking-wider text-ink-500">
+                      {activeMockup.screenTitle} · 변형 {activeMockupIndex + 1} —{" "}
+                      {activeMockup.variantLabel}
+                    </div>
+                    <div className="min-h-0 flex-1">
+                      <CanvasStage
+                        contentWidth={VIEWPORT_WIDTH[viewport]}
+                        contentHeight={CANVAS_HEIGHT[viewport]}
+                        zoom={zoom}
+                        onZoomChange={setZoom}
+                        fitSignal={fitSignal}
+                        resetKey={`${activeConcept}:${activeScreen}:${activeMockupIndex}:${viewport}`}
+                      >
+                        <MockupCanvas
+                          tokens={activeDS.tokens}
+                          mockup={activeMockup}
+                          projectName={project.name}
+                          viewport={viewport}
+                          zoom={zoom}
+                          selectable
+                          onSelect={(sel: ElementSelection) => selectElement(sel)}
+                        />
+                      </CanvasStage>
+                    </div>
+                  </div>
                 )
               )}
             </div>
@@ -617,14 +762,30 @@ export default function WorkspaceClient() {
                   return (
                     <button
                       key={m.id}
-                      onClick={() => setMockup(idx)}
+                      onClick={(e) => {
+                        // Shift+클릭은 비교 대상 선택 — 일반 클릭은 전환이다.
+                        if (e.shiftKey) toggleCompareSelection(idx);
+                        else setMockup(idx);
+                      }}
+                      title={
+                        compareSelection.includes(idx)
+                          ? "비교 대상 (Shift+클릭으로 해제)"
+                          : "Shift+클릭으로 비교 대상에 추가"
+                      }
                       className={cn(
-                        "flex shrink-0 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition",
-                        active
-                          ? "border-brand-500 bg-brand-50"
-                          : "border-ink-200 bg-surface hover:bg-ink-50",
+                        "relative flex shrink-0 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition",
+                        compareSelection.includes(idx)
+                          ? "border-brand-500 ring-2 ring-brand-400 ring-offset-1"
+                          : active
+                            ? "border-brand-500 bg-brand-50"
+                            : "border-ink-200 bg-surface hover:bg-ink-50",
                       )}
                     >
+                      {compareSelection.includes(idx) && (
+                        <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 text-[9px] font-bold text-white">
+                          {compareSelection.indexOf(idx) + 1}
+                        </span>
+                      )}
                       <span
                         className={cn(
                           "font-mono text-[10px]",
@@ -833,7 +994,10 @@ export default function WorkspaceClient() {
 /** 기능정의서 v0.2.0 §6 '단축키' 정의와 1:1 로 맞춘다. */
 const SHORTCUTS: Array<[string[], string]> = [
   [["1", "~", "5"], "시안 전환"],
+  [["휠"], "확대·축소 (커서 기준)"],
+  [["Space", "드래그"], "이동 (휠 버튼 드래그도 가능)"],
   [["0"], "Zoom 100%"],
+  [["Ctrl/Cmd", "+/−"], "확대·축소"],
   [["Ctrl/Cmd", "0"], "Fit to Screen"],
   [["Ctrl/Cmd", "Z"], "Token 수정 되돌리기"],
   [["Ctrl/Cmd", "S"], "저장 (자동 저장 확인)"],

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
@@ -102,6 +103,11 @@ export default function NewProjectPage() {
   const [name, setName] = useState("");
   const [requirements, setRequirements] = useState("");
   const [platform, setPlatform] = useState<Platform>("Web");
+  // v2.0 예정 플랫폼은 고를 수 없다. 대신 출시 알림을 신청받는다
+  // (기능정의서 §3.1 '플랫폼 선택 — 클릭 시 출시 알림 신청 폼').
+  const [notifyPlatform, setNotifyPlatform] = useState<Platform | null>(null);
+  const [notifyDone, setNotifyDone] = useState(false);
+  const [notifyBusy, setNotifyBusy] = useState(false);
   const [conceptCount, setConceptCount] = useState<1 | 2 | 3>(isFree ? 1 : 3);
   const [variantCount, setVariantCount] = useState<3 | 5>(isFree ? 3 : 5);
   const [dsMode, setDsMode] = useState<DsMode>("per_concept");
@@ -352,18 +358,22 @@ export default function NewProjectPage() {
               <button
                 key={p.value}
                 type="button"
-                disabled={!p.enabled}
-                onClick={() => setPlatform(p.value)}
-                className={`rounded-lg border px-3 py-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  platform === p.value
-                    ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
+                title={p.enabled ? undefined : "출시 알림을 신청한다"}
+                onClick={() =>
+                  p.enabled ? setPlatform(p.value) : setNotifyPlatform(p.value)
+                }
+                className={`rounded-lg border px-3 py-2.5 text-xs font-medium transition ${
+                  !p.enabled
+                    ? "border-dashed border-ink-300 bg-ink-50 text-ink-500 hover:border-brand-400 hover:text-ink-700"
+                    : platform === p.value
+                      ? "border-brand-500 bg-brand-50 text-brand-700"
+                      : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                 }`}
               >
                 {p.label}
                 {!p.enabled && (
                   <div className="mt-0.5 text-[9px] font-normal text-ink-500">
-                    v2.0 예정
+                    v2.0 예정 · 알림 신청
                   </div>
                 )}
               </button>
@@ -664,6 +674,64 @@ export default function NewProjectPage() {
           </div>
         </div>
       </form>
+
+      <Modal
+        open={notifyPlatform !== null}
+        onClose={() => {
+          setNotifyPlatform(null);
+          setNotifyDone(false);
+        }}
+        title={notifyDone ? "신청됐다" : "출시 알림 신청"}
+        description={
+          notifyDone
+            ? "출시되면 가입 이메일로 알린다."
+            : `${notifyPlatform} 지원은 v2.0 에 예정돼 있다. 준비되면 알려 준다.`
+        }
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setNotifyPlatform(null);
+                setNotifyDone(false);
+              }}
+            >
+              닫기
+            </Button>
+            {!notifyDone && (
+              <Button
+                size="sm"
+                loading={notifyBusy}
+                onClick={async () => {
+                  setNotifyBusy(true);
+                  try {
+                    // 별도 저장소를 만들지 않고 피드백 채널로 모은다 —
+                    // 어차피 Admin 이 한곳에서 보는 편이 낫다.
+                    await api.system.feedback({
+                      category: "feature",
+                      title: `[출시 알림] ${notifyPlatform} 플랫폼 지원`,
+                      body: `${notifyPlatform} 플랫폼 출시 알림을 신청했다.`,
+                    });
+                    setNotifyDone(true);
+                  } finally {
+                    setNotifyBusy(false);
+                  }
+                }}
+              >
+                알림 신청
+              </Button>
+            )}
+          </div>
+        }
+      >
+        <p className="text-xs text-ink-600">
+          {notifyDone
+            ? "같은 신청을 다시 보낼 필요는 없다."
+            : "지금은 Web·Mobile 로 생성할 수 있다. 반응형·APP 은 준비 중이다."}
+        </p>
+      </Modal>
     </div>
   );
 }

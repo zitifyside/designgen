@@ -48,6 +48,7 @@ interface WorkspaceState {
   setZoom: (n: number) => void;
   toggleCompare: () => void;
   toggleCompareSelection: (idx: number) => void;
+  clearCompareSelection: () => void;
   selectElement: (el: SelectedElement | null) => void;
   clearError: () => void;
 
@@ -163,7 +164,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ activeScreen: screen, activeMockupIndex: 0, compareSelection: [] }),
   setActiveMockup: (idx) => set({ activeMockupIndex: idx }),
   setViewport: (v) => set({ viewport: v }),
-  setZoom: (n) => set({ zoom: Math.max(25, Math.min(400, n)) }),
+  // 확대 범위는 기능정의서 §3.1 시안 뷰어 정의를 따른다 (10%~400%).
+  setZoom: (n) => set({ zoom: Math.max(10, Math.min(400, n)) }),
   toggleCompare: () =>
     set({ compareMode: !get().compareMode, compareSelection: [] }),
   toggleCompareSelection: (idx) => {
@@ -175,6 +177,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // 비교는 2~3개까지 (기능정의서 v0.2.0 §3.1 '비교 모드').
     set({ compareSelection: [...cur, idx].slice(-3) });
   },
+  clearCompareSelection: () => set({ compareSelection: [] }),
   selectElement: (el) => set({ selectedElement: el }),
   clearError: () => set({ error: null }),
 
