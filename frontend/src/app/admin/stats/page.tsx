@@ -67,6 +67,29 @@ export default function AdminStatsPage() {
         </div>
       )}
 
+      <section className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiBox
+          label="DAU"
+          value={(stats?.dau ?? 0).toLocaleString()}
+          sub="최근 24시간 접속"
+        />
+        <KpiBox
+          label="MAU"
+          value={(stats?.mau ?? 0).toLocaleString()}
+          sub="최근 30일 접속"
+        />
+        <KpiBox
+          label="신규 가입"
+          value={(stats?.daily.reduce((n, d) => n + d.signups, 0) ?? 0).toLocaleString()}
+          sub={`최근 ${stats?.rangeDays ?? 0}일`}
+        />
+        <KpiBox
+          label="생성"
+          value={(stats?.daily.reduce((n, d) => n + d.generations, 0) ?? 0).toLocaleString()}
+          sub={`최근 ${stats?.rangeDays ?? 0}일`}
+        />
+      </section>
+
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiBox
           label="MRR"

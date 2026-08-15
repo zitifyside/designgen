@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import logging
+import ssl
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy.ext.asyncio import (
@@ -20,8 +22,17 @@ from app.core.config import settings
 logger = logging.getLogger("adg")
 
 # asyncpg 가 이해하지 못해 연결 자체를 실패시키는 libpq 전용 쿼리 파라미터.
-# Neon·Supabase 가 콘솔에서 주는 문자열에 기본으로 붙어 있다.
-_LIBPQ_ONLY_PARAMS = {"sslmode", "channel_binding", "options", "target_session_attrs"}
+# 관리형 Postgres 콘솔이 주는 문자열에 기본으로 붙어 있다.
+_LIBPQ_ONLY_PARAMS = {
+    "sslmode",
+    "sslrootcert",
+    "channel_binding",
+    "options",
+    "target_session_attrs",
+}
+
+# asyncpg 가 그대로 받는 libpq 의 SSL 모드. 의미를 바꾸지 않고 넘긴다.
+_SSL_MODES = {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
 
 
 def normalize_database_url(url: str) -> tuple[str, dict]:
@@ -53,8 +64,27 @@ def normalize_database_url(url: str) -> tuple[str, dict]:
 
     connect_args: dict = {}
     sslmode = dropped.get("sslmode", "").lower()
-    if sslmode in {"require", "verify-ca", "verify-full", "prefer"}:
-        connect_args["ssl"] = True
+    root_cert = dropped.get("sslrootcert", "")
+
+    if root_cert:
+        # 사설 CA 로 서명한 인증서(자체 호스팅 DB)는 그 CA 를 신뢰 목록에 넣어야
+        # 검증이 통과한다. 이 경우에만 컨텍스트를 직접 만든다.
+        if not Path(root_cert).is_file():
+            # 여기서 막지 않으면 기동 중에 SSL 내부 오류로 터져 원인이 안 보인다.
+            raise RuntimeError(
+                f"sslrootcert 경로에 파일이 없습니다: {root_cert}. "
+                "CA 인증서를 컨테이너 안에서 읽을 수 있는 경로에 두세요."
+            )
+        ctx = ssl.create_default_context(cafile=root_cert)
+        if sslmode not in {"verify-full"}:
+            # verify-ca 는 CA 만 확인하고 호스트명은 보지 않는다 (libpq 정의).
+            ctx.check_hostname = False
+        connect_args["ssl"] = ctx
+    elif sslmode in _SSL_MODES:
+        # 모드 문자열을 그대로 넘긴다. `True` 로 바꾸면 **`require` 까지 인증서를
+        # 검증**하게 되어, libpq 라면 붙었을 자체 서명 인증서에서 연결이 끊긴다
+        # (libpq 의 require 는 '암호화하되 검증하지 않음'이다).
+        connect_args["ssl"] = sslmode
 
     cleaned = urlunsplit(
         (parts.scheme, parts.netloc, parts.path, urlencode(kept), parts.fragment)

@@ -615,7 +615,13 @@ export const api = {
 
   admin: {
     dashboard: () => request<AdminKpi>("/admin/dashboard"),
-    users: (query?: { q?: string; plan?: string; status?: string }) =>
+    users: (query?: {
+      q?: string;
+      plan?: string;
+      status?: string;
+      page?: number;
+      pageSize?: number;
+    }) =>
       request<AdminUser[]>("/admin/users", { query }),
     changeTier: (userId: string, plan: string) =>
       request<{ detail: string }>(`/admin/users/${userId}/tier`, {
@@ -788,6 +794,9 @@ export interface AdminStatsDailyPoint {
 
 export interface AdminStats {
   rangeDays: number;
+  /** 최근 1일·30일 안에 접속한 사용자 수. */
+  dau: number;
+  mau: number;
   daily: AdminStatsDailyPoint[];
   planDistribution: Record<string, number>;
   mrrCents: number;

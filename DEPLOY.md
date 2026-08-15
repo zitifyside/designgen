@@ -231,7 +231,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | Firebase Hosting | ✅ https://design-gen-zitify.web.app |
 | 백엔드 Cloud Run | ✅ `adg-api` (asia-northeast3) — Hosting `/api/**` rewrite 연결 |
 | 결제 | ✅ Blaze — `zitifycorp` 결제 계정 |
-| DB | ⚠ 컨테이너 `/tmp` SQLite — **콜드 스타트·재배포 시 초기화**. PostgreSQL 전환 준비 완료, 연결 문자열만 있으면 된다 (§6) |
+| DB | ⚠ 컨테이너 `/tmp` SQLite — **콜드 스타트·재배포 시 초기화**. **맥미니 PostgreSQL 로 이식 예정** — 코드·검증 완료, 맥미니 준비만 남았다 (§6) |
 | AI 생성 | ⚠ `FAKE_AI_PIPELINE=true` — placeholder 출력 |
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
 | 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
@@ -251,54 +251,119 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 
 1. **허브 활성화** — `designgenerator` 를 `active` 로 전환해야 중앙 로그가 쌓인다 (§3.5).
    지금은 로컬 DB 사본만 남고, 그 사본도 컨테이너가 내려가면 사라진다.
-2. **DB 를 PostgreSQL 로** — 지금은 사용자가 만든 프로젝트가 콜드 스타트 후 사라진다.
-   **코드 쪽 준비는 끝났다** (§6). 남은 것은 Neon 등에서 DB 를 만들고 연결 문자열을
-   받는 일뿐이며, 그 뒤로는 `DATABASE_URL` 교체 + 재배포 한 번이다.
+2. **DB 를 맥미니 PostgreSQL 로** — 지금은 사용자가 만든 프로젝트가 콜드 스타트 후
+   사라진다. **코드 쪽 준비는 끝났다** (§6). 남은 것은 맥미니에 Postgres 를 올리고
+   Cloud Run 에서 닿는 경로(터널 권장)를 만드는 일이며, 그 뒤로는 `check_db.py` 로
+   확인 → `DATABASE_URL` 교체 + 재배포 한 번이다.
 3. **실제 AI 생성** — `FAKE_AI_PIPELINE=false` + 프로바이더 키.
 4. **커스텀 도메인** — Hosting 에 도메인 연결 시 백엔드 `CORS_ORIGINS` 에도 추가.
 5. **i18n (ko/en)** — 출시 전 작업. 번역은 Codex 전담 규약을 따른다.
 
 ---
 
-## 6. PostgreSQL 전환
+## 6. PostgreSQL 전환 (맥미니 자체 호스팅)
 
 `/tmp` SQLite 는 콜드 스타트·재배포 때마다 사라진다. 데모로는 돌아가지만 사용자가
-만든 프로젝트가 없어지므로 운영에서는 반드시 바꿔야 한다.
+만든 프로젝트가 없어지므로 운영에서는 반드시 바꿔야 한다. **운영 DB 는 맥미니에
+직접 올린다** (운영자 결정 2026-08-16).
 
-### 준비 상태 (2026-08-15)
+### 6.1 준비 상태
 
 | 항목 | 상태 |
 |---|---|
 | `asyncpg` | ✅ `requirements.txt` 활성화 |
-| 엔진 설정 | ✅ 드라이버 자동 보정 · 유휴 연결 대응(`pool_pre_ping`·`pool_recycle`) |
+| 연결 문자열 보정 | ✅ 드라이버 자동 지정 · libpq 파라미터 흡수 · **libpq 그대로의 SSL 모드** |
+| 유휴 연결 대응 | ✅ `pool_pre_ping` · `pool_recycle` |
 | 전체 스모크 | ✅ **PostgreSQL 16 실측 통과** (SQLite 와 동일 결과) |
-| 남은 일 | ⛔ 연결 문자열 (Neon 등에서 DB 생성 필요) |
+| 사전 점검 도구 | ✅ `scripts/check_db.py` |
+| 남은 일 | ⛔ 맥미니 Postgres 기동 + 외부에서 닿는 경로 + 자격증명 |
 
-### 전환 절차
+### 6.2 맥미니에서 준비할 것
 
 ```bash
-# 1) 연결 문자열을 그대로 넣는다. 콘솔이 주는 형태 그대로여도 된다 —
-#    postgres:// · postgresql:// · ?sslmode=require 는 코드가 알아서 보정한다.
-gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com \
-  --project design-gen-zitify --region asia-northeast3 \
-  --update-env-vars "^@^DATABASE_URL=postgresql://<user>:<pw>@<host>/<db>?sslmode=require" \
-  --quiet
+# 1) Postgres 설치·기동 (Homebrew 기준)
+brew install postgresql@16
+brew services start postgresql@16
 
-# 2) 스키마·플랜·데모 계정은 SEED_ON_STARTUP=true 가 기동 시 채운다 (멱등)
+# 2) DB·계정 생성 — 앱 전용 계정을 따로 둔다 (superuser 를 그대로 쓰지 않는다)
+createdb adg
+psql adg -c "CREATE ROLE adg_app LOGIN PASSWORD '<강한-비밀번호>';"
+psql adg -c "GRANT ALL ON DATABASE adg TO adg_app;"
+psql adg -c "GRANT ALL ON SCHEMA public TO adg_app;"
+
+# 3) 외부 접속 허용 (기본값은 localhost 만 듣는다)
+#    postgresql.conf : listen_addresses = '*'
+#    pg_hba.conf     : hostssl adg adg_app <허용대역> scram-sha-256
+brew services restart postgresql@16
 ```
 
-전환 전 같은 문자열로 스모크를 한 번 돌려 두면 안전하다. 이 명령은 **대상 DB 의
-스키마를 지우고 다시 만든다** — 반드시 빈 DB 에만 쓴다.
+### 6.3 Cloud Run 에서 맥미니에 닿는 경로
+
+맥미니는 대개 가정·사무실 회선 뒤에 있어 고정 주소가 없다. 세 가지 중 하나를 고른다.
+
+| 방식 | 특징 | 적합 |
+|---|---|---|
+| **Cloudflare Tunnel** (권장) | 포트 개방 불필요, 공유기 설정 없음, 고정 호스트명 | 회선·IP 가 바뀌는 환경 |
+| Tailscale | 사설망으로 묶어 평문도 안전, 설정 간단 | Cloud Run 에서는 사이드카가 필요해 손이 더 간다 |
+| 포트 포워딩 + DDNS | 추가 도구 없음 | 공인 IP 가 있고 방화벽을 직접 관리할 때 |
+
+⚠ 어떤 방식이든 **Postgres 포트를 그대로 인터넷에 여는 선택은 피한다.** 인증 실패
+시도가 곧바로 들어온다. 터널을 쓰면 포트를 열지 않고도 같은 결과를 얻는다.
+
+### 6.4 전환 절차
 
 ```powershell
-$env:SMOKE_DATABASE_URL = "postgresql://<user>:<pw>@<host>/<db>?sslmode=require"
-cd backend; .venv\Scripts\python.exe scripts\smoke_e2e.py
+# 1) 먼저 연결만 확인한다 (스키마를 건드리지 않는다)
+cd backend
+$env:CHECK_DATABASE_URL = "postgresql://adg_app:<pw>@<호스트>:5432/adg?sslmode=require"
+.venv\Scripts\python.exe scripts\check_db.py
 ```
 
-### 연결 문자열에서 걸리는 것
+`check_db.py` 는 연결·인증·TLS·왕복 지연·인코딩·시간대·생성 권한·기존 테이블 수를
+따로 확인한다. 한 번에 "연결 실패" 만 보면 원인을 좁히는 데 시간이 다 간다.
 
-관리형 Postgres 콘솔이 주는 문자열은 `postgresql://user:pw@host/db?sslmode=require`
-형태다. 이걸 그대로 넣으면 ① 드라이버 지정이 없어 동기 psycopg 를 찾다가 죽고
-② asyncpg 가 `sslmode` 를 모른다며 죽는다. `core/database.py` 의
-`normalize_database_url()` 이 두 경우를 모두 흡수하며, SSL 요구는 버리지 않고
-`connect_args["ssl"]` 로 옮겨 유지한다.
+```powershell
+# 2) 같은 문자열로 전체 스모크를 돌려 본다
+#    ⚠ 대상 DB 의 스키마를 지우고 다시 만든다. 반드시 빈 DB 에만 쓴다.
+$env:SMOKE_DATABASE_URL = $env:CHECK_DATABASE_URL
+.venv\Scripts\python.exe scripts\smoke_e2e.py
+```
+
+```bash
+# 3) 통과하면 Cloud Run 환경변수를 바꾼다
+gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com   --project design-gen-zitify --region asia-northeast3   --update-env-vars "^@^DATABASE_URL=postgresql://adg_app:<pw>@<호스트>:5432/adg?sslmode=require"   --quiet
+```
+
+스키마·플랜·데모 계정은 `SEED_ON_STARTUP=true` 가 기동 시 채운다 (멱등).
+
+### 6.5 연결 문자열에서 걸리는 것
+
+콘솔이나 문서가 주는 문자열은 `postgresql://user:pw@host/db?sslmode=require` 형태다.
+그대로 넣으면 ① 드라이버 지정이 없어 동기 psycopg 를 찾다가 죽고 ② asyncpg 가
+`sslmode` 를 모른다며 죽는다. `core/database.py` 의 `normalize_database_url()` 이
+둘 다 흡수한다.
+
+⚠ **`sslmode` 의 의미를 바꾸지 않는다.** libpq 에서 `require` 는 *암호화하되 인증서를
+검증하지 않는다* 는 뜻이다. 이걸 '검증함'으로 해석하면 공개 CA 를 쓰는 관리형
+서비스에서는 우연히 통과하지만, **자체 서명 인증서를 쓰는 맥미니에서는 연결이
+끊긴다.** 모드 문자열을 그대로 넘겨 libpq 와 같게 동작시킨다.
+
+| 상황 | 지정 |
+|---|---|
+| 자체 서명 인증서 | `?sslmode=require` (암호화만) |
+| 사설 CA 로 서명 | `?sslmode=verify-ca&sslrootcert=/경로/ca.pem` |
+| 공개 CA (관리형) | `?sslmode=verify-full` |
+| 터널 내부라 이미 암호화됨 | `?sslmode=disable` |
+
+`sslrootcert` 파일이 컨테이너 안에 없으면 **기동을 막고 경로를 알려 준다** — SSL
+내부 오류로 터지면 원인이 보이지 않는다.
+
+### 6.6 맥미니를 쓸 때 같이 볼 것
+
+. **지연** — Cloud Run(서울)과 맥미니 사이 왕복이 그대로 응답 시간에 더해진다.
+  `check_db.py` 가 평균·최대를 재 주며, 50ms 를 넘으면 경고한다
+. **가용성** — 맥미니가 꺼지거나 회선이 끊기면 서비스가 함께 멈춘다. 절전 방지와
+  재부팅 후 자동 기동(`brew services`)을 반드시 켠다
+. **백업** — 자체 호스팅은 백업도 자체 책임이다. `pg_dump` 주기 실행 + 외부 보관
+. **인스턴스 상한** — SQLite 때문에 걸어 둔 `--max-instances 1` 은 Postgres 전환 후
+  올릴 수 있다. 다만 레이트 리밋이 프로세스 메모리 기반이라(§3.5) 같이 손봐야 한다

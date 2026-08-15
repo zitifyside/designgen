@@ -93,6 +93,9 @@ class StatsOut(CamelModel):
     """DB 가 실제로 아는 값만 집계한다 — 결제 연동 전에는 매출 계열이 0 이다."""
 
     range_days: int
+    # 최근 1일·30일 안에 접속한 사용자 수 (기능정의서 §3.3 '핵심 지표 카드').
+    dau: int = 0
+    mau: int = 0
     daily: list[DailyPointOut]
     plan_distribution: dict[str, int]
     mrr_cents: int

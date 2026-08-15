@@ -104,6 +104,9 @@ async def list_users(
     q: str | None = Query(default=None),
     plan: str | None = Query(default=None),
     user_status: str | None = Query(default=None, alias="status"),
+    # 기능정의서 v0.2.0 §3.3 — 50명/페이지. 전수 반환은 사용자가 늘면 그대로 무너진다.
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200, alias="pageSize"),
 ):
     stmt = select(User)
     if q:
@@ -112,7 +115,7 @@ async def list_users(
         stmt = stmt.where(User.plan == plan)
     if user_status:
         stmt = stmt.where(User.status == user_status)
-    stmt = stmt.order_by(User.created_at.desc())
+    stmt = stmt.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     rows = (await db.scalars(stmt)).all()
     out = []
     for u in rows:
@@ -317,6 +320,20 @@ async def stats(
     """
     since = _now() - dt.timedelta(days=range_days)
 
+    # 활성 사용자 — `last_active_at` 은 로그인·토큰 갱신 때 갱신되므로 '접속한 날'의
+    # 근사치다. 요청마다 찍지 않으므로 실제 체류와는 다를 수 있다.
+    now = _now()
+    dau = await db.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(User.last_active_at >= now - dt.timedelta(days=1))
+    )
+    mau = await db.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(User.last_active_at >= now - dt.timedelta(days=30))
+    )
+
     gens = (
         await db.scalars(select(Generation).where(Generation.created_at >= since))
     ).all()
@@ -366,6 +383,8 @@ async def stats(
 
     return StatsOut(
         range_days=range_days,
+        dau=dau or 0,
+        mau=mau or 0,
         daily=[
             DailyPointOut(
                 date=day,

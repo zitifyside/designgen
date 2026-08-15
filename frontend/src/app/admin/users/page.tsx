@@ -23,6 +23,8 @@ const STATUS_TONE: Record<string, "success" | "warning" | "neutral"> = {
 
 const PLANS: Plan[] = ["Free", "Pro", "Team", "Admin"];
 
+const PAGE_SIZE = 50;
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [q, setQ] = useState("");
@@ -33,6 +35,8 @@ export default function AdminUsersPage() {
   const [suspendReason, setSuspendReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 기능정의서 §3.3 — 50명/페이지. 목록은 서버가 잘라 준다.
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setError(null);
@@ -42,11 +46,18 @@ export default function AdminUsersPage() {
           q: q || undefined,
           plan: planFilter === "all" ? undefined : planFilter,
           status: statusFilter === "all" ? undefined : statusFilter,
+          page,
+          pageSize: PAGE_SIZE,
         }),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "사용자를 불러오지 못했다.");
     }
+  }, [q, planFilter, statusFilter, page]);
+
+  // 조건이 바뀌면 첫 페이지부터 다시 본다.
+  useEffect(() => {
+    setPage(1);
   }, [q, planFilter, statusFilter]);
 
   useEffect(() => {
@@ -211,6 +222,27 @@ export default function AdminUsersPage() {
             )}
           </tbody>
         </table>
+
+        {/* 서버가 페이지 단위로 주므로 총 개수를 모른다 — 가득 찼으면 다음이 있다고 본다. */}
+        {(page > 1 || users.length === PAGE_SIZE) && (
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              onClick={() => setPage((n) => Math.max(1, n - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-ink-700 px-2.5 py-1.5 text-xs text-ink-300 transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:text-ink-500"
+            >
+              이전
+            </button>
+            <span className="text-xs text-ink-400">{page} 페이지</span>
+            <button
+              onClick={() => setPage((n) => n + 1)}
+              disabled={users.length < PAGE_SIZE}
+              className="rounded-lg border border-ink-700 px-2.5 py-1.5 text-xs text-ink-300 transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:text-ink-500"
+            >
+              다음
+            </button>
+          </div>
+        )}
       </Card>
 
       <UserDetailDrawer

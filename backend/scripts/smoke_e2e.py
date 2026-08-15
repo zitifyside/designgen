@@ -361,6 +361,18 @@ async def main() -> None:
         r = await c.get(f"{API}/templates", headers=h)
         check("  승인 후 노출", any(t["id"] == tid for t in r.json()))
 
+        # 12-a) 심사 거부는 사유가 필수다 (기능정의서 §3.3 '템플릿 심사').
+        r = await c.post(f"{API}/templates", headers=h,
+                         json={"name": "거부용 DS", "category": "SaaS Dashboard",
+                               "description": "테스트", "price": 0, "projectId": pid})
+        rej_id = r.json()["id"]
+        r = await c.patch(f"{API}/admin/templates/{rej_id}", headers=ah,
+                          json={"status": "Rejected", "reason": ""})
+        check("거부 사유 없으면 차단(400)", r.status_code == 400, f"{r.status_code} {r.text[:120]}")
+        r = await c.patch(f"{API}/admin/templates/{rej_id}", headers=ah,
+                          json={"status": "Rejected", "reason": "미리보기 이미지가 없다."})
+        check("  사유가 있으면 거부 처리", r.status_code == 200, r.text[:120])
+
         # 12-b) 리뷰 — 목록·평점 분포
         r = await c.get(f"{API}/templates/{tid}/reviews")
         check("리뷰 목록 (빈 상태)", r.status_code == 200 and r.json()["total"] == 0, r.text[:120])
@@ -454,6 +466,22 @@ async def main() -> None:
             row = await db.get(Generation, stub_id)
             await db.delete(row)
             await db.commit()
+
+        # 14-b) Admin — 목록 페이지네이션 · 활성 사용자 지표
+        r = await c.get(f"{API}/admin/users?page=1&pageSize=2", headers=ah)
+        check("Admin 사용자 페이지네이션", r.status_code == 200 and len(r.json()) <= 2,
+              f"{r.status_code} {len(r.json()) if r.status_code == 200 else ''}")
+        first_ids = [u["id"] for u in r.json()]
+        r = await c.get(f"{API}/admin/users?page=2&pageSize=2", headers=ah)
+        check("  2페이지는 다른 사용자", not set(first_ids) & {u["id"] for u in r.json()},
+              str([u["email"] for u in r.json()]))
+        r = await c.get(f"{API}/admin/stats?range=30", headers=ah)
+        st_body = r.json()
+        check("Admin 활성 사용자 지표", "dau" in st_body and "mau" in st_body,
+              str(list(st_body)[:5]))
+        check("  방금 로그인한 사용자 반영", st_body.get("dau", 0) >= 1, str(st_body.get("dau")))
+        check("  MAU >= DAU", st_body.get("mau", 0) >= st_body.get("dau", 0),
+              f"{st_body.get('mau')} / {st_body.get('dau')}")
 
         # 15) 팀 (Team 등급 필요 — Admin 계정으로)
         r = await c.post(f"{API}/teams", headers=ah, json={"name": "디자인팀"})
