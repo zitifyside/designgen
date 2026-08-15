@@ -34,7 +34,7 @@ jobs:
       - name: npm audit (prod)
         working-directory: frontend
         run: npm audit --omit=dev --audit-level=critical
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: pip-audit
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: scan tracked files
