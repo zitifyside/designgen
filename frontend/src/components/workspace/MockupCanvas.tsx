@@ -3,7 +3,7 @@
 import { CSSProperties, useMemo } from "react";
 import { tokensToCssVars } from "@/lib/token-utils";
 import type { DesignTokens, Mockup } from "@/lib/types";
-import { MockupRenderer, type ElementSelection } from "./MockupRenderer";
+import { MockupRenderer, type SelectionChain } from "./MockupRenderer";
 
 export const VIEWPORT_WIDTH = {
   Desktop: 1440,
@@ -21,7 +21,9 @@ interface Props {
   zoom: number;
   caption?: string;
   selectable?: boolean;
-  onSelect?: (selection: ElementSelection) => void;
+  onSelect?: (chain: SelectionChain) => void;
+  /** 더블클릭 — 선택 사슬에서 한 단계 안으로. */
+  onEnterChild?: () => void;
 }
 
 export function MockupCanvas({
@@ -33,6 +35,7 @@ export function MockupCanvas({
   caption,
   selectable,
   onSelect,
+  onEnterChild,
 }: Props) {
   const vars = useMemo(() => tokensToCssVars(tokens), [tokens]);
   const width = VIEWPORT_WIDTH[viewport];
@@ -72,6 +75,7 @@ export function MockupCanvas({
             projectName={projectName}
             tokens={tokens}
             onSelect={selectable ? onSelect : undefined}
+            onEnterChild={selectable ? onEnterChild : undefined}
           />
         </div>
       </div>

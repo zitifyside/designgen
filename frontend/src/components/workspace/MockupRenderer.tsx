@@ -19,11 +19,37 @@ export interface ElementSelection {
   tokenRefs: { label: string; token: string; value: string }[];
 }
 
+/** 클릭 지점의 조상 사슬 — 바깥에서 안쪽 순서다. */
+export type SelectionChain = ElementSelection[];
+
+/** DOM 조상에서 선택 사슬을 읽는다.
+ *
+ * 렌더 트리를 다시 짜지 않고 계층을 얻으려면 이 방법이 가장 얕게 끝난다 —
+ * 각 선택 가능 요소가 자기 정보를 data 속성에 적어 두고, 클릭 시 위로 훑는다. */
+function chainFrom(node: HTMLElement | null): SelectionChain {
+  const chain: SelectionChain = [];
+  let cur: HTMLElement | null = node;
+  while (cur) {
+    const raw = cur.dataset.sel;
+    if (raw) {
+      try {
+        chain.unshift(JSON.parse(raw) as ElementSelection);
+      } catch {
+        /* 형식이 깨진 노드는 건너뛴다 */
+      }
+    }
+    cur = cur.parentElement;
+  }
+  return chain;
+}
+
 interface Props {
   mockup: Mockup;
   projectName: string;
   tokens: DesignTokens;
-  onSelect?: (selection: ElementSelection) => void;
+  onSelect?: (chain: SelectionChain) => void;
+  /** 더블클릭 — 선택 사슬에서 한 단계 안으로. */
+  onEnterChild?: () => void;
   /** Image Gen 실패로 CSS Fallback 된 시안 — 콘텐츠 슬롯을 단색으로 채운다. */
   fallback?: boolean;
 }
@@ -33,6 +59,7 @@ export function MockupRenderer({
   projectName,
   tokens,
   onSelect,
+  onEnterChild,
   fallback,
 }: Props) {
   const ctx: RenderContext = {
@@ -40,6 +67,7 @@ export function MockupRenderer({
     projectName,
     tokens,
     onSelect,
+    onEnterChild,
     fallback: fallback ?? mockup.isFallback,
   };
 
@@ -62,7 +90,8 @@ interface RenderContext {
   variant: number;
   projectName: string;
   tokens: DesignTokens;
-  onSelect?: (selection: ElementSelection) => void;
+  onSelect?: (chain: SelectionChain) => void;
+  onEnterChild?: () => void;
   fallback: boolean;
 }
 
@@ -140,14 +169,22 @@ function Sel({
   if (!ctx.onSelect) {
     return <div style={style}>{children}</div>;
   }
+  const payload: ElementSelection = { type, path, tokenRefs: refs(ctx.tokens) };
   return (
     <div
       style={{ ...style, cursor: "pointer" }}
       onClick={(e) => {
+        // 안쪽 요소가 먼저 받되, 넘기는 것은 조상까지 포함한 사슬이다.
+        // 어느 깊이를 선택할지는 화면 쪽이 정한다 (클릭=바깥, 더블클릭=한 단계 안).
         e.stopPropagation();
-        ctx.onSelect?.({ type, path, tokenRefs: refs(ctx.tokens) });
+        ctx.onSelect?.(chainFrom(e.currentTarget as HTMLElement));
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        ctx.onEnterChild?.();
       }}
       data-element={type}
+      data-sel={JSON.stringify(payload)}
     >
       {children}
     </div>
@@ -187,6 +224,28 @@ const cardRefs = (t: DesignTokens) => [
     value: `${t.spacing.baseUnit * 3}px`,
   },
   { label: "Elevation", token: "--ds-shadow-card", value: t.components.cardElevation },
+];
+
+/** 지표 숫자처럼 '카드 안의 강조 텍스트' 가 참조하는 토큰. */
+const metricValueRefs = (t: DesignTokens) => [
+  { label: "Color", token: "--ds-color-text", value: t.color.text },
+  {
+    label: "Font Size",
+    token: "--ds-font-size-2xl",
+    value: `${Math.round(t.typography.baseSize * Math.pow(t.typography.scale, 3))}px`,
+  },
+  {
+    label: "Font Weight",
+    token: "--ds-font-weight-bold",
+    value: String(t.typography.weights.bold),
+  },
+];
+
+/** 차트 선·면이 참조하는 토큰. */
+const chartRefs = (t: DesignTokens) => [
+  { label: "Line", token: "--ds-color-primary", value: t.color.primary },
+  { label: "Accent", token: "--ds-color-secondary", value: t.color.secondary },
+  { label: "Surface", token: "--ds-color-surface", value: t.color.surface },
 ];
 
 const headingRefs = (t: DesignTokens) => [
@@ -478,15 +537,23 @@ function MetricCards({ ctx, columns }: { ctx: RenderContext; columns: number }) 
         <Sel key={m.l} ctx={ctx} type="Card · Metric" path={["Page", "Metrics", m.l]} refs={cardRefs}>
           <div style={card}>
             <div style={muted}>{m.l}</div>
-            <div
-              style={{
-                fontSize: "var(--ds-font-size-2xl)",
-                fontWeight: "var(--ds-font-weight-bold)" as unknown as number,
-                marginTop: "var(--ds-space-2)",
-              }}
+            {/* 카드 안의 숫자는 따로 고를 수 있다 — 참조 토큰이 카드와 다르다. */}
+            <Sel
+              ctx={ctx}
+              type="Text · Metric Value"
+              path={["Page", "Metrics", m.l, "Value"]}
+              refs={metricValueRefs}
             >
-              {m.v}
-            </div>
+              <div
+                style={{
+                  fontSize: "var(--ds-font-size-2xl)",
+                  fontWeight: "var(--ds-font-weight-bold)" as unknown as number,
+                  marginTop: "var(--ds-space-2)",
+                }}
+              >
+                {m.v}
+              </div>
+            </Sel>
             <div
               style={{
                 marginTop: "var(--ds-space-2)",
@@ -516,6 +583,7 @@ function TrendChart({ ctx, height = 120 }: { ctx: RenderContext; height?: number
         >
           Revenue trend
         </div>
+        <Sel ctx={ctx} type="Chart · Area" path={["Page", "Chart", "Area"]} refs={chartRefs}>
         <svg viewBox="0 0 400 120" style={{ width: "100%", height }}>
           <polyline
             fill="none"
@@ -531,6 +599,7 @@ function TrendChart({ ctx, height = 120 }: { ctx: RenderContext; height?: number
             points="0,100 40,95 80,90 120,85 160,80 200,75 240,70 280,65 320,60 360,55 400,50"
           />
         </svg>
+        </Sel>
       </div>
     </Sel>
   );

@@ -68,6 +68,7 @@ export default function ExportClient() {
   const project = useWorkspaceStore((s) => s.project);
   const screens = useWorkspaceStore((s) => s.screens);
   const designSystems = useWorkspaceStore((s) => s.designSystems);
+  const mockups = useWorkspaceStore((s) => s.mockups);
   const activeConcept = useWorkspaceStore((s) => s.activeConcept);
 
   const [scope, setScope] = useState<ExportScope>("current");
@@ -81,6 +82,8 @@ export default function ExportClient() {
   const [estimate, setEstimate] = useState<ExportEstimate | null>(null);
   // .fig 가 실패했을 때만 켠다 — 문서 정의상 PNG 대체를 제안한다.
   const [figFallback, setFigFallback] = useState(false);
+  // 시안 다중 선택 — 비우면 범위(scope) 규칙을 그대로 따른다.
+  const [variantIndexes, setVariantIndexes] = useState<number[]>([]);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -114,7 +117,11 @@ export default function ExportClient() {
           format,
           scope,
           conceptLabel: conceptForEstimate,
-          screen: scope === "current" ? screen || undefined : undefined,
+          screen:
+            variantIndexes.length || scope === "current"
+              ? screen || undefined
+              : undefined,
+          variantIndexes: variantIndexes.length ? variantIndexes : undefined,
         });
         if (!cancelled) setEstimate(est);
       } catch {
@@ -125,7 +132,7 @@ export default function ExportClient() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [projectId, project, format, scope, screen, conceptForEstimate]);
+  }, [projectId, project, format, scope, screen, conceptForEstimate, variantIndexes]);
 
   if (!project) {
     return (
@@ -136,6 +143,13 @@ export default function ExportClient() {
   }
 
   const conceptLabel = project.confirmedConceptLabel ?? activeConcept;
+  // 지금 고른 화면·컨셉의 시안 목록. 체크박스는 이 안에서만 고른다.
+  const currentScreenVariants = mockups
+    .filter(
+      (m) =>
+        m.conceptLabel === conceptLabel && (!screen || m.screen === screen),
+    )
+    .sort((a, b) => a.index - b.index);
   const totalVariants = screens.reduce((sum, s) => sum + s.variantCount, 0);
 
   const runExport = async (thenDownload: boolean) => {
@@ -148,7 +162,11 @@ export default function ExportClient() {
         scope,
         resolution: format === "png" ? resolution : undefined,
         conceptLabel,
-        screen: scope === "current" ? screen || undefined : undefined,
+        screen:
+          variantIndexes.length || scope === "current"
+            ? screen || undefined
+            : undefined,
+        variantIndexes: variantIndexes.length ? variantIndexes : undefined,
       });
       await loadHistory();
       if (thenDownload) {
@@ -234,7 +252,10 @@ export default function ExportClient() {
               {screens.map((s) => (
                 <button
                   key={s.screen}
-                  onClick={() => setScreen(s.screen)}
+                  onClick={() => {
+                    setScreen(s.screen);
+                    setVariantIndexes([]); // 화면이 바뀌면 시안 선택도 푼다
+                  }}
                   className={cn(
                     "rounded-lg border px-2.5 py-1 text-[11px] font-medium transition",
                     screen === s.screen
@@ -245,6 +266,59 @@ export default function ExportClient() {
                   {s.screenTitle}
                 </button>
               ))}
+            </div>
+          )}
+
+          {currentScreenVariants.length > 0 && (
+            <div className="mt-3 border-t border-ink-100 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-ink-700">
+                  시안 직접 선택 (선택 사항)
+                </span>
+                {variantIndexes.length > 0 && (
+                  <button
+                    onClick={() => setVariantIndexes([])}
+                    className="text-[10px] text-ink-500 underline hover:text-ink-700"
+                  >
+                    선택 해제
+                  </button>
+                )}
+              </div>
+              <p className="mt-0.5 text-[10px] text-ink-500">
+                고르지 않으면 위에서 정한 범위를 그대로 내보낸다.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {currentScreenVariants.map((m) => {
+                  const on = variantIndexes.includes(m.index);
+                  return (
+                    <label
+                      key={m.id}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition",
+                        on
+                          ? "border-brand-500 bg-brand-50 text-brand-700"
+                          : "border-ink-200 bg-surface text-ink-600 hover:bg-ink-50",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() =>
+                          setVariantIndexes((prev) =>
+                            prev.includes(m.index)
+                              ? prev.filter((i) => i !== m.index)
+                              : [...prev, m.index],
+                          )
+                        }
+                        className="h-3 w-3"
+                      />
+                      <span className="max-w-[180px] truncate">
+                        #{m.index + 1} {m.variantLabel || m.title}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           )}
         </Card>

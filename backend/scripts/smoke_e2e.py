@@ -288,6 +288,22 @@ async def main() -> None:
         check("  .fig 대체 안내 경고", any("png" in w for w in r.json().get("warnings", [])),
               json.dumps(r.json().get("warnings"), ensure_ascii=False)[:160])
 
+        # 시안을 직접 고르면 그 선택이 범위 규칙보다 우선한다.
+        r = await c.post(f"{API}/projects/{pid}/exports/estimate", headers=h,
+                         json={"format": "json", "scope": "concept",
+                               "screen": "dashboard", "variantIndexes": [0, 2]})
+        check("  시안 다중 선택", r.json().get("mockupCount") == 2, str(r.json().get("mockupCount")))
+        r = await c.post(f"{API}/projects/{pid}/exports/estimate", headers=h,
+                         json={"format": "json", "scope": "current",
+                               "screen": "dashboard", "variantIndexes": [0, 1, 2]})
+        check("    범위보다 선택이 우선", r.json().get("mockupCount") == 3,
+              str(r.json().get("mockupCount")))
+        # 화면을 지정하지 않으면 다른 화면의 같은 번호까지 걸린다 — 그래서 함께 받는다.
+        r = await c.post(f"{API}/projects/{pid}/exports/estimate", headers=h,
+                         json={"format": "json", "scope": "concept", "variantIndexes": [0]})
+        check("    화면 미지정 시 화면별 동일 번호 포함", r.json().get("mockupCount") == 2,
+              str(r.json().get("mockupCount")))
+
         # 10-d) 만료 임박 Export 안내
         from app.core.database import AsyncSessionLocal
         from app.models.platform import ExportHistory as _EH

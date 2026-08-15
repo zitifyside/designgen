@@ -14,6 +14,9 @@ class ExportCreate(CamelModel):
     resolution: str | None = Field(default=None, pattern="^(1x|2x|3x)$")
     concept_label: str | None = Field(default=None, max_length=1)
     screen: str | None = Field(default=None, max_length=60)
+    # 시안 다중 선택 (기능정의서 v0.2.0 §3.1 'Export 대상 선택 — 썸네일 체크박스').
+    # 비우면 범위(scope) 규칙을 그대로 따른다.
+    variant_indexes: list[int] | None = Field(default=None, max_length=15)
 
 
 class ExportOut(CamelModel):

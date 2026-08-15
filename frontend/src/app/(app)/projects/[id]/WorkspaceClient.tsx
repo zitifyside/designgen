@@ -66,6 +66,12 @@ export default function WorkspaceClient() {
   const toggleCompareSelection = useWorkspaceStore((s) => s.toggleCompareSelection);
   const clearCompareSelection = useWorkspaceStore((s) => s.clearCompareSelection);
   const selectElement = useWorkspaceStore((s) => s.selectElement);
+  const selectChain = useWorkspaceStore((s) => s.selectChain);
+  const selectionChain = useWorkspaceStore((s) => s.selectionChain);
+  const selectionDepth = useWorkspaceStore((s) => s.selectionDepth);
+  const enterChild = useWorkspaceStore((s) => s.enterChild);
+  const exitToParent = useWorkspaceStore((s) => s.exitToParent);
+  const selectDepth = useWorkspaceStore((s) => s.selectDepth);
   const clearError = useWorkspaceStore((s) => s.clearError);
   const confirmConcept = useWorkspaceStore((s) => s.confirmConcept);
   const unlockConcept = useWorkspaceStore((s) => s.unlockConcept);
@@ -217,7 +223,7 @@ export default function WorkspaceClient() {
         // Esc 는 입력 중에도 받는다 — 열린 것을 닫는 키이기 때문이다.
         if (shortcutHelp) setShortcutHelp(false);
         else if (screenModal) setScreenModal(false);
-        else selectElement(null);
+        else exitToParent(); // 한 단계 밖으로. 맨 바깥이면 선택 해제
         return;
       }
       if (typing) return;
@@ -241,7 +247,7 @@ export default function WorkspaceClient() {
     project,
     router,
     screenModal,
-    selectElement,
+    exitToParent,
     setMockup,
     setZoom,
     shortcutHelp,
@@ -742,7 +748,8 @@ export default function WorkspaceClient() {
                           viewport={viewport}
                           zoom={zoom}
                           selectable
-                          onSelect={(sel: ElementSelection) => selectElement(sel)}
+                          onSelect={selectChain}
+                          onEnterChild={enterChild}
                         />
                       </CanvasStage>
                     </div>
@@ -826,9 +833,30 @@ export default function WorkspaceClient() {
             <div className="px-4 py-3">
               {selectedElement ? (
                 <>
-                  <div className="mb-3 text-[11px] text-ink-500">
-                    {selectedElement.path.join(" › ")}
+                  {/* 부모-자식 계층 트리 — 눌러서 그 단계로 옮긴다. */}
+                  <div className="mb-3 flex flex-wrap items-center gap-1">
+                    {selectionChain.map((node, i) => (
+                      <span key={`${node.type}-${i}`} className="flex items-center gap-1">
+                        {i > 0 && <span className="text-[10px] text-ink-400">›</span>}
+                        <button
+                          onClick={() => selectDepth(i)}
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[11px] transition",
+                            i === selectionDepth
+                              ? "bg-brand-50 font-medium text-brand-700"
+                              : "text-ink-500 hover:bg-ink-100 hover:text-ink-700",
+                          )}
+                        >
+                          {node.type}
+                        </button>
+                      </span>
+                    ))}
                   </div>
+                  {selectionDepth < selectionChain.length - 1 && (
+                    <div className="mb-3 text-[10px] text-ink-500">
+                      더블클릭하면 안쪽 요소로 들어간다 · Esc 로 상위 복귀
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {selectedElement.tokenRefs.map((r) => (
                       <div
@@ -871,7 +899,8 @@ export default function WorkspaceClient() {
               ) : (
                 <p className="text-[11px] leading-relaxed text-ink-500">
                   캔버스의 버튼·카드·입력 요소를 클릭하면 참조 중인 Design Token 과
-                  실제 값이 여기에 표시된다. Esc 로 선택을 해제한다.
+                  실제 값이 여기에 표시된다. 더블클릭으로 안쪽 요소에 들어가고
+                  Esc 로 상위로 돌아온다.
                 </p>
               )}
             </div>

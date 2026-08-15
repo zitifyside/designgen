@@ -73,6 +73,20 @@ async def _collect(db, project: Project, body: ExportCreate):
         stmt = stmt.where(Mockup.screen == body.screen)
     stmt = stmt.order_by(Mockup.screen_order, Mockup.index)
     mockups = (await db.scalars(stmt)).all()
+
+    # 시안을 직접 고른 경우에는 그 선택이 범위 규칙보다 우선한다.
+    # 시안 번호는 **화면 안에서의 순번**이라, 화면을 함께 지정하지 않으면 다른 화면의
+    # 같은 번호까지 걸린다. 그래서 번호를 줄 때는 화면도 함께 받는다.
+    if body.variant_indexes:
+        wanted = set(body.variant_indexes)
+        picked = [
+            m
+            for m in mockups
+            if m.index in wanted and (not body.screen or m.screen == body.screen)
+        ]
+        if picked:
+            return ds, picked
+
     if body.scope == "current":
         mockups = mockups[:1]
     return ds, mockups

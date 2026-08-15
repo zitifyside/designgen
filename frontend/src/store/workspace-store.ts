@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { api, type DeepPartial } from "@/lib/api";
+import type { SelectionChain } from "@/components/workspace/MockupRenderer";
 import type {
   ConceptLabel,
   DesignSystem,
@@ -33,6 +34,10 @@ interface WorkspaceState {
   zoom: number;
   compareMode: boolean;
   compareSelection: number[];
+  /** 클릭 지점의 조상 사슬 (바깥 → 안쪽). */
+  selectionChain: SelectionChain;
+  /** 사슬에서 지금 보고 있는 깊이. 더블클릭이 늘리고 Esc 가 줄인다. */
+  selectionDepth: number;
   selectedElement: SelectedElement | null;
 
   loading: boolean;
@@ -50,6 +55,14 @@ interface WorkspaceState {
   toggleCompareSelection: (idx: number) => void;
   clearCompareSelection: () => void;
   selectElement: (el: SelectedElement | null) => void;
+  /** 클릭 — 사슬을 받아 가장 바깥 요소를 고른다 (Figma 와 같은 방식). */
+  selectChain: (chain: SelectionChain) => void;
+  /** 더블클릭 — 한 단계 안으로 들어간다. */
+  enterChild: () => void;
+  /** Esc — 한 단계 밖으로. 맨 바깥에서 한 번 더 누르면 선택을 푼다. */
+  exitToParent: () => void;
+  /** 계층 트리에서 직접 고르기. */
+  selectDepth: (depth: number) => void;
   clearError: () => void;
 
   /** 컨셉별 Token 되돌리기 스택 (기능정의서 v0.2.0 §6 '버전 관리 / Undo'). */
@@ -117,6 +130,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   zoom: 100,
   compareMode: false,
   compareSelection: [],
+  selectionChain: [],
+  selectionDepth: 0,
   selectedElement: null,
 
   loading: false,
@@ -147,6 +162,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         activeMockupIndex: 0,
         compareSelection: [],
         selectedElement: null,
+        selectionChain: [],
+        selectionDepth: 0,
         tokenHistory: {},
         loading: false,
       });
@@ -178,7 +195,41 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ compareSelection: [...cur, idx].slice(-3) });
   },
   clearCompareSelection: () => set({ compareSelection: [] }),
-  selectElement: (el) => set({ selectedElement: el }),
+  selectElement: (el) =>
+    set({ selectedElement: el, selectionChain: el ? get().selectionChain : [], selectionDepth: 0 }),
+
+  selectChain: (chain) => {
+    if (chain.length === 0) {
+      set({ selectionChain: [], selectionDepth: 0, selectedElement: null });
+      return;
+    }
+    // 클릭은 가장 바깥을 고른다. 안쪽을 보려면 더블클릭으로 들어간다 —
+    // 클릭 한 번에 최하위가 잡히면 상위 묶음을 고를 방법이 없어진다.
+    set({ selectionChain: chain, selectionDepth: 0, selectedElement: chain[0] });
+  },
+
+  enterChild: () => {
+    const { selectionChain, selectionDepth } = get();
+    const next = Math.min(selectionDepth + 1, selectionChain.length - 1);
+    if (next === selectionDepth) return;
+    set({ selectionDepth: next, selectedElement: selectionChain[next] });
+  },
+
+  exitToParent: () => {
+    const { selectionChain, selectionDepth } = get();
+    if (selectionDepth === 0) {
+      set({ selectionChain: [], selectionDepth: 0, selectedElement: null });
+      return;
+    }
+    const next = selectionDepth - 1;
+    set({ selectionDepth: next, selectedElement: selectionChain[next] });
+  },
+
+  selectDepth: (depth) => {
+    const { selectionChain } = get();
+    const next = Math.max(0, Math.min(depth, selectionChain.length - 1));
+    set({ selectionDepth: next, selectedElement: selectionChain[next] ?? null });
+  },
   clearError: () => set({ error: null }),
 
   tokenHistory: {},

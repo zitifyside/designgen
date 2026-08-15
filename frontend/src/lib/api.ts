@@ -510,6 +510,7 @@ export const api = {
         resolution?: "1x" | "2x" | "3x";
         conceptLabel?: ConceptLabel;
         screen?: string;
+        variantIndexes?: number[];
       },
     ) =>
       request<ExportRecord>(`/projects/${projectId}/exports`, {
@@ -523,6 +524,7 @@ export const api = {
         scope: ExportScope;
         conceptLabel?: ConceptLabel;
         screen?: string;
+        variantIndexes?: number[];
       },
     ) =>
       request<ExportEstimate>(`/projects/${projectId}/exports/estimate`, {
