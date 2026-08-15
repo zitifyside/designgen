@@ -26,9 +26,21 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 # 개발 DB 를 건드리지 않도록 임시 파일 DB 로 격리한다 (설정 로드 전에 지정).
+#
+# 다른 DB 엔진(PostgreSQL 등)으로 같은 검증을 돌리려면 SMOKE_DATABASE_URL 을 준다.
+# `DATABASE_URL` 을 그대로 읽지 않는 이유는, 개발 셸에 그 변수가 떠 있는 상태로
+# 실행하면 스모크가 개발 DB 를 갈아엎기 때문이다 — 파괴적 동작은 명시적으로만 켠다.
+#
+#   $env:SMOKE_DATABASE_URL = "postgresql+asyncpg://user:pw@host/db"
+#   .venv/Scripts/python.exe scripts/smoke_e2e.py
+_EXTERNAL_DB = os.environ.get("SMOKE_DATABASE_URL", "").strip()
 _TMP_DB = Path(tempfile.gettempdir()) / "adg_smoke.db"
-_TMP_DB.unlink(missing_ok=True)
-os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TMP_DB.as_posix()}"
+if _EXTERNAL_DB:
+    os.environ["DATABASE_URL"] = _EXTERNAL_DB
+    print(f"[스모크] 외부 DB 로 실행 — {_EXTERNAL_DB.split('://', 1)[0]} (스키마를 새로 만든다)")
+else:
+    _TMP_DB.unlink(missing_ok=True)
+    os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TMP_DB.as_posix()}"
 os.environ["FAKE_AI_PIPELINE"] = "true"
 os.environ["DEBUG"] = "false"
 os.environ["ENVIRONMENT"] = "test"
@@ -46,7 +58,23 @@ def check(label: str, ok: bool, extra: str = "") -> None:
         FAILS.append(label)
 
 
+async def reset_external_schema() -> None:
+    """외부 DB 로 돌 때만 스키마를 비우고 다시 만든다.
+
+    임시 SQLite 는 파일을 지우면 그만이지만 외부 DB 는 그럴 수 없다. 앞선 실행이
+    남긴 행이 있으면 '최대 5개' 같은 상한 검사가 엉뚱하게 실패한다.
+    """
+    from app.core.database import Base, engine, init_db
+
+    await init_db()  # 모델 import 를 태워 metadata 를 채운다
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+
 async def main() -> None:
+    if _EXTERNAL_DB:
+        await reset_external_schema()
     await seed()  # 플랜·데모 계정·관리자 계정 시드
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:

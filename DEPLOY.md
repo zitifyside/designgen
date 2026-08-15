@@ -231,7 +231,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | Firebase Hosting | ✅ https://design-gen-zitify.web.app |
 | 백엔드 Cloud Run | ✅ `adg-api` (asia-northeast3) — Hosting `/api/**` rewrite 연결 |
 | 결제 | ✅ Blaze — `zitifycorp` 결제 계정 |
-| DB | ⚠ 컨테이너 `/tmp` SQLite — **콜드 스타트·재배포 시 초기화** |
+| DB | ⚠ 컨테이너 `/tmp` SQLite — **콜드 스타트·재배포 시 초기화**. PostgreSQL 전환 준비 완료, 연결 문자열만 있으면 된다 (§6) |
 | AI 생성 | ⚠ `FAKE_AI_PIPELINE=true` — placeholder 출력 |
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
 | 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
@@ -250,7 +250,52 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 1. **허브 활성화** — `designgenerator` 를 `active` 로 전환해야 중앙 로그가 쌓인다 (§3.5).
    지금은 로컬 DB 사본만 남고, 그 사본도 컨테이너가 내려가면 사라진다.
 2. **DB 를 PostgreSQL 로** — 지금은 사용자가 만든 프로젝트가 콜드 스타트 후 사라진다.
-   Neon 무료 티어에 DB 를 만들고 `DATABASE_URL` 만 바꿔 재배포하면 된다
-   (`asyncpg` 는 `requirements.txt` 에 주석으로 준비돼 있으니 주석을 푼다).
+   **코드 쪽 준비는 끝났다** (§6). 남은 것은 Neon 등에서 DB 를 만들고 연결 문자열을
+   받는 일뿐이며, 그 뒤로는 `DATABASE_URL` 교체 + 재배포 한 번이다.
 3. **실제 AI 생성** — `FAKE_AI_PIPELINE=false` + 프로바이더 키.
 4. **커스텀 도메인** — Hosting 에 도메인 연결 시 백엔드 `CORS_ORIGINS` 에도 추가.
+
+---
+
+## 6. PostgreSQL 전환
+
+`/tmp` SQLite 는 콜드 스타트·재배포 때마다 사라진다. 데모로는 돌아가지만 사용자가
+만든 프로젝트가 없어지므로 운영에서는 반드시 바꿔야 한다.
+
+### 준비 상태 (2026-08-15)
+
+| 항목 | 상태 |
+|---|---|
+| `asyncpg` | ✅ `requirements.txt` 활성화 |
+| 엔진 설정 | ✅ 드라이버 자동 보정 · 유휴 연결 대응(`pool_pre_ping`·`pool_recycle`) |
+| 전체 스모크 | ✅ **PostgreSQL 16 실측 통과** (SQLite 와 동일 결과) |
+| 남은 일 | ⛔ 연결 문자열 (Neon 등에서 DB 생성 필요) |
+
+### 전환 절차
+
+```bash
+# 1) 연결 문자열을 그대로 넣는다. 콘솔이 주는 형태 그대로여도 된다 —
+#    postgres:// · postgresql:// · ?sslmode=require 는 코드가 알아서 보정한다.
+gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com \
+  --project design-gen-zitify --region asia-northeast3 \
+  --update-env-vars "^@^DATABASE_URL=postgresql://<user>:<pw>@<host>/<db>?sslmode=require" \
+  --quiet
+
+# 2) 스키마·플랜·데모 계정은 SEED_ON_STARTUP=true 가 기동 시 채운다 (멱등)
+```
+
+전환 전 같은 문자열로 스모크를 한 번 돌려 두면 안전하다. 이 명령은 **대상 DB 의
+스키마를 지우고 다시 만든다** — 반드시 빈 DB 에만 쓴다.
+
+```powershell
+$env:SMOKE_DATABASE_URL = "postgresql://<user>:<pw>@<host>/<db>?sslmode=require"
+cd backend; .venv\Scripts\python.exe scripts\smoke_e2e.py
+```
+
+### 연결 문자열에서 걸리는 것
+
+관리형 Postgres 콘솔이 주는 문자열은 `postgresql://user:pw@host/db?sslmode=require`
+형태다. 이걸 그대로 넣으면 ① 드라이버 지정이 없어 동기 psycopg 를 찾다가 죽고
+② asyncpg 가 `sslmode` 를 모른다며 죽는다. `core/database.py` 의
+`normalize_database_url()` 이 두 경우를 모두 흡수하며, SSL 요구는 버리지 않고
+`connect_args["ssl"]` 로 옮겨 유지한다.
