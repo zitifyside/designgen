@@ -56,3 +56,75 @@ async def get_admin_user(user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(get_admin_user)]
+
+
+# ── API Key 인증 (Public API · MCP Server) ────────────────────────
+# 사용자 키는 `adg_<prefix>.<secret>` 형태이며 서버는 전체 문자열의 SHA-256 만
+# 보관한다. prefix 로 후보를 좁힌 뒤 해시를 상수 시간 비교한다.
+_API_KEY_EXC = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="유효한 API Key 가 필요합니다.",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
+# 등급별 분당 호출 한도 (기능정의서 v0.2.0 §5.3).
+API_RATE_LIMITS: dict[str, int] = {"Pro": 300, "Team": 600, "Admin": 600}
+
+
+def _extract_api_key(authorization: str | None, x_api_key: str | None) -> str | None:
+    if x_api_key:
+        return x_api_key.strip()
+    if authorization and authorization.lower().startswith("bearer "):
+        candidate = authorization.split(" ", 1)[1].strip()
+        # JWT 와 구분한다 — 사용자 키만 이 접두사를 가진다.
+        if candidate.startswith("adg_"):
+            return candidate
+    return None
+
+
+async def get_api_key_user(
+    db: DbDep,
+    authorization: Annotated[str | None, Header()] = None,
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+) -> User:
+    """API Key 로 사용자를 식별한다. 실패는 전부 동일한 401 로 답한다."""
+    import hashlib
+    import hmac as _hmac
+
+    from sqlalchemy import select
+
+    from app.models.platform import ApiKey
+
+    raw = _extract_api_key(authorization, x_api_key)
+    if not raw or "." not in raw:
+        raise _API_KEY_EXC
+
+    prefix = raw.split(".", 1)[0]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    row = await db.scalar(
+        select(ApiKey).where(ApiKey.prefix == prefix, ApiKey.revoked.is_(False))
+    )
+    # 키가 없더라도 같은 비용의 비교를 수행해 존재 여부를 흘리지 않는다.
+    expected = row.key_hash if row is not None else "0" * 64
+    if not _hmac.compare_digest(expected, digest) or row is None:
+        raise _API_KEY_EXC
+
+    user = await db.get(User, row.user_id)
+    if user is None or user.status != "Active":
+        raise _API_KEY_EXC
+    if user.plan not in API_RATE_LIMITS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public API 는 Pro 이상 등급에서 사용할 수 있습니다.",
+        )
+
+    # 사용 흔적을 남긴다 — 마지막 사용 시각은 키 회수 판단의 근거가 된다.
+    import datetime as dt
+
+    row.last_used_at = dt.datetime.now(dt.timezone.utc)
+    row.call_count += 1
+    db.add(row)
+    return user
+
+
+ApiKeyUser = Annotated[User, Depends(get_api_key_user)]

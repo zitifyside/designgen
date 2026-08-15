@@ -37,6 +37,9 @@ RATE_LIMITS: tuple[tuple[str, int, int], ...] = (
     ("/api/v1/users/2fa", 300, 10),
     ("/api/v1/users/password", 3600, 10),
     ("/api/v1/generate", 3600, 60),
+    # Public API 는 등급별 한도(Pro 300·Team 600/분)가 계약이지만, IP 단위
+    # 1차 방어선은 상한(600)으로 둔다 — 등급 판정은 인증 이후라 여기선 알 수 없다.
+    ("/api/v1/public", 60, 600),
     ("/api/v1", 60, 300),                 # 그 외 전체 API 분당 300회
 )
 

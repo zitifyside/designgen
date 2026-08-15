@@ -27,6 +27,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import urllib.error
@@ -101,9 +102,19 @@ def to_serving_config(hosting: dict) -> dict:
 
 
 def access_token() -> str:
+    """배포용 토큰을 얻는다.
+
+    이 머신에는 여러 Google 계정이 로그인돼 있고 활성 계정이 다른 프로젝트를 가리킬
+    수 있다. 활성 계정을 바꾸면 다른 작업에 영향을 주므로, 호출 단위로 계정을 지정한다
+    (`GCLOUD_ACCOUNT` 환경변수, 미지정 시 활성 계정).
+    """
+    cmd = ["gcloud", "auth", "print-access-token"]
+    account = os.environ.get("GCLOUD_ACCOUNT", "").strip()
+    if account:
+        cmd.append(f"--account={account}")
     try:
         out = subprocess.run(
-            ["gcloud", "auth", "print-access-token"],
+            cmd,
             capture_output=True,
             text=True,
             check=True,

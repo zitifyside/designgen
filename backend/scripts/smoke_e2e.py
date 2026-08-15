@@ -169,12 +169,59 @@ async def main() -> None:
         r = await c.get(f"{API}/projects/{pid}/tokens.json", headers=h)
         check("DTCG tokens", r.status_code == 200 and "$schema" in r.text)
 
-        # 11) API Key (Pro+)
+        # 11) API Key (Pro+) → Public API (MCP Tool 대응 표면)
         r = await c.post(f"{API}/users/api-keys", headers=h, json={"label": "MCP local"})
         check("api key 발급", r.status_code == 201 and r.json()["key"].startswith("adg_"), r.text[:160])
         kid = r.json()["id"]
+        raw_key = r.json()["key"]
+        kh = {"X-API-Key": raw_key}
+
+        # 인증 경계 — 키가 없거나 위조면 전부 같은 401 로 답한다.
+        r = await c.get(f"{API}/public/projects")
+        check("public: 키 없음 401", r.status_code == 401, str(r.status_code))
+        r = await c.get(f"{API}/public/projects", headers={"X-API-Key": "adg_deadbeef.fake"})
+        check("public: 위조 키 401", r.status_code == 401, str(r.status_code))
+        # 웹 세션 토큰으로는 못 들어온다 — 두 인증 표면을 분리해 둔다.
+        r = await c.get(f"{API}/public/projects", headers=h)
+        check("public: JWT 로는 접근 불가 401", r.status_code == 401, str(r.status_code))
+
+        r = await c.get(f"{API}/public/projects", headers=kh)
+        check("public: list_projects", r.status_code == 200 and any(p["id"] == pid for p in r.json()["projects"]), r.text[:160])
+
+        r = await c.get(f"{API}/public/projects/{pid}/tokens", headers=kh)
+        check("public: get_design_tokens(DTCG)", r.status_code == 200 and '"$type"' in r.text, r.text[:160])
+        check("  확정 컨셉 기본 적용", r.status_code == 200 and r.json()["concept"]["label"] == "B", r.text[:120])
+
+        r = await c.get(f"{API}/public/projects/{pid}/mockups", headers=kh)
+        pub_screens = r.json().get("screens", []) if r.status_code == 200 else []
+        check("public: get_mockup_context", r.status_code == 200 and len(pub_screens) >= 1, r.text[:160])
+        # 시안 = 같은 화면의 구조 변형이라는 규칙이 응답 구조에도 드러나야 한다.
+        check(
+            "  화면축 ⊥ 변형축 분리",
+            all(s.get("screen") and len(s.get("variants", [])) >= 1 for s in pub_screens),
+            json.dumps(pub_screens[:1], ensure_ascii=False)[:160],
+        )
+
+        r = await c.get(f"{API}/public/projects/{pid}/components", headers=kh)
+        check(
+            "public: get_component_styles",
+            r.status_code == 200
+            and set(r.json()["components"]) == {"button", "input", "card", "typography"},
+            r.text[:160],
+        )
+
+        # 소유권 격리 — 남의(또는 없는) 프로젝트는 404 로 존재조차 흘리지 않는다.
+        r = await c.get(f"{API}/public/projects/not-a-real-project/tokens", headers=kh)
+        check("public: 타 프로젝트 404", r.status_code == 404, str(r.status_code))
+
+        # 읽기 전용 — 유출된 키로 자원이 바뀌면 안 된다.
+        r = await c.post(f"{API}/public/projects", headers=kh, json={"name": "x"})
+        check("public: 쓰기 메서드 없음(405)", r.status_code == 405, str(r.status_code))
+
         r = await c.delete(f"{API}/users/api-keys/{kid}", headers=h)
         check("api key 회수", r.status_code == 200)
+        r = await c.get(f"{API}/public/projects", headers=kh)
+        check("public: 회수된 키 401", r.status_code == 401, str(r.status_code))
 
         # 12) 템플릿 등록 → 심사
         r = await c.post(

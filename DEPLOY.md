@@ -40,12 +40,18 @@
 cd frontend
 NEXT_STATIC_EXPORT=1 npm run build      # → frontend/out
 
-# 2) 배포 (저장소 루트에서) — gcloud 로그인 계정을 그대로 쓴다
+# 2) 배포 (저장소 루트에서)
 cd ..
-python scripts/deploy_hosting.py
+GCLOUD_ACCOUNT=zitifycorp@gmail.com python scripts/deploy_hosting.py
 ```
 
-⚠ `NEXT_STATIC_EXPORT=1` 없이 빌드하면 `frontend/out` 이 생기지 않아 배포가 빈 사이트가 된다.
+⚠ `NEXT_STATIC_EXPORT=1` 없이 빌드하면 `frontend/out` 이 갱신되지 않는다. 이때 배포는
+실패하지 않고 **직전 빌드 결과를 그대로 다시 올린다** — "업로드 필요 0개" 가 뜨면 export
+플래그를 빠뜨린 것이다.
+
+⚠ 이 머신에는 Google 계정이 여러 개 로그인돼 있고 gcloud 활성 계정이 다른 프로젝트를
+가리킬 수 있다. 활성 계정을 바꾸면 다른 작업에 영향을 주므로 `GCLOUD_ACCOUNT` 로 호출
+단위 지정만 한다. 계정이 틀리면 버전 생성에서 `USER_PROJECT_DENIED` 403 이 난다.
 
 ### 왜 `firebase deploy` 가 아니라 스크립트인가
 
@@ -70,7 +76,7 @@ firebase deploy --only hosting --project design-gen-zitify
 서비스 `adg-api` (asia-northeast3) 가 이미 떠 있다. 코드 변경 후 재배포는 아래 한 줄이다.
 
 ```bash
-gcloud run deploy adg-api --source ./backend \
+gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com \
   --project design-gen-zitify --region asia-northeast3 --quiet
 ```
 
@@ -177,6 +183,36 @@ Redis 백엔드로 옮겨야 한다.
 
 ---
 
+## 3.6 Public API · MCP Server
+
+발급된 API Key 로 코딩 도구(Cursor·Claude Code)가 확정 토큰·시안 구조를 직접 읽는
+경로다 (기획서 v0.5.0 §4 F-204). 웹 세션(JWT)과는 인증 표면을 나눠 두었다.
+
+| MCP Tool | REST |
+|---|---|
+| `list_projects` | `GET /api/v1/public/projects` |
+| `get_design_tokens` | `GET /api/v1/public/projects/{id}/tokens` (W3C DTCG) |
+| `get_mockup_context` | `GET /api/v1/public/projects/{id}/mockups` |
+| `get_component_styles` | `GET /api/v1/public/projects/{id}/components` |
+| `subscribe_token_changes` | 미구현 (v1.0 로드맵) |
+
+. **읽기 전용** — 쓰기 경로를 두지 않아 키가 유출돼도 자원이 바뀌지 않는다
+. **Pro 이상** — Free 는 키 발급 자체가 막힌다. 한도는 Pro 분당 300회·Team 600회
+. **소유권 격리** — 타인 프로젝트는 403 이 아니라 404 로 답해 존재 여부도 흘리지 않는다
+. **즉시 회수** — 웹에서 키를 회수하면 다음 호출부터 401
+
+MCP 어댑터는 `mcp/adg-mcp-server.mjs` (Node 18+, 무의존성) 이며 설정·점검 절차는
+[mcp/README.md](mcp/README.md) 에 있다. 계약의 진원은 백엔드
+`backend/app/api/routes/public_api.py` 한 곳이고 어댑터는 그 위를 덮는 얇은 층이다.
+
+```bash
+# 배포본 확인 (키는 웹 → 설정 → API Key 에서 발급)
+curl -H "X-API-Key: adg_xxxx.xxxx" \
+  https://design-gen-zitify.web.app/api/v1/public/projects
+```
+
+---
+
 ## 4. 배포 전 점검
 
 - [ ] `cd backend && python -m app.seed` — 초기 플랜·계정 시드 (신규 DB 한정)
@@ -187,7 +223,7 @@ Redis 백엔드로 옮겨야 한다.
 
 ---
 
-## 5. 현재 상태 (2026-08-14)
+## 5. 현재 상태 (2026-08-15)
 
 | 구성 | 상태 |
 |---|---|
@@ -200,9 +236,14 @@ Redis 백엔드로 옮겨야 한다.
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
 | 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
 | 보안 하드닝 | ✅ 인증·레이트리밋·헤더·CSP·크롤 차단 (§3.5) |
+| Public API · MCP | ✅ Tool 4종 동작 · `subscribe_token_changes` 만 미구현 (§3.6) |
 
 라이브 E2E 확인 (2026-08-14): 로그인 → 프로젝트 생성(단일 DS·대시보드) → 생성 완료
 (15 시안, 화면축 단일·구조 변형 5종) → 컨셉 확정 → 화면 추가(로그인 3종) → Export(json).
+
+배포본 Public API 확인 (2026-08-15): 키 발급 → 인증 경계(무키·위조 키 401) →
+`list_projects` → 생성·컨셉 확정 → 토큰(DTCG)·시안(화면 1종/변형 3건)·컴포넌트 4종 →
+타 프로젝트 404 → 키 회수 후 401. 11항목 전부 통과.
 
 ### 남은 일
 

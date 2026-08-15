@@ -174,6 +174,106 @@ export default function ApiKeysPage() {
           </table>
         )}
       </Card>
+
+      <UsageGuide />
     </div>
+  );
+}
+
+/** MCP Tool 5종과 REST 경로를 한 화면에서 보여 준다. */
+const MCP_TOOLS: Array<[string, string]> = [
+  ["list_projects", "GET /public/projects"],
+  ["get_design_tokens", "GET /public/projects/{id}/tokens"],
+  ["get_mockup_context", "GET /public/projects/{id}/mockups"],
+  ["get_component_styles", "GET /public/projects/{id}/components"],
+  ["subscribe_token_changes", "미구현 (v1.0 로드맵)"],
+];
+
+function UsageGuide() {
+  const [tab, setTab] = useState<"mcp" | "rest">("mcp");
+
+  const origin =
+    typeof window === "undefined" ? "https://design-gen-zitify.web.app" : window.location.origin;
+
+  const mcpConfig = `{
+  "mcpServers": {
+    "ai-design-generator": {
+      "command": "node",
+      "args": ["<저장소 경로>/mcp/adg-mcp-server.mjs"],
+      "env": {
+        "ADG_API_KEY": "발급받은 키",
+        "ADG_API_BASE": "${origin}/api/v1"
+      }
+    }
+  }
+}`;
+
+  const restSnippet = `curl -H "X-API-Key: 발급받은 키" \\
+  ${origin}/api/v1/public/projects
+
+# 확정 컨셉의 DTCG 토큰
+curl -H "X-API-Key: 발급받은 키" \\
+  ${origin}/api/v1/public/projects/<프로젝트 ID>/tokens`;
+
+  const snippet = tab === "mcp" ? mcpConfig : restSnippet;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Public API · MCP 연동"
+        description="Cursor·Claude Code 에서 프로젝트의 확정 토큰과 시안 구조를 직접 참조한다."
+        action={
+          <div className="flex gap-1 rounded-lg bg-ink-100 p-0.5">
+            {(["mcp", "rest"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={
+                  "rounded-md px-2.5 py-1 text-[11px] font-medium transition " +
+                  (tab === t ? "bg-white text-ink-900 shadow-sm" : "text-ink-500")
+                }
+              >
+                {t === "mcp" ? "MCP 설정" : "REST"}
+              </button>
+            ))}
+          </div>
+        }
+      />
+
+      <div className="relative">
+        <pre className="max-h-64 overflow-auto rounded-lg bg-ink-900 p-3 text-[11px] leading-relaxed text-ink-100">
+          <code>{snippet}</code>
+        </pre>
+        <Button
+          size="sm"
+          variant="outline"
+          className="absolute right-2 top-2"
+          onClick={() => void navigator.clipboard?.writeText(snippet)}
+        >
+          복사
+        </Button>
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-lg border border-ink-200">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 border-b border-ink-200 bg-ink-50 px-3 py-1.5 text-[11px] font-medium text-ink-500">
+          <span>MCP Tool</span>
+          <span>REST 경로</span>
+        </div>
+        {MCP_TOOLS.map(([tool, path]) => (
+          <div
+            key={tool}
+            className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 border-b border-ink-100 px-3 py-2 text-[11px] last:border-b-0"
+          >
+            <code className="truncate font-mono text-ink-800">{tool}</code>
+            <code className="truncate font-mono text-ink-500">{path}</code>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-3 text-[11px] text-ink-500">
+        Public API 는 읽기 전용이다. 키가 유출되더라도 프로젝트가 변경되지 않는다.
+        호출 한도는 Pro 분당 300회·Team 분당 600회이며, 키를 회수하면 즉시 차단된다.
+      </p>
+    </Card>
   );
 }
