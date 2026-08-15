@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.models.design import Mockup
 from app.models.project import Project
 from app.schemas.design import MockupOut
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/projects/{project_id}/mockups", tags=["mockups"])
 
 
 async def _owned_project(db: DbDep, project_id: str, user_id: str) -> Project:
-    project = await db.get(Project, project_id)
+    project = await get_pub(db, Project, project_id)
     if project is None or project.owner_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -43,7 +44,7 @@ async def toggle_mockup_favorite(
     project_id: str, mockup_id: str, user: CurrentUser, db: DbDep
 ):
     await _owned_project(db, project_id, user.id)
-    mk = await db.get(Mockup, mockup_id)
+    mk = await get_pub(db, Mockup, mockup_id)
     if mk is None or mk.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mockup not found")
     mk.is_favorite = not mk.is_favorite

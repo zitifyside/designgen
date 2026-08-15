@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # NoDecode: pydantic-settings가 환경 변수 값을 JSON으로 파싱하지 않도록 합니다.
     # 아래 validator가 쉼표로 구분된 문자열을 직접 분리합니다.
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
+    # 관리자 API(/admin) 허용 IP·CIDR. 비우면 막지 않는다 (환경변수 누락 잠금 방지).
+    admin_allow_ips: Annotated[list[str], NoDecode] = []
 
     # 데이터베이스
     database_url: str = "sqlite+aiosqlite:///./designgen.db"
@@ -82,7 +84,7 @@ class Settings(BaseSettings):
         # development·test 등 내부 명칭은 허브 계약상 local 로 접는다.
         return "local"
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "admin_allow_ips", mode="before")
     @classmethod
     def _split_origins(cls, v: object) -> object:
         if isinstance(v, str):

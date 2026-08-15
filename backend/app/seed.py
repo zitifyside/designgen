@@ -1,4 +1,4 @@
-"""플랜, 데모 사용자, 관리자 사용자, 그리고 몇 가지 템플릿을 시드합니다.
+﻿"""플랜, 데모 사용자, 관리자 사용자, 그리고 몇 가지 템플릿을 시드합니다.
 
 실행 방법:  python -m app.seed
 멱등성 보장: 반복 실행해도 안전합니다 (자연 키 기준으로 upsert).
@@ -9,11 +9,35 @@ import asyncio
 
 from sqlalchemy import select
 
+from app.core.codes import CODE_MAP
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal, init_db
 from app.core.security import hash_password
 from app.models.billing import Plan
+from app.models.code import CodeCommon, CodeGroup
 from app.models.template import Template
-from app.models.user import User
+from app.models.user import Session, User
+
+# code_value = C010101, code_nm = API 문자열 (DA 코드테이블.md)
+_CODE_GROUP_NM = {
+    "USER_PLAN": "사용자 등급",
+    "USER_STATUS": "사용자 상태",
+    "PROJECT_STATUS": "프로젝트 상태",
+    "GEN_STATUS": "생성 작업 상태",
+}
+CODE_GROUPS = [
+    (
+        group_cd,
+        _CODE_GROUP_NM[group_cd],
+        [(code, api, i) for i, (api, code) in enumerate(mapping.items(), start=1)],
+    )
+    for group_cd, mapping in CODE_MAP.items()
+]
+
+# 문서·로그인 화면에 적혀 있던 데모 계정. 운영에서는 만들지도, 받지도 않는다.
+SEED_ACCOUNT_EMAILS = frozenset(
+    {"demo@designgenerator.io", "admin@designgenerator.io"}
+)
 
 PLANS = [
     # code, name, monthly_cents, annual_cents, gens(-1=무제한), concepts, variants, credit_unit_cents
@@ -34,6 +58,27 @@ TEMPLATES = [
 async def seed() -> None:
     await init_db()
     async with AsyncSessionLocal() as db:
+        for group_cd, group_nm, codes in CODE_GROUPS:
+            group = await db.scalar(select(CodeGroup).where(CodeGroup.group_cd == group_cd))
+            if group is None:
+                db.add(CodeGroup(group_cd=group_cd, group_nm=group_nm))
+            for value, nm, order in codes:
+                row = await db.scalar(
+                    select(CodeCommon).where(
+                        CodeCommon.group_cd == group_cd,
+                        CodeCommon.code_value == value,
+                    )
+                )
+                if row is None:
+                    db.add(
+                        CodeCommon(
+                            group_cd=group_cd,
+                            code_value=value,
+                            code_nm=nm,
+                            sort_order=order,
+                        )
+                    )
+
         # 플랜
         for code, name, m, a, gens, concepts, variants, unit in PLANS:
             plan = await db.scalar(select(Plan).where(Plan.code == code))
@@ -55,25 +100,26 @@ async def seed() -> None:
                 plan.max_variants = variants
                 plan.credit_unit_cents = unit
 
-        # 데모 (Pro) 사용자
-        if await db.scalar(select(User).where(User.email == "demo@designgenerator.io")) is None:
-            db.add(
-                User(
-                    email="demo@designgenerator.io", name="안승준",
-                    password_hash=hash_password("demo1234"), plan="Pro",
-                    credits=78, monthly_used=12, monthly_limit=30, email_verified=True,
+        # 데모·관리자 계정은 로컬·테스트에서만 채운다.
+        # 운영에 올리면 문서에 적힌 비밀번호로 관리자 콘솔이 열린다.
+        if settings.environment != "production":
+            if await db.scalar(select(User).where(User.email == "demo@designgenerator.io")) is None:
+                db.add(
+                    User(
+                        email="demo@designgenerator.io", name="안승준",
+                        password_hash=hash_password("demo1234"), plan="Pro",
+                        credits=78, monthly_used=12, monthly_limit=30, email_verified=True,
+                    )
                 )
-            )
 
-        # 관리자 사용자
-        if await db.scalar(select(User).where(User.email == "admin@designgenerator.io")) is None:
-            db.add(
-                User(
-                    email="admin@designgenerator.io", name="Admin",
-                    password_hash=hash_password("admin1234"), plan="Admin",
-                    is_admin=True, monthly_limit=-1, email_verified=True,
+            if await db.scalar(select(User).where(User.email == "admin@designgenerator.io")) is None:
+                db.add(
+                    User(
+                        email="admin@designgenerator.io", name="Admin",
+                        password_hash=hash_password("admin1234"), plan="Admin",
+                        is_admin=True, monthly_limit=-1, email_verified=True,
+                    )
                 )
-            )
 
         # 템플릿
         for name, author, cat, price, rating, downloads, desc, concept in TEMPLATES:
@@ -87,7 +133,35 @@ async def seed() -> None:
                 )
 
         await db.commit()
-    print("✅ Seed complete — demo@designgenerator.io / demo1234, admin@designgenerator.io / admin1234")
+    if settings.environment == "production":
+        print("Seed complete — production (plans/templates only, no demo accounts)")
+    else:
+        print("Seed complete — demo@designgenerator.io / demo1234, admin@designgenerator.io / admin1234")
+
+
+async def lock_published_seed_accounts() -> int:
+    """운영에 남아 있는 공개 시드 계정을 정지하고 세션을 폐기한다.
+
+    콜드 스타트 전 이미 떠 있는 인스턴스의 JWT 를 즉시 무효로 만든다.
+    """
+    if settings.environment != "production":
+        return 0
+    locked = 0
+    async with AsyncSessionLocal() as db:
+        rows = (
+            await db.scalars(select(User).where(User.email.in_(tuple(SEED_ACCOUNT_EMAILS))))
+        ).all()
+        for user in rows:
+            user.status = "Suspended"
+            sessions = (
+                await db.scalars(select(Session).where(Session.user_id == user.id))
+            ).all()
+            for session in sessions:
+                session.revoked = True
+            locked += 1
+        if locked:
+            await db.commit()
+    return locked
 
 
 if __name__ == "__main__":

@@ -11,8 +11,8 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.core.observability import log_event
-from app.core.config import settings
 from app.models.design import DesignSystem, Mockup
 from app.models.platform import EXPORT_TTL_DAYS, ExportHistory
 from app.models.project import Project
@@ -33,7 +33,7 @@ router = APIRouter(tags=["exports"])
 
 
 async def _owned_project(db: DbDep, project_id: str, user_id: str) -> Project:
-    project = await db.get(Project, project_id)
+    project = await get_pub(db, Project, project_id)
     if project is None or project.owner_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -199,10 +199,14 @@ async def create_export(
         watermark=watermark,
         size_bytes=len(content.encode("utf-8")),
         expires_at=_now() + dt.timedelta(days=EXPORT_TTL_DAYS),
+        concept_label=(body.concept_label or "").upper() or None,
+        screen=body.screen,
+        variant_indexes=list(body.variant_indexes) if body.variant_indexes else None,
     )
     db.add(row)
     await db.flush()
-    row.download_url = f"{settings.api_v1_prefix}/exports/{row.id}/download"
+    # API_BASE 가 이미 /api/v1 이므로 prefix 를 다시 붙이지 않는다.
+    row.download_url = f"/exports/{row.id}/download"
     log_event(
         kind="export.created",
         message=f"Export 생성 ({body.format})",
@@ -234,7 +238,7 @@ async def list_exports(
 
 @router.get("/exports/{export_id}/download")
 async def download_export(export_id: str, user: CurrentUser, db: DbDep):
-    row = await db.get(ExportHistory, export_id)
+    row = await get_pub(db, ExportHistory, export_id)
     if row is None or row.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found")
     expires_at = row.expires_at
@@ -246,12 +250,20 @@ async def download_export(export_id: str, user: CurrentUser, db: DbDep):
             detail="Export 파일이 만료되었습니다 (보존 기간 7일). 다시 내보내 주세요.",
         )
 
-    project = await db.get(Project, row.project_id)
+    project = await get_pub(db, Project, row.project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     ds, mockups = await _collect(
-        db, project, ExportCreate(format=row.format, scope=row.scope)
+        db,
+        project,
+        ExportCreate(
+            format=row.format,
+            scope=row.scope,
+            concept_label=row.concept_label,
+            screen=row.screen,
+            variant_indexes=row.variant_indexes,
+        ),
     )
     content = _render(row.format, project, ds, mockups, row.watermark)
     filename = f"{project.name}_{ds.concept_label}.{FILE_SUFFIX[row.format]}"
@@ -290,7 +302,7 @@ async def project_tokens(
 
 @router.delete("/exports/{export_id}", response_model=Message)
 async def delete_export(export_id: str, user: CurrentUser, db: DbDep):
-    row = await db.get(ExportHistory, export_id)
+    row = await get_pub(db, ExportHistory, export_id)
     if row is None or row.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found")
     await db.delete(row)

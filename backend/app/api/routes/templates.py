@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.models.design import DesignSystem
 from app.models.project import Project
 from app.models.user import User
@@ -35,7 +36,9 @@ async def list_templates(
     if category:
         stmt = stmt.where(Template.category == category)
     if q:
-        stmt = stmt.where(Template.name.ilike(f"%{q}%"))
+        from app.core.text import escape_like
+
+        stmt = stmt.where(Template.name.ilike(f"%{escape_like(q)}%", escape="\\"))
     stmt = stmt.order_by(Template.downloads.desc())
     rows = (await db.scalars(stmt)).all()
     return [TemplateOut.model_validate(t) for t in rows]
@@ -62,7 +65,7 @@ async def create_template(body: TemplateCreate, user: CurrentUser, db: DbDep):
     tokens = None
     concept_name = body.concept_name
     if body.project_id:
-        project = await db.get(Project, body.project_id)
+        project = await get_pub(db, Project, body.project_id)
         if project is None or project.owner_id != user.id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         label = (body.concept_label or project.confirmed_concept_label or "A").upper()
@@ -97,8 +100,8 @@ async def create_template(body: TemplateCreate, user: CurrentUser, db: DbDep):
 
 @router.get("/{template_id}", response_model=TemplateOut)
 async def get_template(template_id: str, db: DbDep):
-    t = await db.get(Template, template_id)
-    if t is None:
+    t = await get_pub(db, Template, template_id)
+    if t is None or t.status != "Approved":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     return TemplateOut.model_validate(t)
 
@@ -107,8 +110,8 @@ async def get_template(template_id: str, db: DbDep):
 async def add_review(
     template_id: str, body: TemplateReviewIn, user: CurrentUser, db: DbDep
 ):
-    t = await db.get(Template, template_id)
-    if t is None:
+    t = await get_pub(db, Template, template_id)
+    if t is None or t.status != "Approved":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     db.add(
         TemplateReview(
@@ -124,8 +127,8 @@ async def add_review(
 @router.get("/{template_id}/reviews", response_model=TemplateReviewsOut)
 async def list_reviews(template_id: str, db: DbDep):
     """리뷰와 평점 분포. 분포는 화면에서 다시 세지 않도록 서버가 만든다."""
-    t = await db.get(Template, template_id)
-    if t is None:
+    t = await get_pub(db, Template, template_id)
+    if t is None or t.status != "Approved":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
 
     rows = (

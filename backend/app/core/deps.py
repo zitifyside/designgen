@@ -1,15 +1,17 @@
-"""FastAPI 의존성: DB 세션, 현재 사용자, 관리자 가드."""
+﻿"""FastAPI 의존성: DB 세션, 현재 사용자, 관리자 가드."""
 from __future__ import annotations
 
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_cookies import ACCESS_COOKIE
 from app.core.database import get_db
+from app.core.identity import get_pub
 from app.core.security import ACCESS_TOKEN, decode_token
-from app.models.user import User
+from app.models.user import Session, User
 
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 
@@ -22,11 +24,16 @@ _CREDENTIALS_EXC = HTTPException(
 
 async def get_current_user(
     db: DbDep,
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
 ) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        token = (request.cookies.get(ACCESS_COOKIE) or "").strip() or None
+    if not token:
         raise _CREDENTIALS_EXC
-    token = authorization.split(" ", 1)[1].strip()
     try:
         payload = decode_token(token)
     except jwt.PyJWTError:
@@ -34,13 +41,18 @@ async def get_current_user(
     if payload.get("type") != ACCESS_TOKEN:
         raise _CREDENTIALS_EXC
 
-    user = await db.get(User, payload.get("sub"))
-    if user is None or user.status == "Deleted":
+    user = await get_pub(db, User, payload.get("sub"))
+    if user is None or user.status == "Deleted" or user.deleted_at is not None:
         raise _CREDENTIALS_EXC
     if user.status == "Suspended":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended"
         )
+    sid = payload.get("sid")
+    if sid:
+        session = await get_pub(db, Session, sid)
+        if session is None or session.revoked or session.user_id != user.id:
+            raise _CREDENTIALS_EXC
     return user
 
 
@@ -109,7 +121,7 @@ async def get_api_key_user(
     if not _hmac.compare_digest(expected, digest) or row is None:
         raise _API_KEY_EXC
 
-    user = await db.get(User, row.user_id)
+    user = await get_pub(db, User, row.user_id)
     if user is None or user.status != "Active":
         raise _API_KEY_EXC
     if user.plan not in API_RATE_LIMITS:
@@ -120,6 +132,16 @@ async def get_api_key_user(
 
     # 사용 흔적을 남긴다 — 마지막 사용 시각은 키 회수 판단의 근거가 된다.
     import datetime as dt
+
+    from app.core.security_middleware import hit_rate_limit
+
+    retry = hit_rate_limit(f"apikey|{user.id}", 60, API_RATE_LIMITS[user.plan])
+    if retry is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(retry)},
+        )
 
     row.last_used_at = dt.datetime.now(dt.timezone.utc)
     row.call_count += 1

@@ -1,4 +1,4 @@
-"""Alembic environment — async, reads URL + metadata from the app."""
+﻿"""Alembic environment — async, reads URL + metadata from the app."""
 from __future__ import annotations
 
 import asyncio

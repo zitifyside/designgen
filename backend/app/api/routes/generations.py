@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.core.observability import log_event
 from app.models.generation import GEN_KIND_FULL, Generation
 from app.models.project import Project
@@ -24,7 +25,7 @@ router = APIRouter(tags=["generations"])
 
 
 async def _owned_project(db: DbDep, project_id: str, user_id: str) -> Project:
-    project = await db.get(Project, project_id)
+    project = await get_pub(db, Project, project_id)
     if project is None or project.owner_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -36,10 +37,12 @@ async def assert_no_active_generation(db, user_id: str) -> None:
     프로젝트 단위가 아니라 **사용자 단위** 검사다 (기획서 v0.5.0 §4 F-002 제약사항).
     """
     active = await db.scalar(
-        select(Generation).where(
+        select(Generation)
+        .where(
             Generation.user_id == user_id,
             Generation.status.in_(("Pending", "Running")),
         )
+        .with_for_update()
     )
     if active is not None:
         log_event(
@@ -99,7 +102,7 @@ async def start_generation(
     project.target_screen_inferred = not target_screen
 
     # 큐에 넣기 전에 쿼터를 선점한다(소진 시 402 발생).
-    await consume_generation(db, user)
+    quota_bucket = await consume_generation(db, user)
 
     gen = Generation(
         project_id=project.id,
@@ -108,6 +111,7 @@ async def start_generation(
         status="Pending",
         stage="InputAnalyzer",
         progress=0,
+        quota_bucket=quota_bucket,
         input_snapshot={
             "requirements": project.requirements_text,
             "platform": project.platform,
@@ -172,7 +176,7 @@ async def retry_generation(
     월간 한도·크레딧 차감은 원 생성에서 이미 이뤄졌으므로 여기서는 차감하지 않는다
     (기획서 v0.5.0 §4 F-002 제약사항).
     """
-    origin = await db.get(Generation, generation_id)
+    origin = await get_pub(db, Generation, generation_id)
     if origin is None or origin.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generation not found")
     if not origin.is_warning:
@@ -238,7 +242,7 @@ async def retry_generation(
 
 @router.get("/generations/{generation_id}/status", response_model=GenerationOut)
 async def generation_status(generation_id: str, user: CurrentUser, db: DbDep):
-    gen = await db.get(Generation, generation_id)
+    gen = await get_pub(db, Generation, generation_id)
     if gen is None or gen.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generation not found")
     return GenerationOut.model_validate(gen)
@@ -246,14 +250,23 @@ async def generation_status(generation_id: str, user: CurrentUser, db: DbDep):
 
 @router.post("/generations/{generation_id}/cancel", response_model=Message)
 async def cancel_generation(generation_id: str, user: CurrentUser, db: DbDep):
-    gen = await db.get(Generation, generation_id)
+    gen = await get_pub(db, Generation, generation_id)
     if gen is None or gen.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generation not found")
-    if gen.status in ("Done", "Failed", "Cancelled"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Generation already finished")
-
-    gen.status = "Cancelled"
-    project = await db.get(Project, gen.project_id)
+    claimed = await db.execute(
+        update(Generation)
+        .where(
+            Generation.id == gen.id,
+            Generation.status.in_(("Pending", "Running")),
+        )
+        .values(status="Cancelled")
+    )
+    if claimed.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Generation already finished"
+        )
+    await db.refresh(gen)
+    project = await get_pub(db, Project, gen.project_id)
     if project is not None:
         # 화면 추가 생성 취소는 확정 상태로, 전체 생성 취소는 Cancelled 로 되돌린다.
         project.status = (
@@ -262,7 +275,7 @@ async def cancel_generation(generation_id: str, user: CurrentUser, db: DbDep):
     # 환불 정책: 진행률 <30% → 전액 환불(단순화). 무차감 재시도 건은 환불 대상이 아니다.
     refunded = gen.progress < 30 and not gen.free_retry_used
     if refunded:
-        refund_generation(user)
+        refund_generation(user, gen.quota_bucket, db)
     log_event(
         kind="generation.cancelled",
         level="warn",

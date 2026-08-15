@@ -1,4 +1,4 @@
-"""중앙 로그 허브(마에 loghub) 전송기.
+﻿"""중앙 로그 허브(마에 loghub) 전송기.
 
 계약 SSOT (읽기 참조):
   D:/Project/mae/docs/기획/로그허브/Mae_중앙로그허브_구현명세_v1.0.0.md §3.1·§5.1
@@ -184,8 +184,12 @@ async def flush() -> None:
     del _buffer[: len(batch)]
     try:
         body = json.dumps({"events": batch}, ensure_ascii=False, default=str).encode("utf-8")
-        base = settings.mae_loghub_url.rstrip("/")
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SEC) as client:
+        from app.core.outbound import assert_safe_egress_url
+
+        base = assert_safe_egress_url(settings.mae_loghub_url.rstrip("/"))
+        async with httpx.AsyncClient(
+            timeout=REQUEST_TIMEOUT_SEC, follow_redirects=False
+        ) as client:
             response = await client.post(
                 f"{base}/v1/ingest", content=body, headers=_sign(body)
             )

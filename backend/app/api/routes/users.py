@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.core.security import hash_password, verify_password
 from app.core.security_middleware import validate_password_strength
 from app.models.design import DesignSystem, Mockup
@@ -19,6 +20,7 @@ from app.models.project import Project
 from app.models.user import Session
 from app.schemas.common import Message
 from app.core.observability import log_event
+from app.services.two_factor import verify_second_factor
 from app.schemas.user import (
     UsageBucket,
     UsageFormatShare,
@@ -52,7 +54,9 @@ async def update_profile(body: UserUpdate, user: CurrentUser, db: DbDep):
 
 
 @router.post("/password", response_model=Message)
-async def change_password(body: PasswordChangeIn, user: CurrentUser, db: DbDep):
+async def change_password(
+    body: PasswordChangeIn, user: CurrentUser, db: DbDep, request: Request
+):
     if not verify_password(body.current_password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect"
@@ -60,6 +64,24 @@ async def change_password(body: PasswordChangeIn, user: CurrentUser, db: DbDep):
     validate_password_strength(body.new_password, email=user.email)
     user.password_hash = hash_password(body.new_password)
     db.add(user)
+    current = _current_sid(request)
+    rows = (
+        await db.scalars(
+            select(Session).where(Session.user_id == user.id, Session.revoked.is_(False))
+        )
+    ).all()
+    revoked = 0
+    for row in rows:
+        if current and row.id == current:
+            continue
+        row.revoked = True
+        revoked += 1
+    log_event(
+        kind="user.password_changed",
+        message="비밀번호 변경 — 다른 세션 종료",
+        user_id=user.id,
+        payload={"revokedSessions": revoked},
+    )
     return Message(detail="Password updated")
 
 
@@ -68,6 +90,10 @@ def _current_sid(request: Request) -> str | None:
     from app.core.security import decode_token
 
     raw = (request.headers.get("authorization") or "").removeprefix("Bearer ").strip()
+    if not raw:
+        from app.core.auth_cookies import ACCESS_COOKIE
+
+        raw = (request.cookies.get(ACCESS_COOKIE) or "").strip()
     if not raw:
         return None
     try:
@@ -100,7 +126,7 @@ async def list_sessions(user: CurrentUser, db: DbDep, request: Request):
 
 @router.post("/sessions/{session_id}/logout", response_model=Message)
 async def revoke_session(session_id: str, user: CurrentUser, db: DbDep):
-    session = await db.get(Session, session_id)
+    session = await get_pub(db, Session, session_id)
     if session is None or session.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     session.revoked = True
@@ -139,6 +165,11 @@ async def revoke_other_sessions(user: CurrentUser, db: DbDep, request: Request):
 @router.post("/2fa/setup", response_model=TwoFactorSetupOut)
 async def setup_2fa(user: CurrentUser, db: DbDep):
     """TOTP 시크릿과 백업 코드 10개를 발급한다. 이 단계에서는 아직 활성화되지 않는다."""
+    if user.two_factor_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 2단계 인증이 켜져 있습니다. 먼저 해제한 뒤 다시 설정해 주세요.",
+        )
     secret = pyotp.random_base32()
     codes = [secrets.token_hex(4).upper() for _ in range(10)]
     user.two_factor_secret = secret
@@ -175,9 +206,7 @@ async def disable_2fa(body: TwoFactorDisableIn, user: CurrentUser, db: DbDep):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="비밀번호가 올바르지 않습니다."
         )
-    if not user.two_factor_secret or not pyotp.TOTP(user.two_factor_secret).verify(
-        body.code, valid_window=1
-    ):
+    if not verify_second_factor(user, body.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="인증 코드가 올바르지 않습니다."
         )

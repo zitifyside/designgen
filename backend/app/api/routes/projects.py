@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from sqlalchemy import select, update
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.core.observability import log_event
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import GEN_KIND_SCREEN, Generation
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 async def _owned(db: DbDep, project_id: str, user_id: str) -> Project:
-    project = await db.get(Project, project_id)
+    project = await get_pub(db, Project, project_id)
     if project is None or project.owner_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -88,7 +89,9 @@ async def list_projects(
     if status_filter:
         stmt = stmt.where(Project.status == status_filter)
     if q:
-        stmt = stmt.where(Project.name.ilike(f"%{q}%"))
+        from app.core.text import escape_like
+
+        stmt = stmt.where(Project.name.ilike(f"%{escape_like(q)}%", escape="\\"))
     stmt = stmt.order_by(Project.updated_at.desc())
     rows = list((await db.scalars(stmt)).all())
     return await _out(db, rows)
@@ -344,7 +347,7 @@ async def add_screen(
         body.screen_title or SCREEN_PRESETS.get(screen) or body.screen.strip()
     )[:120]
 
-    await consume_generation(db, user, note="screen_add")
+    quota_bucket = await consume_generation(db, user, note="screen_add")
 
     gen = Generation(
         project_id=project.id,
@@ -353,6 +356,7 @@ async def add_screen(
         status="Pending",
         stage="LayoutEngine",
         progress=0,
+        quota_bucket=quota_bucket,
         screen=screen,
         input_snapshot={
             "screen": screen,

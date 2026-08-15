@@ -1,58 +1,58 @@
-# AI Design Generator — Frontend (Web App)
+﻿# AI Design Generator — Frontend (Web App)
 
-Next.js 14 App Router 기반의 Web App 프론트엔드이다. 기획서 v0.1.0 의 §5 UI/UX 설계 와 기능정의서 §2.1 Web App 메뉴 트리를 구현 대상으로 한다. 이번 단계는 백엔드 없이 Mock 데이터로만 동작하는 UI 스켈레톤이다.
+Next.js 14 App Router 정적 export 프론트엔드다. 기획서 v0.5.1 · 기능정의서 v0.2.1 의
+Web App 메뉴를 구현하며, API 는 같은 출처 `/api/v1` (로컬은 `localhost:8000`) 로
+FastAPI 에 붙는다.
 
 ## 기술 스택
 
-- Next.js 14 (App Router) + React 18 + TypeScript 5
-- Tailwind CSS 3
-- Zustand 4 (Design Token 전역 상태 + Reactive Binding)
-- Mock 데이터 (`src/lib/mock-data.ts`)
+- Next.js 14.2.35 (App Router) + React 18 + TypeScript 5
+- Tailwind CSS 3 — 색은 `globals.css` CSS 변수. 다크는 `.dark` 에서 값을 뒤집는다
+- Zustand 4 (`auth` · `project` · `workspace` · `notification`)
+- HTTP 진입점은 `src/lib/api.ts` 한 곳. 토큰은 HttpOnly 쿠키 (구 localStorage 키는 기동 시 삭제)
 
 ## 실행
 
 ```bash
 cd frontend
 npm install
-npm run dev          # http://localhost:3000
-npm run build        # 프로덕션 빌드
+npm run dev          # http://localhost:3000  → API http://localhost:8000/api/v1
+NEXT_STATIC_EXPORT=1 npm run build   # → out/  (Hosting 배포용)
+npx tsc --noEmit
 ```
+
+백엔드가 없으면 화면은 뜨지만 데이터는 "API 서버에 연결되지 않았습니다" 로 바뀐다.
 
 ## 화면 구성
 
-| 경로 | 화면 | 출처 |
-|---|---|---|
-| `/login`, `/signup` | 로그인·회원가입 | 기능정의서 §3.1 (Web App) |
-| `/dashboard` | 대시보드 (즐겨찾기·프로젝트 그리드·사용량) | 기획서 §5 화면 1 |
-| `/projects/new` | 새 프로젝트 (요건 입력) | 기획서 §5 화면 2 |
-| `/projects/new/generating` | AI 생성 진행 (4단계 progress) | 기능정의서 3.1 — 생성 진행 |
-| `/projects/[id]` | Workspace (DS 컨트롤러 + 시안 뷰어) | 기획서 §5 화면 3 |
-| `/projects/[id]/export` | Export (대상·형식·해상도·이력) | 기획서 §5 화면 4 |
-| `/templates`, `/templates/[id]` | 템플릿 마켓 | 기능정의서 §3.1 — 템플릿 마켓 |
-| `/notifications` | 알림 센터 | 기능정의서 §3.1 — 알림 센터 |
-| `/me/profile`, `/me/subscription`, `/me/credits`, `/me/usage`, `/me/security`, `/me/notifications` | 마이페이지 6개 서브 | 기능정의서 §3.1 — 마이페이지 (API Key 는 서비스 제공자가 관리하므로 사용자 노출 없음) |
-| `/admin/...` | 관리자 영역 | 기능정의서 §2.3 — Admin |
+| 경로 | 화면 |
+|---|---|
+| `/login`, `/signup` | 로그인·회원가입 (허니팟 `website`, 2FA 2단계) |
+| `/dashboard` | 프로젝트 그리드·사용량·공지 배너 |
+| `/projects/new` | 요건 입력·생성 옵션 (컨셉·시안·DS 방식·대상 화면) |
+| `/projects/[id]` | Workspace (DS 컨트롤러 + 시안 뷰어 + 확정·화면 추가) |
+| `/projects/[id]/export` | Export 대상·형식·미리보기·이력 |
+| `/templates`, `/templates/[id]` | 템플릿 마켓·리뷰 |
+| `/notifications` | 알림 센터 |
+| `/me/profile` · `subscription` · `credits` · `usage` · `security` · `notifications` · `api-keys` | 마이페이지 |
+| `/admin/...` | 관리자 (서버 RBAC) |
+| `/help` | 도움말·FAQ |
+
+동적 라우트는 빌드 때 `__id__` 센티넬 한 벌만 프리렌더한다 (`lib/route-sentinel.ts`).
 
 ## 디자인 시스템 실시간 반영
 
-`workspace-store` 의 DS Token 을 CSS Variables(`--ds-color-primary`, `--ds-spacing-md` 등) 로 변환하여 시안 캔버스에 주입한다. User 가 좌측 컨트롤러에서 Token 을 수정하면 캔버스의 시안이 같은 프레임 안에서 다시 그려진다 — 500ms 이내 반영(기획서 F-004) 의 클라이언트 측 메커니즘이다.
+`workspace-store` 의 Token 을 `--ds-*` CSS 변수로 시안 캔버스에 넣는다. 컨트롤러에서
+고치면 같은 프레임에서 다시 그린다. 시안 캔버스는 앱 테마를 따르지 않는다.
 
-## Mock 데이터
+## 인증
 
-- 컨셉 3종 × 시안 5종 = 총 15종 시안을 Mock 으로 제공한다 (Modern Minimal / Bold Vibrant / Soft Pastel)
-- 시안은 Canvas/Fabric.js 가 아닌 React 컴포넌트 + CSS 변수로 렌더링하여 Token 수정 시 즉시 재반영된다
-- 인증은 LocalStorage 의 `loggedIn` 플래그로만 처리한다 (실제 JWT/OAuth 미적용)
+브라우저는 access/refresh 를 HttpOnly 쿠키로 받는다. 변이 요청은 Origin CSRF 를 탄다.
+Bearer 는 스모크·스크립트용이다. 2FA 를 켠 계정은 TOTP 또는 백업 코드가 있어야 로그인된다.
 
-## 백엔드 연동 시 변경 지점
+## 미구현 (의도)
 
-- `src/store/*` 의 Mock 호출을 `fetch` 로 교체
-- `src/lib/api.ts` (예정) 에 FastAPI 엔드포인트 매핑
-- 인증은 JWT Access/Refresh 페어 + Cookie/Authorization 헤더로 교체
-
-## 미구현 (의도적 제외)
-
-- Figma Plugin (별도 Vite 프로젝트)
-- Admin (별도 빌드 분리 또는 동일 앱 권한 분기 — TBD)
-- 실제 Canvas 시안 뷰어 (Fabric.js·Konva.js) — CSS 기반 시안으로 대체
-- 실제 결제 (Stripe Checkout)
-- 실제 AI 호출 (서버에서 Mock·실제 모두 처리 가능하도록 분리)
+- Figma Plugin (별도 저장소, 아직 없음)
+- Stripe Checkout (백엔드 501)
+- i18n ko/en
+- `subscribe_token_changes` (Public API / MCP)

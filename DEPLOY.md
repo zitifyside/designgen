@@ -1,8 +1,8 @@
-# 배포 가이드 — AI Design Generator
+﻿# 배포 가이드 — AI Design Generator
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.0.0 |
+| 문서 버전 | v1.1.1 |
 | 작성일 | 2026-08-14 |
 | 대상 | Firebase Hosting (프론트) + Cloud Run (백엔드 API) |
 | Firebase 프로젝트 | `design-gen-zitify` |
@@ -114,7 +114,8 @@ done
 
 . `DATABASE_URL` → PostgreSQL (Neon·Supabase·Cloud SQL).
   현재는 컨테이너 `/tmp` 의 SQLite 라 **콜드 스타트·재배포 때 데이터가 사라진다**.
-  `SEED_ON_STARTUP=true` 라 데모 계정·플랜은 매번 다시 채워진다.
+  `SEED_ON_STARTUP=true` 이면 플랜·템플릿은 다시 채운다. **운영(`ENVIRONMENT=production`)에서는
+  공개 데모·관리자 계정을 만들지 않고**, 이미 있으면 정지·세션 폐기한다.
 . `SECRET_KEY` — `backend/.env`(Secrets SSOT 링크) 의 `CLOUDRUN_SECRET_KEY` 를 쓴다.
   값이 바뀌면 기존 토큰이 전부 무효가 된다.
 . 실제 AI 생성 — `FAKE_AI_PIPELINE=false` + `GEMINI_API_KEY`/`OPENAI_API_KEY`.
@@ -223,7 +224,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 
 ---
 
-## 5. 현재 상태 (2026-08-15)
+## 5. 현재 상태 (2026-08-16)
 
 | 구성 | 상태 |
 |---|---|
@@ -235,7 +236,8 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | AI 생성 | ⚠ `FAKE_AI_PIPELINE=true` — placeholder 출력 |
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
 | 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
-| 보안 하드닝 | ✅ 인증·레이트리밋·헤더·CSP·크롤 차단 (§3.5) |
+| 보안 하드닝 | ✅ 인증·쿠키/CSRF·레이트리밋·헤더·CSP·봇 UA·크롤 함정 (§3.5·SECURITY.md) |
+| DA 스키마 | ✅ BIGINT PK+public_id · C-코드 · 논리삭제 뷰 · SCD · Alembic `202608161200` |
 | Public API · MCP | ✅ Tool 4종 동작 · `subscribe_token_changes` 만 미구현 (§3.6) |
 | 공통 기능 | ✅ 도움말·FAQ · 온보딩 투어 · 단축키·Undo · 공지 배너 · 테마(Light·Dark·System) |
 | i18n (ko/en) | ⛔ 출시 전 작업으로 유예 |
@@ -334,7 +336,10 @@ $env:SMOKE_DATABASE_URL = $env:CHECK_DATABASE_URL
 gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com   --project design-gen-zitify --region asia-northeast3   --update-env-vars "^@^DATABASE_URL=postgresql://adg_app:<pw>@<호스트>:5432/adg?sslmode=require"   --quiet
 ```
 
-스키마·플랜·데모 계정은 `SEED_ON_STARTUP=true` 가 기동 시 채운다 (멱등).
+스키마·플랜·템플릿은 `SEED_ON_STARTUP=true` 가 기동 시 채운다 (멱등).
+운영에서는 공개 데모 계정을 만들지 않는다.
+문자열 PK 잔존 스키마는 **SQLite 에서만** 비운다. Postgres 는 Alembic 을 쓰고,
+기동 중 `DROP CASCADE` 는 하지 않는다.
 
 ### 6.5 연결 문자열에서 걸리는 것
 
@@ -367,3 +372,13 @@ gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com   --
 . **백업** — 자체 호스팅은 백업도 자체 책임이다. `pg_dump` 주기 실행 + 외부 보관
 . **인스턴스 상한** — SQLite 때문에 걸어 둔 `--max-instances 1` 은 Postgres 전환 후
   올릴 수 있다. 다만 레이트 리밋이 프로세스 메모리 기반이라(§3.5) 같이 손봐야 한다
+
+---
+
+## 변경 이력
+
+| 버전 | 날짜 | 작성자 | 변경 내용 |
+|---|---|---|---|
+| v1.1.1 | 2026-08-16 | 안승준 | Postgres 기동 시 스키마 wipe 금지. Cloudflare IP 헤더는 신뢰하지 않는다 |
+| v1.1.0 | 2026-08-16 | 안승준 | §5 현재 상태 일자·DA 스키마·쿠키/CSRF/봇 반영. 운영 시드 계정 잠금 정정. 변경이력 신설 |
+| v1.0.0 | 2026-08-14 | 안승준 | 초판. Hosting + Cloud Run 배포 절차 |

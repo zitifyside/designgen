@@ -1,5 +1,6 @@
-"""Import all models so they register on Base.metadata."""
+﻿"""Import all models so they register on Base.metadata."""
 from app.models.admin import Announcement, AuditLog, Feedback
+from app.models.code import CodeCommon, CodeGroup
 from app.models.billing import (
     CreditTransaction,
     Payment,
@@ -9,6 +10,7 @@ from app.models.billing import (
 )
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import Generation
+from app.models.hist import PlanHist, UserHist
 from app.models.logging import AppLogEvent
 from app.models.notification import Notification
 from app.models.platform import ApiKey, ExportHistory, Team, TeamMembership
@@ -27,6 +29,8 @@ __all__ = [
     "ApiKey",
     "AppLogEvent",
     "AuditLog",
+    "CodeCommon",
+    "CodeGroup",
     "CreditTransaction",
     "DesignSystem",
     "EmailVerification",
@@ -39,6 +43,8 @@ __all__ = [
     "PasswordReset",
     "Payment",
     "Plan",
+    "PlanHist",
+    "UserHist",
     "Project",
     "Refund",
     "Session",

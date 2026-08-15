@@ -1,0 +1,3 @@
+# AI training opt-out
+User-agent: *
+Disallow: /

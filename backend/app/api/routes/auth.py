@@ -4,11 +4,16 @@ from __future__ import annotations
 import datetime as dt
 
 import jwt
-from fastapi import APIRouter, Header, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from sqlalchemy import select, update
+
+from app.core.auth_cookies import REFRESH_COOKIE, auth_json, clear_auth_cookies
 
 from app.core.config import settings
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.core.observability import log_event, user_id_var
 from app.core.security_middleware import validate_password_strength
 from app.core.security import (
@@ -20,6 +25,8 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import Session, User
+from app.seed import SEED_ACCOUNT_EMAILS
+from app.services.two_factor import verify_second_factor
 from app.schemas.common import Message
 from app.schemas.user import (
     LoginIn,
@@ -73,12 +80,25 @@ async def _issue_tokens(db: DbDep, user: User, device: str | None) -> TokenPair:
     )
 
 
+def _token_response(pair: TokenPair, status_code: int = 200) -> JSONResponse:
+    return auth_json(
+        jsonable_encoder(pair.model_dump(by_alias=True)),
+        status_code=status_code,
+        access=pair.access_token,
+        refresh=pair.refresh_token,
+    )
+
+
 @router.post("/signup", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
 async def signup(
     body: SignupIn,
     db: DbDep,
     user_agent: str | None = Header(default=None),
 ):
+    if (body.website or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="가입에 실패했습니다."
+        )
     existing = await db.scalar(select(User).where(User.email == body.email))
     if existing is not None:
         log_event(
@@ -103,6 +123,20 @@ async def signup(
     )
     db.add(user)
     await db.flush()
+    from app.models.platform import TeamMembership
+
+    invites = (
+        await db.scalars(
+            select(TeamMembership).where(
+                TeamMembership.email == str(body.email),
+                TeamMembership.user_id.is_(None),
+            )
+        )
+    ).all()
+    for invite in invites:
+        invite.user_id = user.id
+        invite.status = "Active"
+        db.add(invite)
     user_id_var.set(user.id)
     log_event(
         kind="auth.signup",
@@ -110,7 +144,7 @@ async def signup(
         user_id=user.id,
         payload={"plan": user.plan},
     )
-    return await _issue_tokens(db, user, user_agent)
+    return _token_response(await _issue_tokens(db, user, user_agent), 201)
 
 
 @router.post("/login", response_model=TokenPair)
@@ -119,6 +153,16 @@ async def login(
     db: DbDep,
     user_agent: str | None = Header(default=None),
 ):
+    # 운영에 남은 공개 시드 계정은 존재조차 인정하지 않는다.
+    if (
+        settings.environment == "production"
+        and str(body.email).lower() in SEED_ACCOUNT_EMAILS
+    ):
+        verify_password(body.password, _DUMMY_HASH)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
+
     user = await db.scalar(select(User).where(User.email == body.email))
 
     # 계정 잠금 확인이 비밀번호 검증보다 앞선다 — 잠긴 계정은 시도 자체를 받지 않는다.
@@ -178,17 +222,41 @@ async def login(
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")
 
+    if user.two_factor_enabled:
+        if not (body.totp_code or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "totp_required",
+                    "message": "2단계 인증 코드를 입력해 주세요.",
+                },
+            )
+        if not verify_second_factor(user, body.totp_code or ""):
+            log_event(
+                kind="auth.login_2fa_failed",
+                level="warn",
+                message="2FA 코드 불일치",
+                user_id=user.id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="인증 코드가 올바르지 않습니다.",
+            )
+
     user.failed_login_attempts = 0
     user.locked_until = None
     user_id_var.set(user.id)
     log_event(kind="auth.login", message="로그인 성공", user_id=user.id)
-    return await _issue_tokens(db, user, user_agent)
+    return _token_response(await _issue_tokens(db, user, user_agent))
 
 
 @router.post("/refresh", response_model=TokenPair)
-async def refresh(body: RefreshIn, db: DbDep):
+async def refresh(body: RefreshIn, db: DbDep, request: Request):
+    raw = (body.refresh_token or "").strip() or request.cookies.get(REFRESH_COOKIE)
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
     try:
-        payload = decode_token(body.refresh_token)
+        payload = decode_token(raw)
     except jwt.PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
     if payload.get("type") != REFRESH_TOKEN:
@@ -198,37 +266,66 @@ async def refresh(body: RefreshIn, db: DbDep):
         select(Session).where(Session.refresh_jti == payload["jti"])
     )
     if session is None or session.revoked:
-        # 이미 회전된 토큰의 재사용은 탈취 신호일 수 있다 — 반드시 기록한다.
+        # 이미 회전된 토큰의 재사용은 탈취 신호 — 그 사용자의 세션을 모두 끊는다.
+        uid = payload.get("sub")
         log_event(
             kind="auth.refresh_reuse",
             level="warn",
             message="폐기된 리프레시 토큰 재사용 시도",
-            user_id=payload.get("sub"),
+            user_id=uid,
         )
+        if uid:
+            await db.execute(
+                update(Session)
+                .where(Session.user_id == uid, Session.revoked.is_(False))
+                .values(revoked=True)
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked")
 
-    user = await db.get(User, payload["sub"])
+    user = await get_pub(db, User, payload["sub"])
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    # 리프레시 토큰을 회전한다(일회용).
-    session.revoked = True
-    return await _issue_tokens(db, user, session.device)
+    # 리프레시 토큰을 회전한다(일회용). 동시에 두 요청이 오면 한 쪽만 이긴다.
+    claimed = await db.execute(
+        update(Session)
+        .where(Session.id == session.id, Session.revoked.is_(False))
+        .values(revoked=True)
+    )
+    if claimed.rowcount == 0:
+        log_event(
+            kind="auth.refresh_reuse",
+            level="warn",
+            message="리프레시 회전 경합 — 재사용으로 처리",
+            user_id=user.id,
+        )
+        await db.execute(
+            update(Session)
+            .where(Session.user_id == user.id, Session.revoked.is_(False))
+            .values(revoked=True)
+        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked")
+    return _token_response(await _issue_tokens(db, user, session.device))
 
 
 @router.post("/logout", response_model=Message)
-async def logout(body: RefreshIn, db: DbDep):
+async def logout(body: RefreshIn, db: DbDep, request: Request):
+    raw = (body.refresh_token or "").strip() or request.cookies.get(REFRESH_COOKIE)
+    empty = JSONResponse({"detail": "Logged out"})
+    clear_auth_cookies(empty)
+    if not raw:
+        return empty
     try:
-        payload = decode_token(body.refresh_token)
+        payload = decode_token(raw)
     except jwt.PyJWTError:
-        return Message(detail="Logged out")
+        return empty
     session = await db.scalar(
         select(Session).where(Session.refresh_jti == payload.get("jti"))
     )
     if session is not None:
         session.revoked = True
         log_event(kind="auth.logout", message="로그아웃", user_id=session.user_id)
-    return Message(detail="Logged out")
+    return empty
 
 
 @router.get("/me", response_model=UserOut)

@@ -1,4 +1,4 @@
-"""FastAPI 애플리케이션 진입점."""
+﻿"""FastAPI 애플리케이션 진입점."""
 from __future__ import annotations
 
 import time
@@ -20,8 +20,16 @@ from app.core.observability import (
     trace_id_var,
     user_id_var,
 )
+from app.core.bot_guard import enforce_bot_guard
 from app.core.security_middleware import (
+    MAX_BODY_BYTES,
     SECURITY_HEADERS,
+    BodyTooLarge,
+    client_ip,
+    enforce_admin_ip,
+    enforce_crawl_trap,
+    enforce_csrf,
+    enforce_ip_ban,
     enforce_request_limits,
     verify_production_secrets,
 )
@@ -36,15 +44,26 @@ async def lifespan(app: FastAPI):
     configure_logging()
     verify_production_secrets()
 
-    # 로컬/SQLite 개발 환경에서는 부팅 시 테이블을 생성합니다. 프로덕션에서는
-    # 대신 Alembic 마이그레이션을 실행하고 이 호출을 제거하거나 가드 처리하세요.
-    if settings.database_url.startswith("sqlite"):
-        await init_db()
+    # 스키마 정렬(레거시 이름) + 빠진 테이블/컬럼. SQLite·Postgres 모두 멱등.
+    await init_db()
     if settings.seed_on_startup:
         # 컨테이너는 매번 빈 파일시스템으로 뜨므로 플랜·데모 계정을 채운다 (멱등).
-        from app.seed import seed
+        # 운영에서는 플랜·템플릿만 채우고 공개 데모 계정은 만들지 않는다.
+        from app.seed import lock_published_seed_accounts, seed
 
         await seed()
+        await lock_published_seed_accounts()
+    elif settings.environment == "production":
+        from app.seed import lock_published_seed_accounts
+
+        await lock_published_seed_accounts()
+
+    from app.core.database import AsyncSessionLocal
+    from app.services.purge import purge_due_accounts
+
+    async with AsyncSessionLocal() as db:
+        await purge_due_accounts(db)
+        await db.commit()
 
     loghub.start_forwarder()
     logger.info(
@@ -78,8 +97,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key", "X-Request-Id"],
+    expose_headers=["X-Request-Id", "Retry-After"],
 )
 
 
@@ -99,11 +119,55 @@ async def observability_middleware(request: Request, call_next):
     user_token = user_id_var.set(None)
     started = time.perf_counter()
 
+    ban_response = enforce_ip_ban(request)
+    if ban_response is not None:
+        trace_id_var.reset(trace_token)
+        user_id_var.reset(user_token)
+        return ban_response
+
+    trap_response = enforce_crawl_trap(request)
+    if trap_response is not None:
+        trace_id_var.reset(trace_token)
+        user_id_var.reset(user_token)
+        return trap_response
+
+    bot_response = enforce_bot_guard(request)
+    if bot_response is not None:
+        trace_id_var.reset(trace_token)
+        user_id_var.reset(user_token)
+        return bot_response
+
+    admin_response = enforce_admin_ip(request)
+    if admin_response is not None:
+        trace_id_var.reset(trace_token)
+        user_id_var.reset(user_token)
+        return admin_response
+
+    csrf_response = enforce_csrf(request)
+    if csrf_response is not None:
+        trace_id_var.reset(trace_token)
+        user_id_var.reset(user_token)
+        return csrf_response
+
     limit_response = enforce_request_limits(request)
     if limit_response is not None:
         trace_id_var.reset(trace_token)
         user_id_var.reset(user_token)
         return limit_response
+
+    received = 0
+    original_receive = request.receive
+
+    async def limited_receive() -> dict:
+        nonlocal received
+        message = await original_receive()
+        if message["type"] == "http.request":
+            received += len(message.get("body", b"") or b"")
+            if received > MAX_BODY_BYTES:
+                raise BodyTooLarge()
+        return message
+
+    request._receive = limited_receive  # noqa: SLF001 — 청크 본문 상한
 
     status_code = 500
     try:
@@ -112,7 +176,16 @@ async def observability_middleware(request: Request, call_next):
         response.headers["x-request-id"] = trace_id
         for key, value in SECURITY_HEADERS.items():
             response.headers.setdefault(key, value)
+        if "server" in response.headers:
+            del response.headers["server"]
         return response
+    except BodyTooLarge:
+        status_code = 413
+        return JSONResponse(
+            status_code=413,
+            content={"detail": "요청 본문이 너무 큽니다."},
+            headers={"x-request-id": trace_id, **SECURITY_HEADERS},
+        )
     except Exception as exc:  # noqa: BLE001 — 미처리 예외도 관측하고 표준 응답으로 바꾼다
         import traceback
 
@@ -126,7 +199,7 @@ async def observability_middleware(request: Request, call_next):
             path=request.url.path,
             status_code=500,
             duration_ms=int((time.perf_counter() - started) * 1000),
-            ip=_client_ip(request),
+            ip=client_ip(request),
         )
         # 내부 예외 내용을 클라이언트에 노출하지 않는다.
         return JSONResponse(
@@ -149,17 +222,19 @@ async def observability_middleware(request: Request, call_next):
                 path=path,
                 status_code=status_code,
                 duration_ms=duration_ms,
-                ip=_client_ip(request),
+                ip=client_ip(request),
             )
         trace_id_var.reset(trace_token)
         user_id_var.reset(user_token)
 
 
-def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else None
+@app.exception_handler(BodyTooLarge)
+async def body_too_large_handler(_request: Request, _exc: BodyTooLarge):
+    return JSONResponse(
+        status_code=413,
+        content={"detail": "요청 본문이 너무 큽니다."},
+        headers=SECURITY_HEADERS,
+    )
 
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
@@ -167,8 +242,19 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 @app.get("/", tags=["system"])
 async def root():
+    if settings.environment == "production":
+        return {"status": "ok"}
     return {
         "name": settings.app_name,
         "version": settings.service_version,
         "api": settings.api_v1_prefix,
     }
+
+
+@app.get("/__crawl-trap", include_in_schema=False)
+@app.get("/wp-admin", include_in_schema=False)
+@app.get("/wp-login.php", include_in_schema=False)
+@app.get("/xmlrpc.php", include_in_schema=False)
+async def crawl_trap_alias():
+    """미들웨어가 먼저 잡는다. 라우트는 rewrite 가 앱까지 올 때를 대비한 자리만."""
+    return JSONResponse(status_code=404, content={"detail": "Not Found"})

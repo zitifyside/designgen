@@ -1,4 +1,4 @@
-"""프로젝트 첨부 파일 업로드·조회·삭제.
+﻿"""프로젝트 첨부 파일 업로드·조회·삭제.
 
 기능정의서 v0.2.0 §3.1 '파일 업로드' — 형식·크기·개수 제한과 3중 검증은
 services/upload.py 가 담당한다. 여기서는 소유권·개수·기록을 다룬다.
@@ -9,7 +9,9 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.core.observability import log_event
+from app.core.security_middleware import hit_rate_limit
 from app.models.project import Project
 from app.models.upload import FileUpload
 from app.schemas.common import Message
@@ -20,7 +22,7 @@ router = APIRouter(prefix="/projects/{project_id}/files", tags=["uploads"])
 
 
 async def _owned(db: DbDep, project_id: str, user_id: str) -> Project:
-    project = await db.get(Project, project_id)
+    project = await get_pub(db, Project, project_id)
     if project is None or project.owner_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -47,6 +49,13 @@ async def upload_files(
     files: list[UploadFile] = File(...),
 ):
     project = await _owned(db, project_id, user.id)
+    retry = hit_rate_limit(f"upload|{user.id}", 3600, 20)
+    if retry is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="업로드가 너무 잦습니다. 잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(retry)},
+        )
 
     existing = (
         await db.scalars(select(FileUpload).where(FileUpload.project_id == project_id))
@@ -103,7 +112,7 @@ async def upload_files(
 @router.delete("/{file_id}", response_model=Message)
 async def delete_file(project_id: str, file_id: str, user: CurrentUser, db: DbDep):
     await _owned(db, project_id, user.id)
-    row = await db.get(FileUpload, file_id)
+    row = await get_pub(db, FileUpload, file_id)
     if row is None or row.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     await db.delete(row)

@@ -34,11 +34,11 @@ powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 status
 | `setup` | 가상환경 생성 → 의존성 설치 → `.env` 확인 → DB 시드 |
 | `start` | 숨김 실행 기동. `-Port 8010` 로 포트 변경, `-Reload` 로 자동 리로드 |
 | `stop` | 프로세스 트리 정리 후 포트 해제까지 확인 |
-| `status` | 기동 여부 + `/health` 응답 (DB·환경·fake 파이프라인 여부) |
+| `status` | 기동 여부 + 공개 `/health` (`{"status":"ok"}`). 환경·DB·FAKE_AI 는 `/admin/health` |
 | `logs` | 최근 로그 (`-Lines 100`) |
 | `seed` | 플랜·계정 시드 (멱등) |
 | `reset` | ⚠ DB 삭제 후 재시드 — 로컬 데이터가 사라집니다 |
-| `smoke` | 문서 v0.5.0 규칙 E2E 46 검사 (임시 DB 격리, 서버 불필요) |
+| `smoke` | 문서 규칙 E2E (`scripts/smoke_e2e.py`, 임시 DB 격리, 서버 불필요) |
 
 ### 수동 실행 (macOS·Linux 또는 스크립트 없이)
 
@@ -88,7 +88,7 @@ cd ..\frontend; npm run dev
 ### 정합 점검
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 smoke   # E2E 46 검사
+powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 smoke   # E2E 스모크
 .venv\Scripts\python.exe scripts\check_api_paths.py                     # 프론트 호출 경로 ↔ 라우트 대조
 ```
 
@@ -97,7 +97,7 @@ powershell -ExecutionPolicy Bypass -File scripts\dev-server.ps1 smoke   # E2E 46
 ```
 app/
   core/        설정, 데이터베이스(비동기 엔진), 보안(JWT/bcrypt), 의존성
-  models/      SQLAlchemy 모델 (users, projects, design, generation, billing, …)
+  models/      SQLAlchemy 모델 (mst_user, trx_project, trx_design_system, …)
   schemas/     Pydantic v2 스키마 (Next.js 프론트에 맞춘 camelCase 출력)
   services/
     ai/        프로바이더 인터페이스 + Gemini/Codex 스텁 + 파이프라인 + placeholder
@@ -114,7 +114,7 @@ alembic/       비동기 마이그레이션
 `POST /api/v1/projects/{id}/generate`는 쿼터를 차감하고 `Generation` 레코드를
 만든 뒤, 4단계 파이프라인을 백그라운드 작업으로 실행합니다.
 
-`InputAnalyzer → ConceptEngine → LayoutEngine → Renderer`
+`InputAnalyzer → ConceptEngine → LayoutEngine → Renderer` (4단계. 화면 추가는 Layout→Renderer)
 
 `GET /api/v1/generations/{id}/status`로 `stage`/`progress`를 폴링합니다.
 성공하면 프로젝트의 디자인 시스템 + 목업이 채워지고 알림이 발송됩니다.
@@ -135,11 +135,10 @@ alembic/       비동기 마이그레이션
 
 ## PostgreSQL로 전환하기
 
-1. `pip install asyncpg` (`requirements.txt`에서 주석 해제).
-2. `DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/designgen` 설정.
-3. SQLite 자동 생성 대신 Alembic 사용:
+1. `asyncpg` 는 `requirements.txt` 에 이미 있다.
+2. `DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/designgen` (또는 `postgresql://…?sslmode=require` — `normalize_database_url` 이 흡수한다).
+3. 기동 시 `init_db` 가 테이블·빠진 컬럼·활성 뷰를 채운다. 버전 기록은 Alembic `202608161200` (ADD) / `U202608161200` (DROP 롤백) 이다.
    ```bash
-   alembic revision --autogenerate -m "init"
    alembic upgrade head
    ```
 
@@ -147,6 +146,6 @@ alembic/       비동기 마이그레이션
 
 - 파이프라인을 `BackgroundTasks`에서 실제 큐(Redis/arq/Celery)로 옮기고
   재시도 + 우선순위 큐(Pro/Team > Free)를 적용하세요.
-- 레이트 리밋 추가 (서비스 정책: 비로그인 20/분, 사용자 60/분, API 키 300/600).
+- 레이트 리밋은 프로세스 메모리로 이미 있다 (로그인·가입·업로드·API·Public API 등급별). 인스턴스를 늘리면 Redis 로 옮겨야 한다.
 - `ai_cost_cents` 기록, 월간 초기화 작업 실행, Stripe + 웹훅 연동.
 ```

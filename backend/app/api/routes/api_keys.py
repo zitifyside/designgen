@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.models.platform import ApiKey
 from app.schemas.common import Message
 from app.schemas.platform import ApiKeyCreate, ApiKeyIssued, ApiKeyOut
@@ -85,7 +86,7 @@ async def create_api_key(body: ApiKeyCreate, user: CurrentUser, db: DbDep):
 
 @router.delete("/{key_id}", response_model=Message)
 async def revoke_api_key(key_id: str, user: CurrentUser, db: DbDep):
-    row = await db.get(ApiKey, key_id)
+    row = await get_pub(db, ApiKey, key_id)
     if row is None or row.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
     row.revoked = True

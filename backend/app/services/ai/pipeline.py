@@ -22,10 +22,11 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.core.identity import get_pub
 from app.core.observability import build_event
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import Generation
@@ -88,10 +89,10 @@ async def run_generation(
 ) -> None:
     """백그라운드 작업의 진입점. 자체 DB 세션을 소유한다."""
     async with AsyncSessionLocal() as db:
-        gen = await db.get(Generation, generation_id)
+        gen = await get_pub(db, Generation, generation_id)
         if gen is None or gen.status in ("Cancelled", "Done"):
             return
-        project = await db.get(Project, gen.project_id)
+        project = await get_pub(db, Project, gen.project_id)
         if project is None:
             return
 
@@ -181,12 +182,20 @@ async def run_generation(
                         )
                     )
 
-            gen.status = "Done"
-            gen.stage = "Done"
-            gen.progress = 100
-            gen.is_warning = fallback
-            gen.warning_reason = FALLBACK_REASON if fallback else None
-            gen.completed_at = _now()
+            claimed = await _claim_active(
+                db,
+                generation_id,
+                status="Done",
+                stage="Done",
+                progress=100,
+                is_warning=fallback,
+                warning_reason=FALLBACK_REASON if fallback else None,
+                completed_at=_now(),
+            )
+            if not claimed:
+                await db.rollback()
+                return
+            await db.refresh(gen)
             project.status = "CompletedWarning" if fallback else "Completed"
             db.add(
                 build_event(
@@ -236,10 +245,10 @@ async def run_screen_generation(
     실패해도 기존 화면·DS 는 영향을 받지 않는다 (기획서 v0.5.0 §4 제약사항).
     """
     async with AsyncSessionLocal() as db:
-        gen = await db.get(Generation, generation_id)
+        gen = await get_pub(db, Generation, generation_id)
         if gen is None or gen.status in ("Cancelled", "Done"):
             return
-        project = await db.get(Project, gen.project_id)
+        project = await get_pub(db, Project, gen.project_id)
         if project is None:
             return
 
@@ -280,9 +289,12 @@ async def run_screen_generation(
             await db.commit()
 
             # 같은 화면이 이미 있으면 교체한다 (동일 화면 재생성).
+            # 확정 컨셉만 지운다 — 보관 중인 다른 컨셉의 같은 화면은 남긴다.
             await db.execute(
                 delete(Mockup).where(
-                    Mockup.project_id == project.id, Mockup.screen == screen
+                    Mockup.project_id == project.id,
+                    Mockup.screen == screen,
+                    Mockup.concept_label == confirmed.concept_label,
                 )
             )
             await db.flush()
@@ -312,12 +324,20 @@ async def run_screen_generation(
                     )
                 )
 
-            gen.status = "Done"
-            gen.stage = "Done"
-            gen.progress = 100
-            gen.is_warning = fallback
-            gen.warning_reason = FALLBACK_REASON if fallback else None
-            gen.completed_at = _now()
+            claimed = await _claim_active(
+                db,
+                generation_id,
+                status="Done",
+                stage="Done",
+                progress=100,
+                is_warning=fallback,
+                warning_reason=FALLBACK_REASON if fallback else None,
+                completed_at=_now(),
+            )
+            if not claimed:
+                await db.rollback()
+                return
+            await db.refresh(gen)
             # 화면 추가 후에도 프로젝트는 컨셉 확정 상태를 유지한다.
             project.status = "ConceptLocked"
             db.add(
@@ -351,7 +371,7 @@ async def run_screen_generation(
 
 async def _fail(db, generation_id: str, exc: Exception, *, reset_project_status: str):
     await db.rollback()
-    gen = await db.get(Generation, generation_id)
+    gen = await get_pub(db, Generation, generation_id)
     if gen is None or gen.status == "Cancelled":
         return
     gen.status = "Failed"
@@ -372,15 +392,28 @@ async def _fail(db, generation_id: str, exc: Exception, *, reset_project_status:
             payload={"generationId": gen.id, "projectId": gen.project_id, "kind": gen.kind},
         )
     )
-    proj = await db.get(Project, gen.project_id)
+    proj = await get_pub(db, Project, gen.project_id)
     if proj is not None:
         proj.status = reset_project_status
     # 시스템 장애 시 예약된 생성 횟수를 환불한다. 무차감 재시도 건은 예외다.
     if not gen.free_retry_used:
-        user = await db.get(User, gen.user_id)
+        user = await get_pub(db, User, gen.user_id)
         if user is not None:
-            refund_generation(user)
+            refund_generation(user, gen.quota_bucket, db)
     await db.commit()
+
+
+async def _claim_active(db, generation_id: str, **values) -> bool:
+    """Pending/Running 일 때만 상태 전이를 확정한다. 취소와 경합하면 False."""
+    result = await db.execute(
+        update(Generation)
+        .where(
+            Generation.id == generation_id,
+            Generation.status.in_(("Pending", "Running")),
+        )
+        .values(**values)
+    )
+    return result.rowcount > 0
 
 
 async def _set_stage(db, gen: Generation, stage: str) -> None:

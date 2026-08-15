@@ -35,18 +35,19 @@ import type {
   User,
 } from "./types";
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
 const TOKEN_KEY = "adg.tokens.v1";
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -55,20 +56,20 @@ interface TokenPair {
   refreshToken: string;
 }
 
+let memoryTokens: TokenPair | null = null;
+
 export function readTokens(): TokenPair | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(TOKEN_KEY);
-    return raw ? (JSON.parse(raw) as TokenPair) : null;
-  } catch {
-    return null;
-  }
+  return memoryTokens;
 }
 
 export function writeTokens(tokens: TokenPair | null) {
+  memoryTokens = tokens;
   if (typeof window === "undefined") return;
-  if (tokens) localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
-  else localStorage.removeItem(TOKEN_KEY);
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* 구버전 localStorage 잔여만 지운다. */
+  }
 }
 
 /**
@@ -101,10 +102,31 @@ interface RequestOptions {
   retried?: boolean;
 }
 
+function apiBasePath(): string {
+  const base = API_BASE.replace(/\/$/, "");
+  if (/^https?:\/\//i.test(base)) {
+    try {
+      return new URL(base).pathname.replace(/\/$/, "") || "";
+    } catch {
+      return "";
+    }
+  }
+  return base.startsWith("/") ? base : `/${base}`;
+}
+
+function resolveApiPath(path: string): string {
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const base = API_BASE.replace(/\/$/, "");
+  let p = path.startsWith("/") ? path : `/${path}`;
+  const prefix = apiBasePath();
+  if (prefix && (p === prefix || p.startsWith(`${prefix}/`))) {
+    p = p.slice(prefix.length) || "/";
+  }
+  return `${base}${p.startsWith("/") ? p : `/${p}`}`;
+}
+
 function buildUrl(path: string, query?: Query): string {
-  const base = path.startsWith("http")
-    ? path
-    : `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  const base = resolveApiPath(path);
   if (!query) return base;
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
@@ -114,14 +136,26 @@ function buildUrl(path: string, query?: Query): string {
   return qs ? `${base}?${qs}` : base;
 }
 
+let refreshInFlight: Promise<boolean> | null = null;
+
 async function refreshTokens(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = doRefreshTokens();
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function doRefreshTokens(): Promise<boolean> {
   const tokens = readTokens();
-  if (!tokens?.refreshToken) return false;
   try {
     const res = await fetch(buildUrl("/auth/refresh"), {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+      body: JSON.stringify({ refreshToken: tokens?.refreshToken }),
     });
     if (!res.ok) return false;
     const data = (await res.json()) as TokenPair;
@@ -152,6 +186,7 @@ export async function request<T>(
   try {
     res = await fetch(buildUrl(path, query), {
       method,
+      credentials: "include",
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
@@ -188,16 +223,20 @@ export async function request<T>(
     }
 
     let detail = `요청이 실패했습니다 (${res.status})`;
+    let code: string | undefined;
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") detail = data.detail;
-      else if (Array.isArray(data?.detail) && data.detail[0]?.msg) {
+      else if (data?.detail && typeof data.detail === "object") {
+        if (typeof data.detail.message === "string") detail = data.detail.message;
+        if (typeof data.detail.code === "string") code = data.detail.code;
+      } else if (Array.isArray(data?.detail) && data.detail[0]?.msg) {
         detail = data.detail.map((d: { msg: string }) => d.msg).join(", ");
       }
     } catch {
       /* JSON 이라고 했는데 파싱이 안 되면 기본 메시지를 쓴다. */
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, detail, code);
   }
 
   if (res.status === 204) return undefined as T;
@@ -206,13 +245,17 @@ export async function request<T>(
 }
 
 /** 인증이 필요한 파일 다운로드 — Blob 을 받아 브라우저 저장을 트리거한다. */
-export async function downloadFile(path: string, filename: string) {
+export async function downloadFile(path: string, filename: string, retried = false) {
   const tokens = readTokens();
   const res = await fetch(buildUrl(path), {
+    credentials: "include",
     headers: tokens?.accessToken
       ? { Authorization: `Bearer ${tokens.accessToken}` }
       : {},
   });
+  if (res.status === 401 && !retried && (await refreshTokens())) {
+    return downloadFile(path, filename, true);
+  }
   if (!res.ok) {
     let detail = `다운로드에 실패했습니다 (${res.status})`;
     try {
@@ -238,18 +281,26 @@ export async function downloadFile(path: string, filename: string) {
  * multipart 업로드. Content-Type 을 직접 지정하면 boundary 가 빠지므로
  * 브라우저가 채우도록 두고, 인증 헤더만 붙인다.
  */
-export async function uploadMultipart<T>(path: string, files: File[]): Promise<T> {
+export async function uploadMultipart<T>(
+  path: string,
+  files: File[],
+  retried = false,
+): Promise<T> {
   const form = new FormData();
   for (const file of files) form.append("files", file, file.name);
 
   const tokens = readTokens();
   const res = await fetch(buildUrl(path), {
     method: "POST",
+    credentials: "include",
     headers: tokens?.accessToken
       ? { Authorization: `Bearer ${tokens.accessToken}` }
       : {},
     body: form,
   });
+  if (res.status === 401 && !retried && (await refreshTokens())) {
+    return uploadMultipart<T>(path, files, true);
+  }
   if (!res.ok) {
     let detail = `업로드에 실패했습니다 (${res.status})`;
     try {
@@ -270,10 +321,10 @@ interface AuthResponse extends TokenPair {
 
 export const api = {
   auth: {
-    async login(email: string, password: string): Promise<User> {
+    async login(email: string, password: string, totpCode?: string): Promise<User> {
       const data = await request<AuthResponse>("/auth/login", {
         method: "POST",
-        body: { email, password },
+        body: { email, password, totpCode: totpCode || undefined },
         auth: false,
       });
       writeTokens({
@@ -282,10 +333,15 @@ export const api = {
       });
       return data.user;
     },
-    async signup(email: string, password: string, name: string): Promise<User> {
+    async signup(
+      email: string,
+      password: string,
+      name: string,
+      website = "",
+    ): Promise<User> {
       const data = await request<AuthResponse>("/auth/signup", {
         method: "POST",
-        body: { email, password, name },
+        body: { email, password, name, website },
         auth: false,
       });
       writeTokens({
@@ -298,12 +354,10 @@ export const api = {
     async logout() {
       const tokens = readTokens();
       try {
-        if (tokens?.refreshToken) {
-          await request("/auth/logout", {
-            method: "POST",
-            body: { refreshToken: tokens.refreshToken },
-          });
-        }
+        await request("/auth/logout", {
+          method: "POST",
+          body: tokens?.refreshToken ? { refreshToken: tokens.refreshToken } : {},
+        });
       } finally {
         writeTokens(null);
       }

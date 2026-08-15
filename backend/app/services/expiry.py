@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification
 from app.models.platform import ExportHistory
+from app.services.purge import purge_due_accounts
 
 # 만료 몇 시간 전부터 알릴지.
 WARN_WITHIN_HOURS = 24
@@ -21,6 +22,7 @@ WARN_WITHIN_HOURS = 24
 
 async def notify_expiring_exports(db: AsyncSession, user_id: str) -> int:
     """만료가 임박한 Export 에 대해 아직 보내지 않은 안내를 만든다."""
+    await purge_due_accounts(db)
     now = dt.datetime.now(dt.timezone.utc)
     deadline = now + dt.timedelta(hours=WARN_WITHIN_HOURS)
 

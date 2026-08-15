@@ -1,12 +1,14 @@
 """프로젝트별 디자인 시스템(토큰 세트)."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.models.design import DesignSystem
 from app.models.project import DS_MODE_UNIFIED, Project
 from app.schemas.design import DesignSystemOut, DesignSystemUpdate
@@ -15,7 +17,7 @@ router = APIRouter(prefix="/projects/{project_id}/design-systems", tags=["design
 
 
 async def _owned_project(db: DbDep, project_id: str, user_id: str) -> Project:
-    project = await db.get(Project, project_id)
+    project = await get_pub(db, Project, project_id)
     if project is None or project.owner_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -24,6 +26,19 @@ async def _owned_project(db: DbDep, project_id: str, user_id: str) -> Project:
 # Free 등급은 Color 만 수정할 수 있다 (기능정의서 v0.2.0 §5.1 권한 매트릭스).
 FREE_EDITABLE_TOKEN_CATEGORIES = {"color"}
 FULL_TOKEN_EDIT_PLANS = ("Pro", "Team", "Admin")
+_HEX_COLOR = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
+
+
+def _assert_safe_color_values(patch: dict[str, Any]) -> None:
+    color = patch.get("color")
+    if not isinstance(color, dict):
+        return
+    for key, value in color.items():
+        if isinstance(value, str) and not _HEX_COLOR.match(value):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"색상 '{key}' 는 #RGB 또는 #RRGGBB 형식이어야 합니다.",
+            )
 
 
 def _assert_editable_categories(plan: str, patch: dict[str, Any]) -> None:
@@ -117,6 +132,7 @@ async def update_design_system(
             detail="컨셉 확정 후 비확정 컨셉은 읽기 전용입니다. 확정 해제 후 수정해 주세요.",
         )
     _assert_editable_categories(user.plan, body.tokens)
+    _assert_safe_color_values(body.tokens)
 
     ds.tokens = _deep_merge(ds.tokens or {}, body.tokens)
     if body.concept_name is not None:

@@ -1,4 +1,4 @@
-"""첨부 파일 검증·텍스트 추출.
+﻿"""첨부 파일 검증·텍스트 추출.
 
 기능정의서 v0.2.0 §3.1 '파일 업로드' — 지원 형식·크기·개수 제한과
 **MIME + 확장자 + 매직 넘버 3중 체크**를 그대로 구현한다.
@@ -135,13 +135,14 @@ def _extract_text(ext: str, data: bytes) -> tuple[str, int | None]:
 def _extract_pdf(data: bytes) -> tuple[str, int | None]:
     try:
         import io
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
         from pypdf import PdfReader
     except ImportError:
         # pypdf 미설치 환경에서도 업로드 자체는 막지 않는다 — 텍스트만 비운다.
         return "", None
 
-    try:
+    def _parse() -> tuple[str, int | None]:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
             raise HTTPException(
@@ -149,13 +150,22 @@ def _extract_pdf(data: bytes) -> tuple[str, int | None]:
                 detail="암호가 걸린 PDF 는 분석할 수 없습니다.",
             )
         chunks: list[str] = []
-        for page in reader.pages[:50]:  # 과도한 문서로 인한 CPU 소모 방지
+        for page in reader.pages[:50]:
             chunks.append(page.extract_text() or "")
             if sum(len(c) for c in chunks) > MAX_EXTRACTED_CHARS:
                 break
         return "\n".join(chunks), len(reader.pages)
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(_parse).result(timeout=30)
     except HTTPException:
         raise
+    except FuturesTimeout:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="PDF 분석 시간이 초과되었습니다.",
+        ) from None
     except Exception:  # noqa: BLE001 — 손상 PDF 는 텍스트 없이 통과시킨다
         return "", None
 
@@ -163,12 +173,15 @@ def _extract_pdf(data: bytes) -> tuple[str, int | None]:
 def merge_requirements(base: str, attachments: list[tuple[str, str]]) -> str:
     """요건 텍스트에 첨부 추출분을 덧붙인다 (AI 파이프라인 입력).
 
-    어디서 온 내용인지 표시해, 모델이 사용자 지시와 참고 자료를 구분하게 한다.
+    사용자 입력은 USER_CONTEXT 블록으로 격리한다 (프롬프트 인젝션 방어).
     """
+    from app.core.text import sanitize_user_context, wrap_user_context
+
     parts = [base.strip()] if base and base.strip() else []
     for name, text in attachments:
-        cleaned = (text or "").strip()
+        cleaned = sanitize_user_context(text or "").strip()
         if not cleaned:
             continue
         parts.append(f"\n--- 첨부 자료: {name} ---\n{cleaned}")
-    return "\n".join(parts)
+    merged = "\n".join(parts)
+    return wrap_user_context(merged) if merged.strip() else merged

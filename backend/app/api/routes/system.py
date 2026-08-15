@@ -1,12 +1,11 @@
-"""공개 시스템 엔드포인트: 헬스 체크, 활성 공지, 피드백 제출."""
+﻿"""공개 시스템 엔드포인트: 헬스 체크, 활성 공지, 피드백 제출."""
 from __future__ import annotations
 
 import datetime as dt
 
 from fastapi import APIRouter
-from sqlalchemy import or_, select, text
+from sqlalchemy import or_, select
 
-from app.core.config import settings
 from app.core.deps import CurrentUser, DbDep
 from app.models.admin import Announcement, Feedback
 from app.schemas.admin import AnnouncementOut
@@ -17,9 +16,6 @@ router = APIRouter(tags=["system"])
 
 class HealthOut(CamelModel):
     status: str
-    environment: str
-    database: str
-    fake_ai_pipeline: bool
 
 
 class FeedbackIn(CamelModel):
@@ -29,18 +25,17 @@ class FeedbackIn(CamelModel):
 
 
 @router.get("/health", response_model=HealthOut)
-async def health(db: DbDep):
-    db_ok = "up"
-    try:
-        await db.execute(text("SELECT 1"))
-    except Exception:  # noqa: BLE001
-        db_ok = "down"
-    return HealthOut(
-        status="ok",
-        environment=settings.environment,
-        database=db_ok,
-        fake_ai_pipeline=settings.fake_ai_pipeline,
-    )
+async def health():
+    """의존성 상태를 공개하지 않는다 (운영심화 §7 정찰면 축소)."""
+    return HealthOut(status="ok")
+
+
+@router.api_route("/__crawl-trap", methods=["GET", "POST", "HEAD"], include_in_schema=False)
+async def crawl_trap():
+    """미들웨어가 먼저 차단한다. 라우트는 경로 정합용 자리만."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
 
 @router.get("/announcements", response_model=list[AnnouncementOut])

@@ -14,6 +14,7 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
+  const [website, setWebsite] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +31,7 @@ export default function SignupPage() {
     }
     setLoading(true);
     try {
-      await signup(email, password, name);
+      await signup(email, password, name, website);
       router.push("/dashboard");
     } catch (err) {
       setError(
@@ -49,6 +50,18 @@ export default function SignupPage() {
       </p>
 
       <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
+        <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden>
+          <label htmlFor="website">웹사이트</label>
+          <input
+            id="website"
+            name="website"
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+          />
+        </div>
         <Input
           id="name"
           label="이름"

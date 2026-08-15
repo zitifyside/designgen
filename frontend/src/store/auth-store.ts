@@ -4,7 +4,6 @@ import { create } from "zustand";
 import {
   ApiError,
   api,
-  readTokens,
   setUnauthorizedHandler,
   writeTokens,
 } from "@/lib/api";
@@ -17,8 +16,8 @@ interface AuthState {
   error: string | null;
 
   hydrate: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  login: (email: string, password: string, totpCode?: string) => Promise<void>;
+  signup: (email: string, password: string, name: string, website?: string) => Promise<void>;
   logout: () => Promise<void>;
   /** 생성·결제 후 쿼터·크레딧을 다시 읽어온다. */
   refreshUser: () => Promise<void>;
@@ -38,11 +37,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     setUnauthorizedHandler(() => {
       set({ user: null, isAuthenticated: false, hydrated: true });
     });
-    const tokens = readTokens();
-    if (!tokens?.accessToken) {
-      set({ hydrated: true, isAuthenticated: false, user: null });
-      return;
-    }
     try {
       const user = await api.auth.me();
       set({ user, isAuthenticated: true, hydrated: true });
@@ -53,15 +47,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  login: async (email, password) => {
+  login: async (email, password, totpCode) => {
     set({ error: null });
-    const user = await api.auth.login(email, password);
+    const user = await api.auth.login(email, password, totpCode);
     set({ user, isAuthenticated: true, hydrated: true });
   },
 
-  signup: async (email, password, name) => {
+  signup: async (email, password, name, website) => {
     set({ error: null });
-    const user = await api.auth.signup(email, password, name);
+    const user = await api.auth.signup(email, password, name, website);
     set({ user, isAuthenticated: true, hydrated: true });
   },
 

@@ -5,13 +5,16 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ApiError } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
-  const [email, setEmail] = useState("demo@designgenerator.io");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [needTotp, setNeedTotp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,14 +23,19 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, needTotp ? totpCode : undefined);
       router.push("/dashboard");
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "로그인에 실패했다. 잠시 후 다시 시도한다.",
-      );
+      if (err instanceof ApiError && err.code === "totp_required") {
+        setNeedTotp(true);
+        setError("2단계 인증 코드를 입력해 주세요.");
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -59,6 +67,18 @@ export default function LoginPage() {
           required
           autoComplete="current-password"
         />
+        {needTotp && (
+          <Input
+            id="totp"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            label="인증 코드"
+            value={totpCode}
+            onChange={(e) => setTotpCode(e.target.value)}
+            required
+          />
+        )}
         {error && (
           <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
             {error}

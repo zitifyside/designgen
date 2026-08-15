@@ -1,4 +1,4 @@
-"""관리자/운영 모델: 공지사항, 감사 로그, 피드백."""
+﻿"""관리자/운영 모델: 공지사항, 감사 로그, 피드백."""
 from __future__ import annotations
 
 import datetime as dt
@@ -8,18 +8,19 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
 from app.core.database import Base
-from app.models.base import TimestampMixin, id_column
+from app.models.base import AuditMixin, TimestampMixin, pk_column, public_id_column
 
 
-class Announcement(Base, TimestampMixin):
-    __tablename__ = "announcements"
+class Announcement(Base, AuditMixin):
+    __tablename__ = "mst_announcement"
 
-    id: Mapped[str] = id_column("an")
-    title: Mapped[str] = mapped_column(String(200))
-    body: Mapped[str] = mapped_column(Text, default="")
-    audience: Mapped[list] = mapped_column(JSON, default=list)  # 대상: ["all"|"free"|"pro"|"team"]
-    priority: Mapped[str] = mapped_column(String(10), default="normal")  # 우선순위: low|normal|high
-    status: Mapped[str] = mapped_column(String(12), default="Draft")  # 상태: Draft|Scheduled|Published|Archived
+    pk: Mapped[int] = pk_column("announcement_id")
+    id: Mapped[str] = public_id_column("an")
+    title: Mapped[str] = mapped_column("title_nm", String(200))
+    body: Mapped[str] = mapped_column("body_desc", Text, default="")
+    audience: Mapped[list] = mapped_column("audience_json", JSON, default=list)
+    priority: Mapped[str] = mapped_column("priority_cd", String(10), default="normal")
+    status: Mapped[str] = mapped_column("status_cd", String(12), default="Draft")
     starts_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -29,23 +30,27 @@ class Announcement(Base, TimestampMixin):
 
 
 class AuditLog(Base, TimestampMixin):
-    __tablename__ = "audit_logs"
+    __tablename__ = "log_audit"
 
-    id: Mapped[str] = id_column("al")
-    actor: Mapped[str] = mapped_column(String(200))  # 이메일 또는 'system'
-    action: Mapped[str] = mapped_column(String(60))
-    target: Mapped[str] = mapped_column(String(255), default="")
-    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    severity: Mapped[str] = mapped_column(String(10), default="info")  # 심각도: info|warning|critical
+    pk: Mapped[int] = pk_column("audit_id")
+    id: Mapped[str] = public_id_column("al")
+    actor: Mapped[str] = mapped_column("actor_nm", String(200))
+    action: Mapped[str] = mapped_column("action_cd", String(60))
+    target: Mapped[str] = mapped_column("target_nm", String(255), default="")
+    ip: Mapped[str | None] = mapped_column("ip_addr", String(64), nullable=True)
+    severity: Mapped[str] = mapped_column("severity_cd", String(10), default="info")
 
 
-class Feedback(Base, TimestampMixin):
-    __tablename__ = "feedback"
+class Feedback(Base, AuditMixin):
+    __tablename__ = "trx_feedback"
 
-    id: Mapped[str] = id_column("fb")
+    pk: Mapped[int] = pk_column("feedback_id")
+    id: Mapped[str] = public_id_column("fb")
     user_email: Mapped[str] = mapped_column(String(255))
-    category: Mapped[str] = mapped_column(String(20))  # 카테고리: bug|feature|feedback
-    title: Mapped[str] = mapped_column(String(200))
-    body: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[str] = mapped_column(String(12), default="new")  # 상태: new|in_review|resolved|closed
-    admin_response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str] = mapped_column("category_cd", String(20))
+    title: Mapped[str] = mapped_column("title_nm", String(200))
+    body: Mapped[str] = mapped_column("body_desc", Text, default="")
+    status: Mapped[str] = mapped_column("status_cd", String(12), default="new")
+    admin_response: Mapped[str | None] = mapped_column(
+        "admin_response_desc", Text, nullable=True
+    )

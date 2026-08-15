@@ -1,4 +1,4 @@
-"""관리자 콘솔: 사용자, 통계, 환불, 공지, 감사 로그, 피드백."""
+﻿"""관리자 콘솔: 사용자, 통계, 환불, 공지, 감사 로그, 피드백."""
 from __future__ import annotations
 
 import datetime as dt
@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.core.deps import AdminUser, DbDep
+from app.core.identity import get_pub
 from app.core.observability import TIER_AUDIT, log_event
 from app.models.admin import Announcement, AuditLog, Feedback
 from app.models.billing import Payment, Plan, Refund, Subscription
@@ -110,7 +111,12 @@ async def list_users(
 ):
     stmt = select(User)
     if q:
-        stmt = stmt.where((User.email.ilike(f"%{q}%")) | (User.name.ilike(f"%{q}%")))
+        from app.core.text import escape_like
+
+        needle = f"%{escape_like(q)}%"
+        stmt = stmt.where(
+            (User.email.ilike(needle, escape="\\")) | (User.name.ilike(needle, escape="\\"))
+        )
     if plan:
         stmt = stmt.where(User.plan == plan)
     if user_status:
@@ -133,7 +139,7 @@ async def list_users(
 
 @router.patch("/users/{user_id}/tier", response_model=Message)
 async def change_tier(user_id: str, body: TierChangeIn, admin: AdminUser, db: DbDep):
-    target = await db.get(User, user_id)
+    target = await get_pub(db, User, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     target.plan = body.plan
@@ -145,7 +151,7 @@ async def change_tier(user_id: str, body: TierChangeIn, admin: AdminUser, db: Db
 
 @router.patch("/users/{user_id}/suspend", response_model=Message)
 async def suspend_user(user_id: str, body: SuspendIn, admin: AdminUser, db: DbDep):
-    target = await db.get(User, user_id)
+    target = await get_pub(db, User, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     target.status = "Suspended" if body.suspend else "Active"
@@ -175,7 +181,7 @@ async def list_refunds(admin: AdminUser, db: DbDep):
 
 @router.patch("/refunds/{refund_id}", response_model=Message)
 async def resolve_refund(refund_id: str, body: RefundResolveIn, admin: AdminUser, db: DbDep):
-    r = await db.get(Refund, refund_id)
+    r = await get_pub(db, Refund, refund_id)
     if r is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Refund not found")
     r.status = "Approved" if body.approve else "Rejected"
@@ -203,7 +209,7 @@ async def create_announcement(body: AnnouncementIn, admin: AdminUser, db: DbDep)
 
 @router.patch("/announcements/{announcement_id}", response_model=AnnouncementOut)
 async def update_announcement(announcement_id: str, body: AnnouncementIn, admin: AdminUser, db: DbDep):
-    a = await db.get(Announcement, announcement_id)
+    a = await get_pub(db, Announcement, announcement_id)
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found")
     for field, value in body.model_dump().items():
@@ -214,7 +220,7 @@ async def update_announcement(announcement_id: str, body: AnnouncementIn, admin:
 
 @router.delete("/announcements/{announcement_id}", response_model=Message)
 async def delete_announcement(announcement_id: str, admin: AdminUser, db: DbDep):
-    a = await db.get(Announcement, announcement_id)
+    a = await get_pub(db, Announcement, announcement_id)
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found")
     await db.delete(a)
@@ -254,7 +260,7 @@ async def list_feedback(admin: AdminUser, db: DbDep, status_filter: str | None =
 
 @router.patch("/feedback/{feedback_id}", response_model=Message)
 async def resolve_feedback(feedback_id: str, body: FeedbackResolveIn, admin: AdminUser, db: DbDep):
-    f = await db.get(Feedback, feedback_id)
+    f = await get_pub(db, Feedback, feedback_id)
     if f is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feedback not found")
     f.status = body.status
@@ -282,7 +288,7 @@ async def list_templates_for_review(
 async def moderate_template(
     template_id: str, body: TemplateModerateIn, admin: AdminUser, db: DbDep
 ):
-    t = await db.get(Template, template_id)
+    t = await get_pub(db, Template, template_id)
     if t is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     if body.status in ("Rejected", "RequestChanges") and not body.reason.strip():
@@ -417,11 +423,11 @@ async def health_components(admin: AdminUser, db: DbDep):
         out.append(
             HealthComponentOut(
                 name="Database", status="operational",
-                detail=settings.database_url.split("://", 1)[0], latency_ms=latency,
+                detail="reachable", latency_ms=latency,
             )
         )
-    except Exception as exc:  # noqa: BLE001
-        out.append(HealthComponentOut(name="Database", status="down", detail=str(exc)[:120]))
+    except Exception:  # noqa: BLE001
+        out.append(HealthComponentOut(name="Database", status="down", detail="연결 실패"))
 
     out.append(
         HealthComponentOut(
@@ -482,14 +488,21 @@ async def list_logs(
         levels = [item.strip() for item in level.split(",") if item.strip()]
         stmt = stmt.where(AppLogEvent.level.in_(levels))
     if kind:
-        stmt = stmt.where(AppLogEvent.kind.ilike(kind + "%"))
+        from app.core.text import escape_like
+
+        stmt = stmt.where(AppLogEvent.kind.ilike(escape_like(kind) + "%", escape="\\"))
     if user_id:
         stmt = stmt.where(AppLogEvent.user_id == user_id)
     if trace_id:
         stmt = stmt.where(AppLogEvent.trace_id == trace_id)
     if q:
-        like = "%" + q + "%"
-        stmt = stmt.where(AppLogEvent.message.ilike(like) | AppLogEvent.path.ilike(like))
+        from app.core.text import escape_like
+
+        like = "%" + escape_like(q) + "%"
+        stmt = stmt.where(
+            AppLogEvent.message.ilike(like, escape="\\")
+            | AppLogEvent.path.ilike(like, escape="\\")
+        )
     rows = (
         await db.scalars(stmt.order_by(AppLogEvent.occurred_at.desc()).limit(limit))
     ).all()
@@ -564,7 +577,7 @@ async def user_detail(user_id: str, admin: AdminUser, db: DbDep):
     """사용자 한 명의 계정·구독·활동·보유 프로젝트를 모아 본다
     (기능정의서 v0.2.0 §3.3 사용자 목록·상세).
     """
-    target = await db.get(User, user_id)
+    target = await get_pub(db, User, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
@@ -662,7 +675,7 @@ async def unlock_user(user_id: str, admin: AdminUser, db: DbDep):
     잠금은 시간이 지나면 자동으로 풀리지만, 정당한 사용자가 즉시 들어와야 하는
     상황(오타 반복·공유 계정)에서 15분을 기다리게 할 이유는 없다.
     """
-    target = await db.get(User, user_id)
+    target = await get_pub(db, User, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     target.failed_login_attempts = 0

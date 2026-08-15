@@ -8,9 +8,8 @@ const isStaticExport = process.env.NEXT_STATIC_EXPORT === "1";
 // 붙이면 재빌드 없이 연결되고 CORS 도 필요 없다. 다른 도메인에 백엔드를 두면
 // NEXT_PUBLIC_API_BASE_URL 환경변수로 절대 URL 을 넘긴다.
 // (.env 계열은 .gitignore 대상이라 기본값을 코드에 둔다 — 시크릿이 아닌 공개 경로다.)
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  (isStaticExport ? "/api/v1" : "http://localhost:8000/api/v1");
+// 같은 출처(/api/v1)로 붙여 HttpOnly 쿠키가 로컬·배포 모두 동작하게 한다.
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
 const nextConfig = {
   reactStrictMode: true,
@@ -18,10 +17,18 @@ const nextConfig = {
   ...(isStaticExport
     ? {
         output: "export",
-        // 정적 export 에서는 next/image 최적화 서버가 없다.
         images: { unoptimized: true },
       }
-    : {}),
+    : {
+        async rewrites() {
+          return [
+            {
+              source: "/api/:path*",
+              destination: "http://127.0.0.1:8000/api/:path*",
+            },
+          ];
+        },
+      }),
 };
 
 export default nextConfig;

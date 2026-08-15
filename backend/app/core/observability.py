@@ -1,4 +1,4 @@
-"""관측 기반: 구조화 로깅 · 요청 상관관계 · 이벤트 적재 단일 진입점.
+﻿"""관측 기반: 구조화 로깅 · 요청 상관관계 · 이벤트 적재 단일 진입점.
 
 설계 원칙
   · **로그 경로의 실패가 업무 요청을 실패시키지 않는다.** 모든 공개 함수는 예외를
@@ -15,6 +15,7 @@ import datetime as dt
 import hashlib
 import json
 import logging
+import re
 import sys
 import uuid
 from typing import Any
@@ -44,6 +45,9 @@ SENSITIVE_KEY_PARTS = (
 )
 MAX_MASK_DEPTH = 8
 REDACTED = "[redacted]"
+AUTH_REDACTED = "[auth-redacted]"
+_EMAIL_RE = re.compile(r"(?i)\b([A-Z0-9._%+-]{1,64})@([A-Z0-9.-]+\.[A-Z]{2,})\b")
+_AUTH_PATH_MARKERS = ("/auth/login", "/auth/signup", "/auth/refresh", "/password", "/2fa")
 
 _LEVEL_ALIASES = {
     "warning": "warn",
@@ -80,7 +84,14 @@ def mask(value: Any, depth: int = 0) -> Any:
         lowered = value.lower()
         if lowered.startswith("bearer ") or value.startswith(("sk-", "ghp_", "AIza", "eyJ")):
             return REDACTED
+        if "@" in value and _EMAIL_RE.search(value):
+            return _EMAIL_RE.sub(lambda m: f"{m.group(1)[:2]}***@{m.group(2)}", value)
     return value
+
+
+def is_auth_path(path: str | None) -> bool:
+    value = path or ""
+    return any(marker in value for marker in _AUTH_PATH_MARKERS)
 
 
 def hash_ip(ip: str | None) -> str | None:
@@ -160,6 +171,10 @@ def build_event(
     normalized = normalize_level(level)
     if tier is None:
         tier = TIER_ERROR if normalized in ("error", "fatal") else TIER_TELEMETRY
+    safe_path = path or ""
+    if is_auth_path(safe_path):
+        message = AUTH_REDACTED
+        payload = {"_": AUTH_REDACTED}
     return AppLogEvent(
         event_id=str(uuid.uuid4()),
         occurred_at=dt.datetime.now(dt.timezone.utc),
@@ -260,6 +275,7 @@ __all__ = [
     "configure_logging",
     "hash_actor",
     "hash_ip",
+    "is_auth_path",
     "log_event",
     "logger",
     "mask",

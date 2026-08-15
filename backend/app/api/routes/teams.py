@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.identity import get_pub
 from app.models.platform import Team, TeamMembership
 from app.models.user import User
 from app.schemas.common import Message
@@ -38,12 +39,24 @@ async def _members(db, team_id: str) -> list[TeamMembership]:
     )
 
 
+def _member_role(team: Team, user: User, members: list[TeamMembership]) -> str | None:
+    if team.owner_id == user.id:
+        return "Owner"
+    return next((m.role for m in members if m.user_id == user.id), None)
+
+
+async def _require_team(db, team_id: str, user: User) -> tuple[Team, list[TeamMembership], str]:
+    team = await get_pub(db, Team, team_id)
+    members = await _members(db, team.id) if team is not None else []
+    role = _member_role(team, user, members) if team is not None else None
+    if team is None or role is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    return team, members, role
+
+
 async def _to_out(db, team: Team, user: User) -> TeamOut:
     members = await _members(db, team.id)
-    my_role = next(
-        (m.role for m in members if m.user_id == user.id),
-        "Owner" if team.owner_id == user.id else "Member",
-    )
+    my_role = _member_role(team, user, members) or "Owner"
     return TeamOut(
         id=team.id,
         name=team.name,
@@ -66,7 +79,7 @@ async def _my_team(db, user: User) -> Team | None:
     )
     if membership is None:
         return None
-    return await db.get(Team, membership.team_id)
+    return await get_pub(db, Team, membership.team_id)
 
 
 def _assert_can_manage(role: str) -> None:
@@ -115,11 +128,9 @@ async def create_team(body: TeamCreate, user: CurrentUser, db: DbDep):
 async def invite_member(
     team_id: str, body: TeamMemberInvite, user: CurrentUser, db: DbDep
 ):
-    team = await db.get(Team, team_id)
-    if team is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    team, _members_rows, role = await _require_team(db, team_id, user)
+    _assert_can_manage(role)
     out = await _to_out(db, team, user)
-    _assert_can_manage(out.my_role)
 
     if out.seats_used >= team.seat_limit:
         raise HTTPException(
@@ -156,13 +167,11 @@ async def update_member_role(
     user: CurrentUser,
     db: DbDep,
 ):
-    team = await db.get(Team, team_id)
-    if team is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    team, _members_rows, role = await _require_team(db, team_id, user)
+    _assert_can_manage(role)
     out = await _to_out(db, team, user)
-    _assert_can_manage(out.my_role)
 
-    membership = await db.get(TeamMembership, member_id)
+    membership = await get_pub(db, TeamMembership, member_id)
     if membership is None or membership.team_id != team.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
     if membership.role == "Owner":
@@ -183,13 +192,10 @@ async def update_member_role(
 
 @router.delete("/{team_id}/members/{member_id}", response_model=Message)
 async def remove_member(team_id: str, member_id: str, user: CurrentUser, db: DbDep):
-    team = await db.get(Team, team_id)
-    if team is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-    out = await _to_out(db, team, user)
-    _assert_can_manage(out.my_role)
+    team, _members_rows, role = await _require_team(db, team_id, user)
+    _assert_can_manage(role)
 
-    membership = await db.get(TeamMembership, member_id)
+    membership = await get_pub(db, TeamMembership, member_id)
     if membership is None or membership.team_id != team.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
     if membership.role == "Owner":

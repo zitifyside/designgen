@@ -33,7 +33,6 @@ class ProjectUpdate(CamelModel):
     name: str | None = None
     description: str | None = None
     platform: str | None = None
-    status: str | None = None
     is_favorite: bool | None = None
     requirements_text: str | None = None
     concept_count: int | None = None

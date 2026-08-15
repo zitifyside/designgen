@@ -16,6 +16,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN adduser --disabled-password --gecos "" --uid 10001 appuser \
+    && mkdir -p /tmp \
+    && chown -R appuser:appuser /app /tmp
+
+USER appuser
+
 # Cloud Run 은 PORT 환경변수를 주입한다 (기본 8080).
 ENV PORT=8080
 EXPOSE 8080

@@ -1,4 +1,4 @@
-"""비동기 SQLAlchemy 엔진 + 세션 팩토리.
+﻿"""비동기 SQLAlchemy 엔진 + 세션 팩토리.
 
 기본값은 SQLite이며, DATABASE_URL을 postgresql+asyncpg://... URL로 설정하면 전환됩니다.
 """
@@ -173,16 +173,40 @@ def _add_missing_columns(conn) -> list[str]:
 
 
 async def init_db() -> None:
-    """테이블을 만들고, 기존 테이블에 빠진 컬럼을 채운다.
+    """레거시 이름을 맞춘 뒤 테이블·빠진 컬럼을 채운다."""
+    from sqlalchemy.orm import Session
 
-    이름 변경·타입 변경처럼 데이터 해석이 필요한 변경은 다루지 않는다 —
-    그 단계에서는 Alembic 을 붙인다.
-    """
-    # create_all 이전에 Base.metadata에 등록되도록 모델을 import합니다.
     from app import models  # noqa: F401
+    from app.core.schema_align import (
+        align_legacy_schema,
+        needs_identity_rebuild,
+        wipe_domain_tables,
+    )
+    from app.core.scd import register_scd
+    from app.core.soft_delete import create_active_views, register_soft_delete
+
+    register_soft_delete(Session)
+    register_scd(Session)
 
     async with engine.begin() as conn:
+        renamed = await conn.run_sync(align_legacy_schema)
+        if await conn.run_sync(needs_identity_rebuild):
+            dialect = conn.dialect.name
+            if dialect != "sqlite":
+                raise RuntimeError(
+                    "문자열 PK 스키마는 SQLite 에서만 자동으로 비운다. "
+                    "Postgres 는 Alembic 202608161200 을 적용하라. "
+                    "기동 중 DROP CASCADE 는 하지 않는다."
+                )
+            wiped = await conn.run_sync(wipe_domain_tables)
+            logger.warning(
+                "문자열 PK 스키마를 BIGINT+public_id 로 재생성한다. 로컬 행은 비운다: %s",
+                ", ".join(wiped[:20]),
+            )
         await conn.run_sync(Base.metadata.create_all)
         added = await conn.run_sync(_add_missing_columns)
+        await conn.run_sync(create_active_views)
+    if renamed:
+        logger.info("스키마 정렬 — 이름 변경: %s", ", ".join(renamed))
     if added:
         logger.info("스키마 보정 — 컬럼 추가: %s", ", ".join(added))

@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core.deps import ApiKeyUser, DbDep
+from app.core.identity import get_pub
 from app.core.observability import log_event
 from app.models.design import DesignSystem, Mockup
 from app.models.project import Project
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/public", tags=["public-api"])
 
 
 async def _owned(db: DbDep, project_id: str, user_id: str) -> Project:
-    project = await db.get(Project, project_id)
+    project = await get_pub(db, Project, project_id)
     if project is None or project.owner_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project

@@ -1,4 +1,4 @@
-"""문서 v0.5.0 핵심 흐름 E2E 스모크 (in-process ASGI).
+﻿"""문서 v0.5.0 핵심 흐름 E2E 스모크 (in-process ASGI).
 
 서버를 띄우지 않고 ASGI 앱을 직접 호출해 아래 규칙을 전수 검증한다.
   · 시안 = 동일 화면의 구조 변형 (서로 다른 화면의 집합이 아니다)
@@ -51,6 +51,13 @@ from app.seed import seed  # noqa: E402
 
 API = "/api/v1"
 FAILS: list[str] = []
+
+
+def api_url(path: str) -> str:
+    """Export downloadUrl 은 /exports/... 이고 예전 값은 /api/v1/exports/... 일 수 있다."""
+    if path.startswith("/api/"):
+        return path
+    return f"{API}{path if path.startswith('/') else '/' + path}"
 
 
 def check(label: str, ok: bool, extra: str = "") -> None:
@@ -188,10 +195,10 @@ async def main() -> None:
         r = await c.post(f"{API}/projects/{pid}/exports", headers=h, json={"format": "json", "scope": "concept"})
         check("export json", r.status_code == 201, r.text[:200])
         exp = r.json()
-        r = await c.get(exp["downloadUrl"], headers=h)
+        r = await c.get(api_url(exp["downloadUrl"]), headers=h)
         check("  download", r.status_code == 200 and "$value" in r.text, str(r.status_code))
         r = await c.post(f"{API}/projects/{pid}/exports", headers=h, json={"format": "css", "scope": "concept"})
-        r = await c.get(r.json()["downloadUrl"], headers=h)
+        r = await c.get(api_url(r.json()["downloadUrl"]), headers=h)
         check("export css", r.status_code == 200 and "--ds-color-primary" in r.text, r.text[:120])
         r = await c.get(f"{API}/exports", headers=h)
         check("export 이력", len(r.json()) >= 2, str(len(r.json())))
@@ -463,7 +470,9 @@ async def main() -> None:
         check("  다른 사용자는 영향 없음", rf2.status_code in (202, 402), str(rf2.status_code))
 
         async with AsyncSessionLocal() as db:
-            row = await db.get(Generation, stub_id)
+            from app.core.identity import get_pub
+
+            row = await get_pub(db, Generation, stub_id)
             await db.delete(row)
             await db.commit()
 
@@ -491,7 +500,189 @@ async def main() -> None:
             r = await c.post(f"{API}/teams/{tmid}/members", headers=ah, json={"email": "demo@designgenerator.io", "role": "Member"})
             check("팀원 초대", r.status_code == 201, r.text[:160])
 
-    print("\n" + ("전부 통과" if not FAILS else f"실패 {len(FAILS)}건: {FAILS}"))
+        # 16) 2FA — 켜면 비밀번호만으로는 로그인되지 않는다.
+        import pyotp
+
+        r = await c.post(
+            f"{API}/auth/signup",
+            json={"email": "tfa.smoke@test.io", "password": "Tfa-adg-2026", "name": "이팩"},
+        )
+        check("2FA 계정 가입", r.status_code == 201, str(r.status_code))
+        th = {"Authorization": f"Bearer {r.json()['accessToken']}"}
+        r = await c.post(f"{API}/users/2fa/setup", headers=th)
+        secret = r.json().get("secret", "")
+        code = pyotp.TOTP(secret).now()
+        r = await c.post(f"{API}/users/2fa/verify", headers=th, json={"code": code})
+        check("2FA 활성화", r.status_code == 200, r.text[:80])
+        r = await c.post(
+            f"{API}/auth/login",
+            json={"email": "tfa.smoke@test.io", "password": "Tfa-adg-2026"},
+        )
+        detail = r.json().get("detail") if r.headers.get("content-type", "").startswith("application/json") else None
+        totp_asked = r.status_code == 401 and (
+            (isinstance(detail, dict) and detail.get("code") == "totp_required")
+            or detail == "totp_required"
+        )
+        check("2FA 없으면 로그인 거부", totp_asked, f"{r.status_code} {r.text[:120]}")
+        r = await c.post(
+            f"{API}/auth/login",
+            json={
+                "email": "tfa.smoke@test.io",
+                "password": "Tfa-adg-2026",
+                "totpCode": pyotp.TOTP(secret).now(),
+            },
+        )
+        check("2FA 코드로 로그인", r.status_code == 200, r.text[:120])
+
+        # 17) 세션 폐기 후 access 는 즉시 거절한다.
+        r1 = await c.post(
+            f"{API}/auth/login",
+            json={"email": "demo@designgenerator.io", "password": "demo1234"},
+        )
+        a1 = r1.json()["accessToken"]
+        r2 = await c.post(
+            f"{API}/auth/login",
+            headers={"User-Agent": "RevokeProbe/1"},
+            json={"email": "demo@designgenerator.io", "password": "demo1234"},
+        )
+        a2 = r2.json()["accessToken"]
+        await c.post(f"{API}/users/sessions/logout-all", headers={"Authorization": f"Bearer {a1}"})
+        r = await c.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {a2}"})
+        check("폐기된 access 즉시 401", r.status_code == 401, str(r.status_code))
+        r = await c.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {a1}"})
+        check("현재 기기 access 유지", r.status_code == 200, str(r.status_code))
+        h = {"Authorization": f"Bearer {a1}"}
+
+        # 18) Export 선택 범위가 다운로드에 유지된다.
+        r = await c.post(
+            f"{API}/projects/{pid}/exports",
+            headers=h,
+            json={
+                "format": "json",
+                "scope": "concept",
+                "screen": "dashboard",
+                "variantIndexes": [0],
+            },
+        )
+        check("Export 시안 1개 생성", r.status_code == 201, r.text[:160])
+        exp_one = r.json()
+        check(
+            "  downloadUrl 이중 prefix 없음",
+            "/api/v1/api/v1/" not in exp_one.get("downloadUrl", ""),
+            exp_one.get("downloadUrl", ""),
+        )
+        r = await c.get(api_url(exp_one["downloadUrl"]), headers=h)
+        payload = r.json() if r.status_code == 200 else {}
+        check(
+            "  다운로드 시안 1개",
+            r.status_code == 200 and len(payload.get("mockups", [])) == 1,
+            f"{r.status_code} {len(payload.get('mockups', []))}",
+        )
+
+        # 19) 크레딧 차감 환불이 월간이 아니라 크레딧을 되돌린다.
+        from app.core.database import AsyncSessionLocal
+        from app.models.generation import Generation as _Gen
+        from app.models.user import User as _User
+        from sqlalchemy import select as _sel
+
+        r = await c.post(
+            f"{API}/projects",
+            headers=fh,
+            json={"name": "환불버킷", "requirementsText": "환불 검증용 랜딩"},
+        )
+        check("환불 검증 프로젝트", r.status_code == 201, str(r.status_code))
+        rp = r.json()["id"]
+        async with AsyncSessionLocal() as db:
+            free = await db.scalar(_sel(_User).where(_User.email == "free.smoke@test.io"))
+            check("  Free 계정 존재", free is not None)
+            if free is not None:
+                free.monthly_used = 3
+                free.credits = 0
+                stub = _Gen(
+                    project_id=rp,
+                    user_id=free.id,
+                    status="Running",
+                    stage="InputAnalyzer",
+                    progress=0,
+                    quota_bucket="credit",
+                )
+                db.add(free)
+                db.add(stub)
+                await db.commit()
+                stub_id = stub.id
+            else:
+                stub_id = None
+        if stub_id:
+            r = await c.post(f"{API}/generations/{stub_id}/cancel", headers=fh)
+            check("  크레딧 건 취소", r.status_code == 200, r.text[:80])
+            async with AsyncSessionLocal() as db:
+                free = await db.scalar(_sel(_User).where(_User.email == "free.smoke@test.io"))
+                used = free.monthly_used if free else None
+                credits = free.credits if free else None
+            check(
+                "  환불이 크레딧 버킷",
+                used == 3 and credits == 1,
+                f"used={used} credits={credits}",
+            )
+
+        # 20) 사이트 보안 조치
+        r = await c.post(
+            f"{API}/auth/signup",
+            json={
+                "email": "bot.smoke@test.io",
+                "password": "Bot-adg-2026",
+                "name": "봇",
+                "website": "https://spam.example",
+            },
+        )
+        check("허니팟 가입 거부", r.status_code == 400, str(r.status_code))
+        r = await c.get(f"{API}/auth/me", headers={"User-Agent": "GPTBot/1.0"})
+        check("GPTBot 403", r.status_code == 403, str(r.status_code))
+        r = await c.get(
+            f"{API}/auth/me",
+            headers={"User-Agent": "Mozilla/5.0 KakaoTalk/10.2.1"},
+        )
+        check("카카오 인앱은 봇 차단 아님", r.status_code != 403, str(r.status_code))
+        r = await c.patch(
+            f"{API}/projects/{pid}",
+            headers=h,
+            json={"status": "Completed"},
+        )
+        check(
+            "프로젝트 status PATCH 무시",
+            r.status_code == 200 and r.json().get("status") != "Completed",
+            f"{r.status_code} {r.json().get('status') if r.status_code == 200 else r.text[:80]}",
+        )
+        r = await c.patch(
+            f"{API}/projects/{pid}/design-systems/B",
+            headers=h,
+            json={"tokens": {"color": {"primary": "red; } body { display:none"}}},
+        )
+        check("비 hex 색상 거부", r.status_code == 400, str(r.status_code))
+        r = await c.post(
+            f"{API}/auth/login",
+            headers={"Origin": "https://evil.example"},
+            json={"email": "demo@designgenerator.io", "password": "demo1234"},
+        )
+        check("CSRF Origin 거부", r.status_code == 403, str(r.status_code))
+        r = await c.get(f"{API}/health")
+        check(
+            "공개 헬스는 status 만",
+            r.status_code == 200 and set(r.json()) <= {"status"},
+            r.text[:80],
+        )
+        r = await c.get(f"{API}/auth/me", headers={"User-Agent": ""})
+        check("빈 UA 거부", r.status_code == 403, str(r.status_code))
+        r = await c.get(
+            f"{API}/__crawl-trap",
+            headers={"X-Forwarded-For": "203.0.113.50", "User-Agent": "Mozilla/5.0"},
+        )
+        check("크롤 함정 404", r.status_code == 404, str(r.status_code))
+        r = await c.get(
+            f"{API}/auth/me",
+            headers={"X-Forwarded-For": "203.0.113.50", "User-Agent": "Mozilla/5.0"},
+        )
+        check("함정 IP 후속 403", r.status_code == 403, str(r.status_code))
 
 
 if __name__ == "__main__":

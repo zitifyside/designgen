@@ -62,11 +62,14 @@ class SignupIn(CamelModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=1, max_length=120)
+    # 허니팟 — 사람은 비워 두고 봇만 채운다. 채워져 있으면 가입을 거절한다.
+    website: str = Field(default="", max_length=200)
 
 
 class LoginIn(CamelModel):
     email: EmailStr
     password: str
+    totp_code: str | None = Field(default=None, max_length=16)
 
 
 class TokenPair(CamelModel):
@@ -77,7 +80,7 @@ class TokenPair(CamelModel):
 
 
 class RefreshIn(CamelModel):
-    refresh_token: str
+    refresh_token: str | None = None
 
 
 class PasswordChangeIn(CamelModel):
@@ -107,12 +110,12 @@ class TwoFactorSetupOut(CamelModel):
 
 
 class TwoFactorVerifyIn(CamelModel):
-    code: str = Field(min_length=6, max_length=6)
+    code: str = Field(min_length=6, max_length=16)
 
 
 class TwoFactorDisableIn(CamelModel):
     password: str
-    code: str = Field(min_length=6, max_length=6)
+    code: str = Field(min_length=6, max_length=16)
 
 
 class AccountDeleteIn(CamelModel):

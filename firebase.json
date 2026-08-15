@@ -10,6 +10,30 @@
         "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
       },
       {
+        "source": "/__crawl-trap",
+        "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/wp-admin",
+        "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/wp-login.php",
+        "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/xmlrpc.php",
+        "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/.env",
+        "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/.git/**",
+        "run": { "serviceId": "adg-api", "region": "asia-northeast3" }
+      },
+      {
         "source": "/projects/*/export",
         "destination": "/projects/__id__/export.html"
       },
@@ -28,14 +52,22 @@
         "headers": [
           { "key": "X-Content-Type-Options", "value": "nosniff" },
           { "key": "X-Frame-Options", "value": "DENY" },
-          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+          { "key": "Referrer-Policy", "value": "no-referrer" },
           {
             "key": "Permissions-Policy",
-            "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), midi=(), interest-cohort=(), browsing-topics=()"
+          },
+          {
+            "key": "Cross-Origin-Resource-Policy",
+            "value": "same-site"
+          },
+          {
+            "key": "X-Permitted-Cross-Domain-Policies",
+            "value": "none"
           },
           {
             "key": "Strict-Transport-Security",
-            "value": "max-age=31536000; includeSubDomains"
+            "value": "max-age=31536000; includeSubDomains; preload"
           },
           {
             "key": "Cache-Control",
@@ -47,7 +79,7 @@
           },
           {
             "key": "X-Robots-Tag",
-            "value": "noindex, nofollow"
+            "value": "noindex, nofollow, noarchive, nosnippet"
           },
           {
             "key": "Content-Security-Policy",

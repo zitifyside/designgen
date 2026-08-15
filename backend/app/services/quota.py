@@ -31,6 +31,10 @@ UNIFIED_DS_PLANS = ("Pro", "Team", "Admin")
 # 화면 추가 생성의 구조 변형은 3종 고정 (시안 수 선택 미적용).
 SCREEN_ADD_VARIANTS = 3
 
+QUOTA_MONTHLY = "monthly"
+QUOTA_CREDIT = "credit"
+QUOTA_UNLIMITED = "unlimited"
+
 
 def plan_limits(plan: str) -> tuple[int, int, tuple[int, ...]]:
     return PLAN_LIMITS.get(plan, PLAN_LIMITS["Free"])
@@ -77,22 +81,32 @@ def require_plan(user: User, plans: tuple[str, ...], feature: str) -> None:
         )
 
 
-async def consume_generation(db, user: User, *, note: str = "generation") -> None:
+async def consume_generation(db, user: User, *, note: str = "generation") -> str:
     """`user`에 대해 생성 1회를 예약하거나 402/403을 발생시킨다.
 
+    깎은 버킷 이름을 돌려준다. 환불은 그 이름을 그대로 넘긴다.
     감싸는 트랜잭션의 커밋은 호출자가 책임진다.
     """
+    from app.core.identity import get_pub
+
+    locked = await get_pub(db, type(user), user.id, for_update=True)
+    if locked is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.monthly_used = locked.monthly_used
+    user.credits = locked.credits
+    user.plan = locked.plan
+
     monthly_limit, _, _ = plan_limits(user.plan)
 
     # 무제한 플랜: 사용량만 기록한다.
     if monthly_limit == -1:
         user.monthly_used += 1
-        return
+        return QUOTA_UNLIMITED
 
     # 1) 월간 무료 제공량.
     if user.monthly_used < monthly_limit:
         user.monthly_used += 1
-        return
+        return QUOTA_MONTHLY
 
     # 2) 구매한 크레딧.
     if user.credits > 0:
@@ -106,7 +120,7 @@ async def consume_generation(db, user: User, *, note: str = "generation") -> Non
                 note=note,
             )
         )
-        return
+        return QUOTA_CREDIT
 
     # 3) 차단.
     log_event(
@@ -123,9 +137,40 @@ async def consume_generation(db, user: User, *, note: str = "generation") -> Non
     )
 
 
-def refund_generation(user: User) -> None:
-    """취소/실패 시 생성 1회를 되돌린다 (가장 저렴한 버킷부터)."""
+def refund_generation(user: User, bucket: str | None = None, db=None) -> None:
+    """취소/실패 시 생성 1회를 그 때 깎은 버킷으로 되돌린다."""
+    if bucket == QUOTA_CREDIT:
+        user.credits += 1
+        if db is not None:
+            db.add(
+                CreditTransaction(
+                    user_id=user.id,
+                    type="refund",
+                    amount=1,
+                    balance_after=user.credits,
+                    note="generation_refund",
+                )
+            )
+        return
+    if bucket == QUOTA_UNLIMITED:
+        if user.monthly_used > 0:
+            user.monthly_used -= 1
+        return
+    # monthly 또는 구 데이터(버킷 없음) — 월간을 우선 되돌린다.
+    # 구 데이터에서 크레딧을 깎았다면 월한이 차 있으므로 monthly_used>0 이다.
+    # 그 경우 월간을 되돌리면 한 칸이 생긴다. 버킷을 모르면 그 편이
+    # 크레딧을 유령 지급하는 것보다 안전하다. 신규 건은 버킷이 있다.
     if user.monthly_used > 0:
         user.monthly_used -= 1
-    else:
-        user.credits += 1
+        return
+    user.credits += 1
+    if db is not None:
+        db.add(
+            CreditTransaction(
+                user_id=user.id,
+                type="refund",
+                amount=1,
+                balance_after=user.credits,
+                note="generation_refund",
+            )
+        )
