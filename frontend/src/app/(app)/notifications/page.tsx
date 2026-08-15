@@ -91,7 +91,7 @@ export default function NotificationsPage() {
                   <span className="text-sm font-semibold text-ink-900">
                     {n.title}
                   </span>
-                  <span className="ml-auto text-[10px] text-ink-400">
+                  <span className="ml-auto text-[10px] text-ink-500">
                     {new Date(n.createdAt).toLocaleString("ko-KR")}
                   </span>
                 </div>
@@ -101,7 +101,7 @@ export default function NotificationsPage() {
                     <Link
                       href={n.href}
                       onClick={() => markRead(n.id)}
-                      className="font-medium text-brand-600 hover:underline"
+                      className="font-medium text-brand-700 hover:underline"
                     >
                       관련 페이지로
                     </Link>
@@ -116,7 +116,7 @@ export default function NotificationsPage() {
                   )}
                   <button
                     onClick={() => remove(n.id)}
-                    className="text-ink-400 hover:text-red-600"
+                    className="text-ink-500 hover:text-red-700"
                   >
                     삭제
                   </button>

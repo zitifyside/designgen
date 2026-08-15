@@ -186,7 +186,7 @@ export function OnboardingTour() {
               />
             ))}
           </div>
-          <span className="text-[10px] text-ink-400">
+          <span className="text-[10px] text-ink-500">
             {index + 1} / {STEPS.length}
           </span>
         </div>
@@ -198,7 +198,7 @@ export function OnboardingTour() {
           <Link
             href={step.link.href}
             onClick={() => void finish()}
-            className="mt-2.5 inline-block text-[11px] font-medium text-brand-600 hover:underline"
+            className="mt-2.5 inline-block text-[11px] font-medium text-brand-700 hover:underline"
           >
             {step.link.label} →
           </Link>

@@ -69,7 +69,7 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <div className="my-4 flex items-center gap-3 text-[10px] text-ink-400">
+      <div className="my-4 flex items-center gap-3 text-[10px] text-ink-500">
         <span className="h-px flex-1 bg-ink-200" />
         OR
         <span className="h-px flex-1 bg-ink-200" />
@@ -91,7 +91,7 @@ export default function LoginPage() {
 
       <p className="mt-5 text-center text-xs text-ink-500">
         아직 계정이 없는가? {" "}
-        <Link href="/signup" className="font-medium text-brand-600 hover:underline">
+        <Link href="/signup" className="font-medium text-brand-700 hover:underline">
           회원가입
         </Link>
       </p>

@@ -129,7 +129,7 @@ export default function DashboardPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-surface px-3 py-2 text-xs text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
               >
                 <span className="font-medium text-ink-900">{p.name}</span>
-                <span className="text-[10px] text-ink-400">
+                <span className="text-[10px] text-ink-500">
                   {relativeTime(p.updatedAt)}
                 </span>
               </Link>
@@ -162,7 +162,7 @@ export default function DashboardPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="이름으로 검색"
-              className="w-44 rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className="w-44 rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs placeholder:text-ink-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
             <Tabs
               size="sm"
@@ -178,7 +178,7 @@ export default function DashboardPage() {
         </div>
 
         {loading && projects.length === 0 ? (
-          <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-400">
+          <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-500">
             프로젝트를 불러오는 중…
           </div>
         ) : others.length === 0 ? (

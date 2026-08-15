@@ -106,7 +106,7 @@ export default function UsagePage() {
           description="전체 생성과 화면 추가 생성을 합산한 수치이다."
         />
         {loading ? (
-          <p className="py-6 text-center text-xs text-ink-400">불러오는 중…</p>
+          <p className="py-6 text-center text-xs text-ink-500">불러오는 중…</p>
         ) : (
           <div className="flex h-32 items-end gap-[2px]">
             {byDay.map(([date, count]) => (

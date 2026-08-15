@@ -64,7 +64,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   if (!hydrated || !user) {
     return (
-      <div className="flex h-screen items-center justify-center text-sm text-ink-400">
+      <div className="flex h-screen items-center justify-center text-sm text-ink-500">
         세션 확인 중…
       </div>
     );
@@ -79,7 +79,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             🛡
           </div>
           <h1 className="mt-4 text-base font-semibold">관리자 전용 영역</h1>
-          <p className="mt-2 text-xs text-ink-400">
+          <p className="mt-2 text-xs text-ink-500">
             본 영역은 <Badge tone="ink">Admin</Badge> 등급에서만 접근 가능하다.
             현재 등급은 <Badge tone="warning">{user.plan}</Badge>.
           </p>

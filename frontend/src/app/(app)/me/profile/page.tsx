@@ -42,7 +42,7 @@ export default function ProfilePage() {
   };
 
   if (!user) {
-    return <div className="text-sm text-ink-400">불러오는 중…</div>;
+    return <div className="text-sm text-ink-500">불러오는 중…</div>;
   }
 
   return (
@@ -109,7 +109,7 @@ export default function ProfilePage() {
                 </button>
               ))}
             </div>
-            <p className="mt-1 text-[10px] text-ink-400">
+            <p className="mt-1 text-[10px] text-ink-500">
               일본어·중국어는 v2.0 예정이다.
             </p>
           </div>

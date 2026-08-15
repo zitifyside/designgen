@@ -187,7 +187,7 @@ export default function AdminLogsPage() {
                 onClick={() => setKind(k.kind)}
                 className="rounded-full border border-ink-200 bg-surface px-2.5 py-1 text-[11px] text-ink-600 hover:bg-ink-50"
               >
-                {k.kind} <span className="text-ink-400">{k.count}</span>
+                {k.kind} <span className="text-ink-500">{k.count}</span>
               </button>
             ))}
           </div>
@@ -229,14 +229,14 @@ export default function AdminLogsPage() {
                 <td className="px-4 py-2.5 text-ink-500">
                   {l.statusCode ?? "—"}
                   {l.durationMs != null && (
-                    <span className="ml-1 text-ink-400">{l.durationMs}ms</span>
+                    <span className="ml-1 text-ink-500">{l.durationMs}ms</span>
                   )}
                 </td>
               </tr>
             ))}
             {logs.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-ink-400">
+                <td colSpan={6} className="px-4 py-10 text-center text-ink-500">
                   {loading ? "불러오는 중…" : "조건에 맞는 로그가 없다."}
                 </td>
               </tr>
@@ -346,7 +346,7 @@ function Metric({
         className={cn(
           "mt-1 text-2xl font-semibold",
           tone === "danger"
-            ? "text-red-600"
+            ? "text-red-700"
             : tone === "warning"
               ? "text-amber-600"
               : "text-ink-900",

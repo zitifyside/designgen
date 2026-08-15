@@ -108,7 +108,7 @@ export default function AdminAuditLogsPage() {
                 <td className="px-4 py-3 font-medium text-ink-900">{l.actor}</td>
                 <td className="px-4 py-3 font-mono text-ink-700">{l.action}</td>
                 <td className="px-4 py-3 text-ink-600">{l.target}</td>
-                <td className="px-4 py-3 text-ink-400">{l.ip ?? "—"}</td>
+                <td className="px-4 py-3 text-ink-500">{l.ip ?? "—"}</td>
                 <td className="px-4 py-3">
                   <Badge tone={TONE[l.severity] ?? "neutral"}>{l.severity}</Badge>
                 </td>
@@ -116,7 +116,7 @@ export default function AdminAuditLogsPage() {
             ))}
             {logs.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-ink-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
                   기록이 없다.
                 </td>
               </tr>

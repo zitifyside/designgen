@@ -158,7 +158,7 @@ export default function ApiKeysPage() {
                   <td className="py-2 text-right">
                     {!k.revoked && (
                       <button
-                        className="text-red-600 hover:underline"
+                        className="text-red-700 hover:underline"
                         onClick={async () => {
                           await api.apiKeys.revoke(k.id);
                           await load();

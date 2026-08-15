@@ -220,7 +220,7 @@ export default function WorkspaceClient() {
 
   if (loading && !project) {
     return (
-      <div className="px-6 py-12 text-center text-sm text-ink-400">
+      <div className="px-6 py-12 text-center text-sm text-ink-500">
         작업 화면을 불러오는 중…
       </div>
     );
@@ -228,9 +228,9 @@ export default function WorkspaceClient() {
 
   if (!project) {
     return (
-      <div className="px-6 py-12 text-center text-sm text-ink-400">
+      <div className="px-6 py-12 text-center text-sm text-ink-500">
         프로젝트를 찾지 못했다.{" "}
-        <Link href="/dashboard" className="text-brand-600 hover:underline">
+        <Link href="/dashboard" className="text-brand-700 hover:underline">
           대시보드로
         </Link>
       </div>
@@ -331,7 +331,7 @@ export default function WorkspaceClient() {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-[10px] text-ink-400">
+          <span className="text-[10px] text-ink-500">
             {saveHint
               ? "자동 저장된다"
               : syncState === "saving"
@@ -522,7 +522,7 @@ export default function WorkspaceClient() {
 
             {/* Screen tabs */}
             <div className="flex items-center gap-2 border-b border-ink-200 bg-surface px-5 py-2">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-ink-500">
                 화면
               </span>
               <div className="flex flex-1 items-center gap-1.5 overflow-x-auto scrollbar-thin">
@@ -539,9 +539,9 @@ export default function WorkspaceClient() {
                   >
                     {s.screenTitle}
                     {s.isPrimary && (
-                      <span className="text-[9px] text-ink-400">대표</span>
+                      <span className="text-[9px] text-ink-500">대표</span>
                     )}
-                    <span className="text-[9px] text-ink-400">
+                    <span className="text-[9px] text-ink-500">
                       {s.variantCount}종
                     </span>
                   </button>
@@ -608,7 +608,7 @@ export default function WorkspaceClient() {
 
             {/* Mockup thumbnails */}
             <div className="flex shrink-0 items-center gap-3 border-t border-ink-200 bg-surface px-5 py-3">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-ink-500">
                 구조 변형
               </span>
               <div className="flex flex-1 items-center gap-2 overflow-x-auto scrollbar-thin">
@@ -628,7 +628,7 @@ export default function WorkspaceClient() {
                       <span
                         className={cn(
                           "font-mono text-[10px]",
-                          active ? "text-brand-700" : "text-ink-400",
+                          active ? "text-brand-700" : "text-ink-500",
                         )}
                       >
                         #{idx + 1}
@@ -646,7 +646,7 @@ export default function WorkspaceClient() {
                   );
                 })}
               </div>
-              <div className="text-[10px] text-ink-400">
+              <div className="text-[10px] text-ink-500">
                 총 {conceptMockups.length}종 · 단축키 1~5
               </div>
             </div>
@@ -655,7 +655,7 @@ export default function WorkspaceClient() {
           {/* Right inspector */}
           <div className="hidden w-72 shrink-0 border-l border-ink-200 bg-surface xl:block">
             <div className="border-b border-ink-200 px-4 py-3">
-              <div className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-ink-500">
                 요소 상세
               </div>
               <div className="mt-0.5 text-sm font-semibold text-ink-900">
@@ -685,7 +685,7 @@ export default function WorkspaceClient() {
                             />
                           )}
                         </div>
-                        <div className="mt-1 font-mono text-[10px] text-brand-600">
+                        <div className="mt-1 font-mono text-[10px] text-brand-700">
                           {r.token}
                         </div>
                         <div className="font-mono text-[10px] text-ink-500">

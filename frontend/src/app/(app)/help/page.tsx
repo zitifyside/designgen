@@ -107,7 +107,7 @@ export default function HelpPage() {
                 className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
               >
                 <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-400">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">
                     {item.category}
                   </div>
                   <div className="mt-0.5 text-sm font-medium text-ink-900">
@@ -116,7 +116,7 @@ export default function HelpPage() {
                 </div>
                 <span
                   className={cn(
-                    "mt-1 shrink-0 text-xs text-ink-400 transition",
+                    "mt-1 shrink-0 text-xs text-ink-500 transition",
                     isOpen(item.id) && "rotate-180",
                   )}
                   aria-hidden
@@ -138,7 +138,7 @@ export default function HelpPage() {
                   {item.link && (
                     <Link
                       href={item.link.href}
-                      className="mt-2.5 inline-block text-[11px] font-medium text-brand-600 hover:underline"
+                      className="mt-2.5 inline-block text-[11px] font-medium text-brand-700 hover:underline"
                     >
                       {item.link.label} →
                     </Link>

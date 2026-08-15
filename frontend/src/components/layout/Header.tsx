@@ -26,7 +26,7 @@ export function Header() {
         <input
           type="search"
           placeholder="프로젝트 검색…"
-          className="block w-full max-w-sm rounded-lg border border-ink-200 bg-ink-50 px-3 py-1.5 text-sm placeholder:text-ink-400 focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className="block w-full max-w-sm rounded-lg border border-ink-200 bg-ink-50 px-3 py-1.5 text-sm placeholder:text-ink-500 focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
       </div>
 
@@ -37,7 +37,7 @@ export function Header() {
       >
         <span className="text-base">🔔</span>
         {unread > 0 && (
-          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
             {unread}
           </span>
         )}
@@ -106,7 +106,7 @@ export function Header() {
                 setMenuOpen(false);
                 router.push("/login");
               }}
-              className="block w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+              className="block w-full px-3 py-1.5 text-left text-xs text-red-700 hover:bg-red-50"
             >
               로그아웃
             </button>

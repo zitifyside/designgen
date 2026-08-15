@@ -26,13 +26,13 @@ export function UsageCard({
       <div className="mt-2 flex items-baseline gap-1">
         <span className="text-2xl font-semibold text-ink-900">{used}</span>
         {limit !== null && (
-          <span className="text-xs text-ink-400">
+          <span className="text-xs text-ink-500">
             / {limit}
             {unit}
           </span>
         )}
         {limit === null && (
-          <span className="text-xs text-ink-400">{unit}</span>
+          <span className="text-xs text-ink-500">{unit}</span>
         )}
       </div>
       {limit !== null && (
@@ -47,7 +47,7 @@ export function UsageCard({
       {ctaHref && ctaLabel && (
         <Link
           href={ctaHref}
-          className="mt-3 inline-block text-xs font-medium text-brand-600 hover:underline"
+          className="mt-3 inline-block text-xs font-medium text-brand-700 hover:underline"
         >
           {ctaLabel} →
         </Link>

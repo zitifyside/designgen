@@ -333,7 +333,7 @@ export default function SecurityPage() {
           <Button
             size="sm"
             variant="outline"
-            className="text-red-600"
+            className="text-red-700"
             onClick={() => setDeleteModal(true)}
           >
             계정 삭제 요청

@@ -45,7 +45,7 @@ export default function MeLayout({ children }: { children: React.ReactNode }) {
                 <div
                   className={cn(
                     "mt-0.5 text-[10px]",
-                    active ? "text-white/70" : "text-ink-500",
+                    active ? "text-ink-200" : "text-ink-500",
                   )}
                 >
                   {it.desc}

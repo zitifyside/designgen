@@ -21,7 +21,7 @@ const TONE = {
     label: "bg-brand-600 text-white",
     title: "text-brand-800",
     body: "text-brand-700",
-    close: "text-brand-600 hover:bg-brand-100",
+    close: "text-brand-700 hover:bg-brand-100",
   },
 } as const;
 

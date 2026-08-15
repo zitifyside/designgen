@@ -60,7 +60,7 @@ export function DSController({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-ink-200 px-4 py-3">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-ink-400">
+        <div className="text-[10px] font-medium uppercase tracking-wider text-ink-500">
           컨셉 {concept}
         </div>
         <div className="mt-0.5 text-sm font-semibold text-ink-900">
@@ -68,7 +68,7 @@ export function DSController({
         </div>
         <button
           onClick={() => void reset(concept)}
-          className="mt-1.5 text-[11px] text-ink-500 hover:text-brand-600 hover:underline"
+          className="mt-1.5 text-[11px] text-ink-500 hover:text-brand-700 hover:underline"
         >
           ↺ 서버 저장본으로 되돌리기
         </button>
@@ -186,7 +186,7 @@ export function DSController({
                     typography: { fontFamily: e.target.value },
                   })
                 }
-                className="block w-full rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-ink-50 disabled:text-ink-400"
+                className="block w-full rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-ink-50 disabled:text-ink-500"
               >
                 {FONT_FAMILIES.map((f) => (
                   <option key={f}>{f}</option>
@@ -441,7 +441,7 @@ function PanelSection({
           {title}
           {lockedForFree && <Badge tone="warning">Pro</Badge>}
         </span>
-        <span className="text-xs text-ink-400">{open ? "−" : "+"}</span>
+        <span className="text-xs text-ink-500">{open ? "−" : "+"}</span>
       </button>
       {open && <div className="px-4 pb-4">{children}</div>}
     </section>

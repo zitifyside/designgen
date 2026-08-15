@@ -13,17 +13,18 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
+// 비활성 상태는 어느 변형이든 같은 모양으로 모은다 — 변형마다 다른 회색을 쓰면
+// 어떤 조합은 글자가 배경에 묻힌다(흰 글자 + 연회색 = 1.5:1 이었다).
+const DISABLED = "disabled:bg-ink-200 disabled:text-ink-600 disabled:border-ink-200";
+
 const VARIANT_CLS: Record<Variant, string> = {
-  primary:
-    "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-ink-300 disabled:text-white",
-  secondary:
-    "bg-ink-900 text-ink-50 hover:bg-ink-800 disabled:bg-ink-300",
-  ghost:
-    "text-ink-700 hover:bg-ink-100 disabled:text-ink-400",
-  danger:
-    "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300",
-  outline:
-    "border border-ink-200 bg-surface text-ink-800 hover:bg-ink-50 disabled:text-ink-400",
+  primary: `bg-brand-600 text-white hover:bg-brand-500 ${DISABLED}`,
+  secondary: `bg-ink-900 text-ink-50 hover:bg-ink-800 ${DISABLED}`,
+  ghost: "text-ink-700 hover:bg-ink-100 disabled:text-ink-500",
+  // 위험 동작의 hover 는 색 단계를 바꾸지 않고 밝기만 낮춘다. red-700 은 다크에서
+  // '어두운 면 위 글자' 역할이라 밝아지므로, 배경으로 쓰면 흰 글자가 묻힌다.
+  danger: `bg-red-600 text-white hover:brightness-90 ${DISABLED}`,
+  outline: `border border-ink-200 bg-surface text-ink-800 hover:bg-ink-50 ${DISABLED}`,
 };
 
 const SIZE_CLS: Record<Size, string> = {

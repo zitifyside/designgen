@@ -331,7 +331,7 @@ export default function NewProjectPage() {
                   className="flex items-center justify-between rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs"
                 >
                   <span className="truncate text-ink-700">{f.name}</span>
-                  <span className="shrink-0 text-[10px] text-ink-400">
+                  <span className="shrink-0 text-[10px] text-ink-500">
                     {(f.size / 1024).toFixed(1)} KB
                   </span>
                 </li>
@@ -362,7 +362,7 @@ export default function NewProjectPage() {
               >
                 {p.label}
                 {!p.enabled && (
-                  <div className="mt-0.5 text-[9px] font-normal text-ink-400">
+                  <div className="mt-0.5 text-[9px] font-normal text-ink-500">
                     v2.0 예정
                   </div>
                 )}
@@ -373,7 +373,7 @@ export default function NewProjectPage() {
 
         <Card>
           <div className="text-xs font-medium text-ink-700">
-            생성 화면 <span className="font-normal text-ink-400">(선택)</span>
+            생성 화면 <span className="font-normal text-ink-500">(선택)</span>
           </div>
           <p className="mt-0.5 text-[11px] text-ink-500">
             시안은 이 화면 하나의 레이아웃 구조 변형으로 생성된다. 미지정 시 AI 가
@@ -585,7 +585,7 @@ export default function NewProjectPage() {
                       <button
                         type="button"
                         onClick={() => applyPlaceholder(idx)}
-                        className="text-[10px] text-brand-600 hover:underline"
+                        className="text-[10px] text-brand-700 hover:underline"
                       >
                         예시로 채우기
                       </button>
@@ -624,7 +624,7 @@ export default function NewProjectPage() {
                   </div>
                 );
               })}
-              <p className="text-[10px] text-ink-400">
+              <p className="text-[10px] text-ink-500">
                 직접 입력 모드에서는 활성 컨셉 {conceptCount}개의 이름·방향성이 모두
                 채워져야 생성을 시작할 수 있다.
               </p>
@@ -642,14 +642,14 @@ export default function NewProjectPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-ink-500">
               {draftSavedAt && (
-                <span className="mr-2 text-[10px] text-ink-400">
+                <span className="mr-2 text-[10px] text-ink-500">
                   자동 저장 {draftSavedAt.toLocaleTimeString("ko-KR")}
                 </span>
               )}
               컨셉 {conceptCount} × 구조 변형 {variantCount} ={" "}
               {conceptCount * variantCount}종 시안 · 예상 소요 2~3분 · 월간 생성
               한도 <span className="font-medium text-ink-700">1회 차감</span>
-              <span className="ml-1 text-[10px] text-ink-400">
+              <span className="ml-1 text-[10px] text-ink-500">
                 (v1.0 균일제)
               </span>
             </div>

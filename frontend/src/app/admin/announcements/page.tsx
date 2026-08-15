@@ -118,7 +118,7 @@ export default function AdminAnnouncementsPage() {
                     {a.priority}
                   </Badge>
                   <Badge tone="neutral">{a.status}</Badge>
-                  <span className="text-[10px] text-ink-400">
+                  <span className="text-[10px] text-ink-500">
                     대상 {a.audience.join(", ")}
                   </span>
                 </div>
@@ -150,7 +150,7 @@ export default function AdminAnnouncementsPage() {
         ))}
         {items.length === 0 && (
           <Card>
-            <p className="py-6 text-center text-xs text-ink-400">
+            <p className="py-6 text-center text-xs text-ink-500">
               등록된 공지가 없다.
             </p>
           </Card>

@@ -37,7 +37,7 @@ export default function TemplateDetailClient() {
 
   if (loading) {
     return (
-      <div className="px-6 py-12 text-center text-sm text-ink-400">
+      <div className="px-6 py-12 text-center text-sm text-ink-500">
         템플릿을 불러오는 중…
       </div>
     );
@@ -45,9 +45,9 @@ export default function TemplateDetailClient() {
 
   if (!template) {
     return (
-      <div className="px-6 py-12 text-center text-sm text-ink-400">
+      <div className="px-6 py-12 text-center text-sm text-ink-500">
         템플릿을 찾지 못했다.{" "}
-        <Link href="/templates" className="text-brand-600 hover:underline">
+        <Link href="/templates" className="text-brand-700 hover:underline">
           템플릿 마켓으로
         </Link>
       </div>

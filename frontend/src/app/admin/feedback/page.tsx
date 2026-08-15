@@ -105,7 +105,7 @@ export default function AdminFeedbackPage() {
                   <Badge tone={TONE[f.status] ?? "neutral"}>
                     {STATUS_LABEL[f.status] ?? f.status}
                   </Badge>
-                  <span className="text-[10px] text-ink-400">{f.category}</span>
+                  <span className="text-[10px] text-ink-500">{f.category}</span>
                 </div>
                 <div className="mt-1 text-[11px] text-ink-500">
                   {f.userEmail} ·{" "}
@@ -135,7 +135,7 @@ export default function AdminFeedbackPage() {
         ))}
         {items.length === 0 && (
           <Card>
-            <p className="py-6 text-center text-xs text-ink-400">
+            <p className="py-6 text-center text-xs text-ink-500">
               피드백이 없다.
             </p>
           </Card>

@@ -100,7 +100,7 @@ export default function ExportClient() {
 
   if (!project) {
     return (
-      <div className="px-6 py-12 text-center text-sm text-ink-400">
+      <div className="px-6 py-12 text-center text-sm text-ink-500">
         프로젝트 정보를 불러오는 중…
       </div>
     );
@@ -363,7 +363,7 @@ export default function ExportClient() {
                       </td>
                       <td className="py-2 text-right">
                         <button
-                          className="text-brand-600 hover:underline"
+                          className="text-brand-700 hover:underline"
                           onClick={() =>
                             void downloadFile(
                               e.downloadUrl,

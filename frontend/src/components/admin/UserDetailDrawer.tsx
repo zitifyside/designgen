@@ -88,7 +88,7 @@ export function UserDetailDrawer({
         </div>
       )}
       {loading && !detail && (
-        <p className="py-6 text-center text-xs text-ink-400">불러오는 중…</p>
+        <p className="py-6 text-center text-xs text-ink-500">불러오는 중…</p>
       )}
 
       {detail && (
@@ -190,7 +190,7 @@ export function UserDetailDrawer({
                     <span className="min-w-0 flex-1 truncate text-ink-700">
                       {l.message ?? ""}
                     </span>
-                    <span className="shrink-0 text-[10px] text-ink-400">
+                    <span className="shrink-0 text-[10px] text-ink-500">
                       {new Date(l.occurredAt).toLocaleString("ko-KR")}
                     </span>
                   </li>
@@ -220,7 +220,7 @@ function Stat({
         className={cn(
           "mt-0.5 text-sm font-semibold",
           tone === "danger"
-            ? "text-red-600"
+            ? "text-red-700"
             : tone === "warning"
               ? "text-amber-600"
               : "text-ink-900",

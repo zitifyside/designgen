@@ -223,7 +223,7 @@ export default function TeamPage() {
                       {canManage && m.role !== "Owner" && (
                         <div className="flex justify-end gap-2">
                           <button
-                            className="text-brand-600 hover:underline"
+                            className="text-brand-700 hover:underline"
                             onClick={() =>
                               run(`role-${m.id}`, async () => {
                                 await api.teams.updateRole(
@@ -238,7 +238,7 @@ export default function TeamPage() {
                             {m.role === "Admin" ? "Member 로" : "Admin 으로"}
                           </button>
                           <button
-                            className="text-red-600 hover:underline"
+                            className="text-red-700 hover:underline"
                             onClick={() =>
                               run(`remove-${m.id}`, async () => {
                                 await api.teams.removeMember(team.id, m.id);

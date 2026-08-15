@@ -128,7 +128,7 @@ export default function AdminDashboardPage() {
           action={
             <Link
               href="/admin/audit-logs"
-              className="text-xs text-brand-600 hover:underline"
+              className="text-xs text-brand-700 hover:underline"
             >
               전체 보기 →
             </Link>
@@ -172,7 +172,7 @@ function Kpi({
       <div
         className={
           tone === "danger"
-            ? "mt-1 text-2xl font-semibold text-red-600"
+            ? "mt-1 text-2xl font-semibold text-red-700"
             : tone === "warning"
               ? "mt-1 text-2xl font-semibold text-amber-600"
               : "mt-1 text-2xl font-semibold text-ink-900"

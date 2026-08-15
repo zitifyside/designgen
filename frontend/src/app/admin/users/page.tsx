@@ -204,7 +204,7 @@ export default function AdminUsersPage() {
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-ink-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
                   조건에 맞는 사용자가 없다.
                 </td>
               </tr>

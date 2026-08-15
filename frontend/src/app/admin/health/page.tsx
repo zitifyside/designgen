@@ -78,7 +78,7 @@ export default function AdminHealthPage() {
               </div>
               <div className="flex items-center gap-3">
                 {typeof c.latencyMs === "number" && (
-                  <span className="font-mono text-[11px] text-ink-400">
+                  <span className="font-mono text-[11px] text-ink-500">
                     {c.latencyMs}ms
                   </span>
                 )}
@@ -87,7 +87,7 @@ export default function AdminHealthPage() {
             </li>
           ))}
           {items.length === 0 && (
-            <li className="px-5 py-8 text-center text-xs text-ink-400">
+            <li className="px-5 py-8 text-center text-xs text-ink-500">
               상태 정보를 불러오는 중…
             </li>
           )}
@@ -95,7 +95,7 @@ export default function AdminHealthPage() {
       </Card>
 
       {checkedAt && (
-        <p className="mt-3 text-[11px] text-ink-400">최종 확인 {checkedAt}</p>
+        <p className="mt-3 text-[11px] text-ink-500">최종 확인 {checkedAt}</p>
       )}
     </div>
   );

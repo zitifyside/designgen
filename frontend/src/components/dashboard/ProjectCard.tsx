@@ -113,7 +113,7 @@ export function ProjectCard({ project }: { project: Project }) {
         <p className="mt-1 line-clamp-1 text-xs text-ink-500">
           {project.description}
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-ink-400">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-ink-500">
           <span>{project.platform}</span>
           <span>·</span>
           <span>
@@ -122,7 +122,7 @@ export function ProjectCard({ project }: { project: Project }) {
           {project.dsMode === "unified" && (
             <>
               <span>·</span>
-              <span className="text-brand-600">단일 DS</span>
+              <span className="text-brand-700">단일 DS</span>
             </>
           )}
           {project.targetScreenTitle && (

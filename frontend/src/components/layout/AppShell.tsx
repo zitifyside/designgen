@@ -26,7 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!hydrated) {
     return (
-      <div className="flex h-screen items-center justify-center text-sm text-ink-400">
+      <div className="flex h-screen items-center justify-center text-sm text-ink-500">
         세션 확인 중…
       </div>
     );

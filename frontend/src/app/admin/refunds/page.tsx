@@ -123,7 +123,7 @@ export default function AdminRefundsPage() {
             ))}
             {refunds.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-ink-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
                   환불 요청이 없다.
                 </td>
               </tr>

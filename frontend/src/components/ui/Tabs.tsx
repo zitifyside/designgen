@@ -41,7 +41,7 @@ export function Tabs({
           >
             {it.label}
             {it.hint && (
-              <span className="ml-1.5 text-[10px] text-ink-400">{it.hint}</span>
+              <span className="ml-1.5 text-[10px] text-ink-500">{it.hint}</span>
             )}
           </button>
         );

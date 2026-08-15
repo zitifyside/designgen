@@ -100,7 +100,7 @@ export function Sidebar() {
           className="block rounded-lg bg-brand-50 px-3 py-2.5 text-xs"
         >
           <div className="font-semibold text-brand-700">Pro 업그레이드</div>
-          <div className="mt-0.5 text-brand-600">
+          <div className="mt-0.5 text-brand-700">
             월 3회 → 30회 생성 + 전체 Export
           </div>
         </Link>

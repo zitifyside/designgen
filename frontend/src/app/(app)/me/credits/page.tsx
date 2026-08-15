@@ -147,7 +147,7 @@ export default function CreditsPage() {
                   <td
                     className={cn(
                       "py-2 font-medium",
-                      t.amount < 0 ? "text-red-600" : "text-emerald-600",
+                      t.amount < 0 ? "text-red-700" : "text-emerald-600",
                     )}
                   >
                     {t.amount > 0 ? `+${t.amount}` : t.amount}

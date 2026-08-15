@@ -185,11 +185,11 @@ export default function TemplatesPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-400">
+        <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-500">
           템플릿을 불러오는 중…
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-400">
+        <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-500">
           게시된 템플릿이 없다.
         </div>
       ) : (
