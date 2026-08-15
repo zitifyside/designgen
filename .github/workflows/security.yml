@@ -53,14 +53,14 @@ jobs:
         run: python backend/scripts/check_secrets.py
 
   osv-backend:
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.2.3
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.5.0
     with:
       scan-args: |-
         -L
         backend/requirements.txt
 
   osv-frontend:
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.2.3
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.5.0
     continue-on-error: true
     with:
       scan-args: |-
