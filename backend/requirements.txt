@@ -28,4 +28,4 @@ openai==1.59.6
 
 # --- Misc ---
 httpx==0.28.1
-pypdf==5.1.0
+pypdf==6.15.0
