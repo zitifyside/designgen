@@ -81,6 +81,20 @@ async def reset_external_schema() -> None:
 
 
 async def main() -> None:
+    class _FakePgDialect:
+        name = "postgresql"
+
+    class _FakePgConn:
+        dialect = _FakePgDialect()
+
+    try:
+        from app.core.schema_align import wipe_domain_tables
+
+        wipe_domain_tables(_FakePgConn())
+        check("Postgres wipe 거부", False, "예외가 나지 않았다")
+    except RuntimeError as exc:
+        check("Postgres wipe 거부", "SQLite" in str(exc), str(exc)[:80])
+
     if _EXTERNAL_DB:
         await reset_external_schema()
     await seed()  # 플랜·데모 계정·관리자 계정 시드
@@ -361,6 +375,10 @@ async def main() -> None:
         tid = r.json()["id"]
         r = await c.get(f"{API}/templates", headers=h)
         check("  심사 전 마켓 미노출", all(t["id"] != tid for t in r.json()))
+        r = await c.get(f"{API}/templates/{tid}", headers=h)
+        check("  심사 전 단건 404", r.status_code == 404, str(r.status_code))
+        r = await c.get(f"{API}/templates/{tid}/reviews")
+        check("  심사 전 리뷰 404", r.status_code == 404, str(r.status_code))
         r = await c.post(f"{API}/auth/login", json={"email": "admin@designgenerator.io", "password": "admin1234"})
         ah = {"Authorization": f"Bearer {r.json()['accessToken']}"}
         r = await c.patch(f"{API}/admin/templates/{tid}", headers=ah, json={"status": "Approved"})
@@ -379,6 +397,8 @@ async def main() -> None:
         r = await c.patch(f"{API}/admin/templates/{rej_id}", headers=ah,
                           json={"status": "Rejected", "reason": "미리보기 이미지가 없다."})
         check("  사유가 있으면 거부 처리", r.status_code == 200, r.text[:120])
+        r = await c.get(f"{API}/templates/{rej_id}", headers=h)
+        check("  거부 템플릿 단건 404", r.status_code == 404, str(r.status_code))
 
         # 12-b) 리뷰 — 목록·평점 분포
         r = await c.get(f"{API}/templates/{tid}/reviews")
@@ -495,10 +515,20 @@ async def main() -> None:
         # 15) 팀 (Team 등급 필요 — Admin 계정으로)
         r = await c.post(f"{API}/teams", headers=ah, json={"name": "디자인팀"})
         check("팀 생성", r.status_code in (201, 409), r.text[:160])
-        if r.status_code == 201:
-            tmid = r.json()["id"]
+        tmid = r.json()["id"] if r.status_code == 201 else None
+        if tmid is None:
+            listed = await c.get(f"{API}/teams", headers=ah)
+            tmid = listed.json()[0]["id"] if listed.status_code == 200 and listed.json() else None
+        if r.status_code == 201 and tmid:
             r = await c.post(f"{API}/teams/{tmid}/members", headers=ah, json={"email": "demo@designgenerator.io", "role": "Member"})
             check("팀원 초대", r.status_code == 201, r.text[:160])
+        if tmid:
+            r = await c.post(
+                f"{API}/teams/{tmid}/members",
+                headers=fh,
+                json={"email": "outsider.smoke@test.io", "role": "Member"},
+            )
+            check("비멤버 팀 초대 404", r.status_code == 404, f"{r.status_code} {r.text[:80]}")
 
         # 16) 2FA — 켜면 비밀번호만으로는 로그인되지 않는다.
         import pyotp
@@ -683,6 +713,33 @@ async def main() -> None:
             headers={"X-Forwarded-For": "203.0.113.50", "User-Agent": "Mozilla/5.0"},
         )
         check("함정 IP 후속 403", r.status_code == 403, str(r.status_code))
+        r = await c.get(
+            f"{API}/auth/me",
+            headers={
+                "CF-Connecting-IP": "203.0.113.50",
+                "X-Forwarded-For": "198.51.100.77",
+                "User-Agent": "Mozilla/5.0",
+            },
+        )
+        check("CF-Connecting-IP 무시", r.status_code != 403, str(r.status_code))
+
+        r = await c.post(
+            f"{API}/auth/login",
+            headers={
+                "X-Forwarded-For": "198.51.100.88",
+                "User-Agent": "Mozilla/5.0",
+            },
+            json={"email": "demo@designgenerator.io", "password": "demo1234"},
+        )
+        check("cookie logout 로그인", r.status_code == 200, str(r.status_code))
+        cookie_at = r.json().get("accessToken", "") if r.status_code == 200 else ""
+        r = await c.post(f"{API}/auth/logout", json={})
+        check("cookie logout 빈 본문", r.status_code == 200, str(r.status_code))
+        r = await c.get(
+            f"{API}/auth/me",
+            headers={"Authorization": f"Bearer {cookie_at}"},
+        )
+        check("cookie logout 후 access 401", r.status_code == 401, str(r.status_code))
 
 
 if __name__ == "__main__":
