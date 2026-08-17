@@ -343,17 +343,16 @@ WEAK_SECRET_MARKERS = ("change-me", "changeme", "secret", "please")
 
 
 def verify_production_secrets() -> None:
-    """운영 환경에서 개발용 기본 시크릿이 그대로면 기동을 막는다.
+    """약한 JWT 시크릿을 막는다. 운영은 기동 실패, 로컬은 기동 시 난수로 교체한다."""
+    import secrets as secrets_mod
 
-    개발용 키로 운영에 뜨면 발급된 JWT 를 누구나 위조할 수 있다. 이건 경고로
-    끝낼 문제가 아니라 기동 실패로 다뤄야 한다.
-    """
-    if settings.environment != "production":
-        return
     key = settings.secret_key or ""
     weak = len(key) < 32 or any(marker in key.lower() for marker in WEAK_SECRET_MARKERS)
-    if weak:
+    if not weak:
+        return
+    if settings.environment == "production":
         raise RuntimeError(
             "운영 환경에서 SECRET_KEY 가 안전하지 않습니다. "
             "32자 이상의 무작위 값으로 교체한 뒤 재기동하세요."
         )
+    settings.secret_key = secrets_mod.token_urlsafe(48)
