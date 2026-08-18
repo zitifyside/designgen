@@ -28,6 +28,7 @@ import gzip
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -108,7 +109,10 @@ def access_token() -> str:
     수 있다. 활성 계정을 바꾸면 다른 작업에 영향을 주므로, 호출 단위로 계정을 지정한다
     (`GCLOUD_ACCOUNT` 환경변수, 미지정 시 활성 계정).
     """
-    cmd = ["gcloud", "auth", "print-access-token"]
+    gcloud = shutil.which("gcloud") or shutil.which("gcloud.cmd")
+    if not gcloud:
+        raise SystemExit("gcloud 를 PATH 에서 찾지 못했습니다.")
+    cmd = [gcloud, "auth", "print-access-token"]
     account = os.environ.get("GCLOUD_ACCOUNT", "").strip()
     if account:
         cmd.append(f"--account={account}")
