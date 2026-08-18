@@ -62,8 +62,12 @@ class User(Base, AuditMixin):
     onboarded_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    language: Mapped[str] = mapped_column("language_cd", String(8), default="ko")
-    theme: Mapped[str] = mapped_column("theme_cd", String(8), default="system")
+    language: Mapped[str] = mapped_column(
+        "language_cd", CodedStr("USER_LANGUAGE", length=8), default="ko"
+    )
+    theme: Mapped[str] = mapped_column(
+        "theme_cd", CodedStr("USER_THEME", length=8), default="system"
+    )
     last_active_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -98,6 +98,37 @@ async def main() -> None:
     if _EXTERNAL_DB:
         await reset_external_schema()
     await seed()  # 플랜·데모 계정·관리자 계정 시드
+    from app.core.codes import CODE_MAP
+    from app.core.database import engine
+    from app.core.soft_delete import ACTIVE_VIEWS, ALL_VIEWS
+    from sqlalchemy import inspect as sa_inspect
+
+    check("코드 그룹 30종", len(CODE_MAP) == 30, str(len(CODE_MAP)))
+    check("  MOCKUP_KIND", "MOCKUP_KIND" in CODE_MAP and "dashboard" in CODE_MAP["MOCKUP_KIND"])
+    check("  DS_MODE", "unified" in CODE_MAP.get("DS_MODE", {}))
+    check("  EXPORT_FORMAT", set(CODE_MAP.get("EXPORT_FORMAT", {})) >= {"json", "png", "css", "fig"})
+    check("  LOG_LEVEL", set(CODE_MAP.get("LOG_LEVEL", {})) >= {"info", "warn", "error"})
+    check("  NOTIFICATION_CATEGORY", "generation" in CODE_MAP.get("NOTIFICATION_CATEGORY", {}))
+    check("  CREDIT_TYPE consumption", "consumption" in CODE_MAP.get("CREDIT_TYPE", {}))
+    check("활성 뷰 정의 25종", len(ACTIVE_VIEWS) == 25, str(len(ACTIVE_VIEWS)))
+    check("관리자 뷰 정의 25종", len(ALL_VIEWS) == 25, str(len(ALL_VIEWS)))
+    async with engine.connect() as conn:
+        view_names = await conn.run_sync(lambda c: set(sa_inspect(c).get_view_names()))
+    check("  vw_team_active", "vw_team_active" in view_names)
+    check("  vw_payment_active", "vw_payment_active" in view_names)
+    check("  vw_code_common_active", "vw_code_common_active" in view_names)
+    check("  vw_user_all", "vw_user_all" in view_names)
+    check("  vw_team_all", "vw_team_all" in view_names)
+    from app.core.database import AsyncSessionLocal
+    from app.models.hist import PlanHist, UserHist
+    from sqlalchemy import select as _sel_hist
+
+    async with AsyncSessionLocal() as db:
+        ph = await db.scalar(_sel_hist(PlanHist).where(PlanHist.is_current.is_(True)))
+        uh = await db.scalar(_sel_hist(UserHist).where(UserHist.is_current.is_(True)))
+    check("플랜 이력 한도 스냅샷", ph is not None and int(getattr(ph, "max_variants", 0) or 0) >= 3)
+    check("유저 이력 업무 스냅샷", uh is not None and bool(getattr(uh, "user_nm", "")))
+
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         # 1) 로그인 (Pro 데모 계정)

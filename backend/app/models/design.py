@@ -5,6 +5,7 @@ from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
+from app.core.codes import CodedStr
 from app.core.database import Base
 from app.models.base import AuditMixin, pk_column, public_id_column
 from app.models.project import DS_MODE_PER_CONCEPT
@@ -27,7 +28,7 @@ class DesignSystem(Base, AuditMixin):
     is_modified: Mapped[bool] = mapped_column(Boolean, default=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     ds_mode: Mapped[str] = mapped_column(
-        "ds_mode_cd", String(20), default=DS_MODE_PER_CONCEPT
+        "ds_mode_cd", CodedStr("DS_MODE", length=20), default=DS_MODE_PER_CONCEPT
     )
     base_ds_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     overridden_fields: Mapped[dict | None] = mapped_column(
@@ -52,7 +53,7 @@ class Mockup(Base, AuditMixin):
     screen: Mapped[str] = mapped_column("screen_cd", String(60), default="landing")
     screen_title: Mapped[str] = mapped_column("screen_nm", String(120), default="랜딩")
     screen_order: Mapped[int] = mapped_column(Integer, default=0)
-    kind: Mapped[str] = mapped_column("kind_cd", String(20))
+    kind: Mapped[str] = mapped_column("kind_cd", CodedStr("MOCKUP_KIND", length=20))
     title: Mapped[str] = mapped_column("title_nm", String(200))
     variant_label: Mapped[str] = mapped_column("variant_nm", String(120), default="")
     image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)

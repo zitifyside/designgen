@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.1.1 |
+| 문서 버전 | v1.1.2 |
 | 작성일 | 2026-08-14 |
 | 대상 | Firebase Hosting (프론트) + Cloud Run (백엔드 API) |
 | Firebase 프로젝트 | `design-gen-zitify` |
@@ -237,7 +237,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
 | 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
 | 보안 하드닝 | ✅ 인증·쿠키/CSRF·레이트리밋·헤더·CSP·봇 UA·크롤 함정 (§3.5·SECURITY.md) |
-| DA 스키마 | ✅ BIGINT PK+public_id · C-코드 · 논리삭제 뷰 · SCD · Alembic `202608161200` |
+| DA 스키마 | ✅ BIGINT PK+public_id · C-코드 30종 · 논리삭제 뷰 · SCD · Alembic `202608161200`·`202608161400` |
 | Public API · MCP | ✅ Tool 4종 동작 · `subscribe_token_changes` 만 미구현 (§3.6) |
 | 공통 기능 | ✅ 도움말·FAQ · 온보딩 투어 · 단축키·Undo · 공지 배너 · 테마(Light·Dark·System) |
 | i18n (ko/en) | ⛔ 출시 전 작업으로 유예 |
@@ -379,6 +379,7 @@ gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com   --
 
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |---|---|---|---|
+| v1.1.2 | 2026-08-18 | 안승준 | §5 DA 스키마 행 — 코드 그룹 30종·Alembic `202608161400` 반영 (3~5차 누적) |
 | v1.1.1 | 2026-08-16 | 안승준 | Postgres 기동 시 스키마 wipe 금지. Cloudflare IP 헤더는 신뢰하지 않는다 |
 | v1.1.0 | 2026-08-16 | 안승준 | §5 현재 상태 일자·DA 스키마·쿠키/CSRF/봇 반영. 운영 시드 계정 잠금 정정. 변경이력 신설 |
 | v1.0.0 | 2026-08-14 | 안승준 | 초판. Hosting + Cloud Run 배포 절차 |

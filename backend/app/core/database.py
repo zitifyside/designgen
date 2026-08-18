@@ -195,7 +195,7 @@ async def init_db() -> None:
             if dialect != "sqlite":
                 raise RuntimeError(
                     "문자열 PK 스키마는 SQLite 에서만 자동으로 비운다. "
-                    "Postgres 는 Alembic 202608161200 을 적용하라. "
+                    "Postgres 는 Alembic 202608161200 이후 리비전을 적용하라. "
                     "기동 중 DROP CASCADE 는 하지 않는다."
                 )
             wiped = await conn.run_sync(wipe_domain_tables)

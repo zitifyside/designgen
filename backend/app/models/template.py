@@ -1,11 +1,13 @@
 ﻿"""템플릿 마켓플레이스 모델."""
 from __future__ import annotations
 
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
+from app.core.codes import CodedStr
 from app.core.database import Base
+from app.core.money import IntCents
 from app.models.base import AuditMixin, pk_column, public_id_column
 
 
@@ -15,18 +17,22 @@ class Template(Base, AuditMixin):
     pk: Mapped[int] = pk_column("template_id")
     id: Mapped[str] = public_id_column("tpl")
     author_id: Mapped[str | None] = mapped_column(
-        ForeignKey("mst_user.public_id", ondelete="SET NULL"), nullable=True
+        ForeignKey("mst_user.public_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     author_name: Mapped[str] = mapped_column("author_nm", String(120))
     name: Mapped[str] = mapped_column("template_nm", String(200))
     description: Mapped[str] = mapped_column("template_desc", Text, default="")
     category: Mapped[str] = mapped_column("category_cd", String(40))
     concept_name: Mapped[str] = mapped_column("concept_nm", String(120), default="")
-    price: Mapped[int] = mapped_column("price_amt", Integer, default=0)
-    rating: Mapped[float] = mapped_column(Float, default=0.0)
+    price: Mapped[int] = mapped_column("price_amt", IntCents(), default=0)
+    rating: Mapped[float] = mapped_column(Numeric(5, 2), default=0)
     downloads: Mapped[int] = mapped_column("download_cnt", Integer, default=0)
     tokens: Mapped[dict | None] = mapped_column("token_json", JSON, nullable=True)
-    status: Mapped[str] = mapped_column("status_cd", String(20), default="Approved")
+    status: Mapped[str] = mapped_column(
+        "status_cd", CodedStr("TEMPLATE_STATUS"), default="Approved"
+    )
 
 
 class TemplateReview(Base, AuditMixin):

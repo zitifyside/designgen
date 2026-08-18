@@ -7,8 +7,9 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Te
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
-from app.core.database import Base
 from app.core.codes import CodedStr
+from app.core.database import Base
+from app.core.money import IntCents
 from app.models.base import AuditMixin, pk_column, public_id_column
 
 GEN_KIND_FULL = "full"
@@ -29,12 +30,16 @@ class Generation(Base, AuditMixin):
     user_id: Mapped[str] = mapped_column(
         ForeignKey("mst_user.public_id", ondelete="CASCADE"), index=True
     )
-    kind: Mapped[str] = mapped_column("kind_cd", String(20), default=GEN_KIND_FULL)
+    kind: Mapped[str] = mapped_column(
+        "kind_cd", CodedStr("GEN_KIND"), default=GEN_KIND_FULL
+    )
     status: Mapped[str] = mapped_column(
         "status_cd", CodedStr("GEN_STATUS"), default="Pending"
     )
-    stage: Mapped[str] = mapped_column("stage_cd", String(20), default="InputAnalyzer")
-    progress: Mapped[int] = mapped_column(Integer, default=0)
+    stage: Mapped[str] = mapped_column(
+        "stage_cd", CodedStr("GEN_STAGE"), default="InputAnalyzer"
+    )
+    progress: Mapped[int] = mapped_column("progress_cnt", Integer, default=0)
     error: Mapped[str | None] = mapped_column("error_desc", Text, nullable=True)
 
     is_warning: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -42,15 +47,15 @@ class Generation(Base, AuditMixin):
         "warning_desc", String(200), nullable=True
     )
     retry_of_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    free_retry_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    free_retry_used: Mapped[bool] = mapped_column("is_free_retry_used", Boolean, default=False)
     screen: Mapped[str | None] = mapped_column("screen_cd", String(60), nullable=True)
     quota_bucket: Mapped[str | None] = mapped_column(
-        "quota_bucket_cd", String(16), nullable=True
+        "quota_bucket_cd", CodedStr("QUOTA_BUCKET", length=16), nullable=True
     )
     input_snapshot: Mapped[dict | None] = mapped_column(
         "input_snapshot_json", JSON, nullable=True
     )
-    ai_cost_cents: Mapped[int] = mapped_column("ai_cost_amt", Integer, default=0)
+    ai_cost_cents: Mapped[int] = mapped_column("ai_cost_amt", IntCents(), default=0)
 
     started_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

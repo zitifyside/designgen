@@ -9,7 +9,7 @@ import asyncio
 
 from sqlalchemy import select
 
-from app.core.codes import CODE_MAP
+from app.core.codes import CODE_GROUP_NM, CODE_MAP
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, init_db
 from app.core.security import hash_password
@@ -19,16 +19,10 @@ from app.models.template import Template
 from app.models.user import Session, User
 
 # code_value = C010101, code_nm = API 문자열 (DA 코드테이블.md)
-_CODE_GROUP_NM = {
-    "USER_PLAN": "사용자 등급",
-    "USER_STATUS": "사용자 상태",
-    "PROJECT_STATUS": "프로젝트 상태",
-    "GEN_STATUS": "생성 작업 상태",
-}
 CODE_GROUPS = [
     (
         group_cd,
-        _CODE_GROUP_NM[group_cd],
+        CODE_GROUP_NM.get(group_cd, group_cd),
         [(code, api, i) for i, (api, code) in enumerate(mapping.items(), start=1)],
     )
     for group_cd, mapping in CODE_MAP.items()

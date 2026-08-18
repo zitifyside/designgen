@@ -7,6 +7,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
+from app.core.codes import CodedStr
 from app.core.database import Base
 from app.models.base import AuditMixin, TimestampMixin, pk_column, public_id_column
 
@@ -25,8 +26,8 @@ class ExportHistory(Base, TimestampMixin):
         ForeignKey("trx_project.public_id", ondelete="CASCADE"), index=True
     )
     project_name: Mapped[str] = mapped_column("project_nm", String(200), default="")
-    format: Mapped[str] = mapped_column("format_cd", String(8))
-    scope: Mapped[str] = mapped_column("scope_cd", String(12))
+    format: Mapped[str] = mapped_column("format_cd", CodedStr("EXPORT_FORMAT", length=8))
+    scope: Mapped[str] = mapped_column("scope_cd", CodedStr("EXPORT_SCOPE", length=12))
     resolution: Mapped[str | None] = mapped_column(String(4), nullable=True)
     concept_label: Mapped[str | None] = mapped_column(String(1), nullable=True)
     screen: Mapped[str | None] = mapped_column("screen_cd", String(60), nullable=True)
@@ -86,5 +87,9 @@ class TeamMembership(Base, AuditMixin):
     )
     email: Mapped[str] = mapped_column(String(255), index=True)
     name: Mapped[str] = mapped_column("member_nm", String(120), default="")
-    role: Mapped[str] = mapped_column("role_cd", String(10), default="Member")
-    status: Mapped[str] = mapped_column("status_cd", String(10), default="Invited")
+    role: Mapped[str] = mapped_column(
+        "role_cd", CodedStr("TEAM_ROLE"), default="Member"
+    )
+    status: Mapped[str] = mapped_column(
+        "status_cd", CodedStr("TEAM_MEMBER_STATUS"), default="Invited"
+    )

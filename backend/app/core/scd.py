@@ -13,8 +13,17 @@ from app.models.user import User
 
 _REGISTERED = False
 
-_PLAN_WATCH = ("code", "name", "monthly_price_cents", "annual_price_cents")
-_USER_WATCH = ("plan", "status")
+_PLAN_WATCH = (
+    "code",
+    "name",
+    "monthly_price_cents",
+    "annual_price_cents",
+    "monthly_generations",
+    "max_concepts",
+    "max_variants",
+    "credit_unit_cents",
+)
+_USER_WATCH = ("plan", "status", "name", "is_admin", "monthly_limit", "language", "theme")
 
 
 def register_scd(session_cls) -> None:
@@ -80,7 +89,7 @@ def _touch_plan(session: Session, plan: Plan, now: dt.datetime) -> None:
     _ensure_public_id(plan)
     if not plan.id:
         return
-    reason = "C990101" if _is_new(plan) else "C990102"
+    reason = to_code("CHANGE_REASON", "created" if _is_new(plan) else "updated")
     _close_current(session, PlanHist, PlanHist.plan_public_id, plan.id, now)
     session.add(
         PlanHist(
@@ -89,6 +98,10 @@ def _touch_plan(session: Session, plan: Plan, now: dt.datetime) -> None:
             plan_nm=plan.name,
             monthly_price_cents=int(plan.monthly_price_cents or 0),
             annual_price_cents=int(plan.annual_price_cents or 0),
+            monthly_generations=int(plan.monthly_generations or 0),
+            max_concepts=int(plan.max_concepts or 0),
+            max_variants=int(plan.max_variants or 0),
+            credit_unit_cents=int(plan.credit_unit_cents or 0),
             valid_from_at=now,
             is_current=True,
             change_reason_cd=reason,
@@ -102,15 +115,20 @@ def _touch_user(session: Session, user: User, now: dt.datetime) -> None:
     _ensure_public_id(user)
     if not user.id:
         return
-    reason = "C990101" if _is_new(user) else "C990102"
+    reason = to_code("CHANGE_REASON", "created" if _is_new(user) else "updated")
     _close_current(session, UserHist, UserHist.user_public_id, user.id, now)
     plan_api = user.plan or "Free"
     status_api = user.status or "Active"
     session.add(
         UserHist(
             user_public_id=user.id,
+            user_nm=user.name or "",
             plan_cd=to_code("USER_PLAN", plan_api) or plan_api,
             status_cd=to_code("USER_STATUS", status_api) or status_api,
+            is_admin=bool(user.is_admin),
+            monthly_limit_cnt=int(user.monthly_limit or 0),
+            language_cd=user.language or "ko",
+            theme_cd=user.theme or "system",
             valid_from_at=now,
             is_current=True,
             change_reason_cd=reason,

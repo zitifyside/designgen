@@ -4,6 +4,7 @@ from __future__ import annotations
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.codes import CodedStr
 from app.core.database import Base
 from app.models.base import AuditMixin, pk_column, public_id_column
 
@@ -20,8 +21,8 @@ class FileUpload(Base, AuditMixin):
         ForeignKey("mst_user.public_id", ondelete="CASCADE"), index=True
     )
     filename: Mapped[str] = mapped_column("file_nm", String(160))
-    kind: Mapped[str] = mapped_column("kind_cd", String(10))
-    content_type: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column("kind_cd", CodedStr("FILE_KIND"))
+    content_type: Mapped[str] = mapped_column("content_type_nm", String(120))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     pages: Mapped[int | None] = mapped_column("page_cnt", Integer, nullable=True)

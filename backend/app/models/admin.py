@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
+from app.core.codes import CodedStr
 from app.core.database import Base
 from app.models.base import AuditMixin, TimestampMixin, pk_column, public_id_column
 
@@ -19,8 +20,12 @@ class Announcement(Base, AuditMixin):
     title: Mapped[str] = mapped_column("title_nm", String(200))
     body: Mapped[str] = mapped_column("body_desc", Text, default="")
     audience: Mapped[list] = mapped_column("audience_json", JSON, default=list)
-    priority: Mapped[str] = mapped_column("priority_cd", String(10), default="normal")
-    status: Mapped[str] = mapped_column("status_cd", String(12), default="Draft")
+    priority: Mapped[str] = mapped_column(
+        "priority_cd", CodedStr("ANNOUNCEMENT_PRIORITY"), default="normal"
+    )
+    status: Mapped[str] = mapped_column(
+        "status_cd", CodedStr("ANNOUNCEMENT_STATUS"), default="Draft"
+    )
     starts_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -38,7 +43,9 @@ class AuditLog(Base, TimestampMixin):
     action: Mapped[str] = mapped_column("action_cd", String(60))
     target: Mapped[str] = mapped_column("target_nm", String(255), default="")
     ip: Mapped[str | None] = mapped_column("ip_addr", String(64), nullable=True)
-    severity: Mapped[str] = mapped_column("severity_cd", String(10), default="info")
+    severity: Mapped[str] = mapped_column(
+        "severity_cd", CodedStr("AUDIT_SEVERITY", length=10), default="info"
+    )
 
 
 class Feedback(Base, AuditMixin):
@@ -50,7 +57,9 @@ class Feedback(Base, AuditMixin):
     category: Mapped[str] = mapped_column("category_cd", String(20))
     title: Mapped[str] = mapped_column("title_nm", String(200))
     body: Mapped[str] = mapped_column("body_desc", Text, default="")
-    status: Mapped[str] = mapped_column("status_cd", String(12), default="new")
+    status: Mapped[str] = mapped_column(
+        "status_cd", CodedStr("FEEDBACK_STATUS"), default="new"
+    )
     admin_response: Mapped[str | None] = mapped_column(
         "admin_response_desc", Text, nullable=True
     )

@@ -1,0 +1,49 @@
+﻿-- DROP 전용. ADD 배포와 같은 회차에 실행하지 않는다 (DA 마이그레이션규칙.md).
+-- 신규 활성 뷰만 내린다. 1차 뷰 5개는 202608161200 롤백이 담당한다.
+
+DROP VIEW IF EXISTS "vw_announcement_active";
+DROP VIEW IF EXISTS "vw_team_active";
+DROP VIEW IF EXISTS "vw_design_system_active";
+DROP VIEW IF EXISTS "vw_mockup_active";
+DROP VIEW IF EXISTS "vw_subscription_active";
+DROP VIEW IF EXISTS "vw_credit_active";
+DROP VIEW IF EXISTS "vw_payment_active";
+DROP VIEW IF EXISTS "vw_refund_active";
+DROP VIEW IF EXISTS "vw_feedback_active";
+DROP VIEW IF EXISTS "vw_notification_active";
+DROP VIEW IF EXISTS "vw_file_upload_active";
+DROP VIEW IF EXISTS "vw_template_review_active";
+DROP VIEW IF EXISTS "vw_template_purchase_active";
+DROP VIEW IF EXISTS "vw_api_key_active";
+DROP VIEW IF EXISTS "vw_team_member_active";
+DROP VIEW IF EXISTS "vw_session_active";
+DROP VIEW IF EXISTS "vw_email_verification_active";
+DROP VIEW IF EXISTS "vw_password_reset_active";
+DROP VIEW IF EXISTS "vw_code_group_active";
+DROP VIEW IF EXISTS "vw_code_common_active";
+
+DROP VIEW IF EXISTS "vw_user_all";
+DROP VIEW IF EXISTS "vw_plan_all";
+DROP VIEW IF EXISTS "vw_announcement_all";
+DROP VIEW IF EXISTS "vw_template_all";
+DROP VIEW IF EXISTS "vw_team_all";
+DROP VIEW IF EXISTS "vw_project_all";
+DROP VIEW IF EXISTS "vw_generation_all";
+DROP VIEW IF EXISTS "vw_design_system_all";
+DROP VIEW IF EXISTS "vw_mockup_all";
+DROP VIEW IF EXISTS "vw_subscription_all";
+DROP VIEW IF EXISTS "vw_credit_all";
+DROP VIEW IF EXISTS "vw_payment_all";
+DROP VIEW IF EXISTS "vw_refund_all";
+DROP VIEW IF EXISTS "vw_feedback_all";
+DROP VIEW IF EXISTS "vw_notification_all";
+DROP VIEW IF EXISTS "vw_file_upload_all";
+DROP VIEW IF EXISTS "vw_template_review_all";
+DROP VIEW IF EXISTS "vw_template_purchase_all";
+DROP VIEW IF EXISTS "vw_api_key_all";
+DROP VIEW IF EXISTS "vw_team_member_all";
+DROP VIEW IF EXISTS "vw_session_all";
+DROP VIEW IF EXISTS "vw_email_verification_all";
+DROP VIEW IF EXISTS "vw_password_reset_all";
+DROP VIEW IF EXISTS "vw_code_group_all";
+DROP VIEW IF EXISTS "vw_code_common_all";

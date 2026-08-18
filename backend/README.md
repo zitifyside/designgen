@@ -137,7 +137,8 @@ alembic/       비동기 마이그레이션
 
 1. `asyncpg` 는 `requirements.txt` 에 이미 있다.
 2. `DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/designgen` (또는 `postgresql://…?sslmode=require` — `normalize_database_url` 이 흡수한다).
-3. 기동 시 `init_db` 가 테이블·빠진 컬럼·활성 뷰를 채운다. 버전 기록은 Alembic `202608161200` (ADD) / `U202608161200` (DROP 롤백) 이다.
+3. 기동 시 `init_db` 가 테이블·빠진 컬럼·활성 뷰를 채운다. 버전 기록은 Alembic
+   `202608161200`·`202608161400` (ADD) / `U202608161200`·`U202608161400` (DROP 롤백) 이다.
    ```bash
    alembic upgrade head
    ```

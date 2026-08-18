@@ -1,6 +1,6 @@
 ﻿# AI Design Generator — Frontend (Web App)
 
-Next.js 14 App Router 정적 export 프론트엔드다. 기획서 v0.5.1 · 기능정의서 v0.2.1 의
+Next.js 14 App Router 정적 export 프론트엔드다. 기획서 v0.5.2 · 기능정의서 v0.2.2 의
 Web App 메뉴를 구현하며, API 는 같은 출처 `/api/v1` (로컬은 `localhost:8000`) 로
 FastAPI 에 붙는다.
 

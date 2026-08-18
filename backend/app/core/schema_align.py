@@ -82,6 +82,8 @@ COLUMN_RENAMES: dict[str, dict[str, str]] = {
         "target_screen": "target_screen_cd",
         "target_screen_title": "target_screen_nm",
         "concept_briefs": "concept_brief_json",
+        "requirements_text": "requirements_desc",
+        "target_screen_inferred": "is_target_screen_inferred",
     },
     "trx_generation": {
         "id": "generation_id",
@@ -92,8 +94,10 @@ COLUMN_RENAMES: dict[str, dict[str, str]] = {
         "warning_reason": "warning_desc",
         "screen": "screen_cd",
         "quota_bucket": "quota_bucket_cd",
+        "progress": "progress_cnt",
         "input_snapshot": "input_snapshot_json",
         "ai_cost_cents": "ai_cost_amt",
+        "free_retry_used": "is_free_retry_used",
     },
     "trx_design_system": {
         "id": "design_system_id",
@@ -119,12 +123,22 @@ COLUMN_RENAMES: dict[str, dict[str, str]] = {
         "monthly_generations": "monthly_generation_cnt",
         "max_concepts": "max_concept_cnt",
         "max_variants": "max_variant_cnt",
+        "monthly_price_cents": "monthly_price_amt",
+        "annual_price_cents": "annual_price_amt",
+        "credit_unit_cents": "credit_unit_amt",
+    },
+    "log_plan_hist": {
+        "monthly_price_cents": "monthly_price_amt",
+        "annual_price_cents": "annual_price_amt",
+        "credit_unit_cents": "credit_unit_amt",
     },
     "trx_subscription": {
         "id": "subscription_id",
         "plan_code": "plan_cd",
         "status": "status_cd",
         "cancel_at_period_end": "is_cancel_at_period_end",
+        "current_period_start": "current_period_start_at",
+        "current_period_end": "current_period_end_at",
     },
     "trx_credit": {
         "id": "credit_id",
@@ -242,6 +256,7 @@ COLUMN_RENAMES: dict[str, dict[str, str]] = {
         "kind": "kind_cd",
         "pages": "page_cnt",
         "extracted_text": "extracted_text_desc",
+        "content_type": "content_type_nm",
     },
 }
 

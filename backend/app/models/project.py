@@ -28,23 +28,27 @@ class Project(Base, AuditMixin):
     )
     name: Mapped[str] = mapped_column("project_nm", String(200))
     description: Mapped[str] = mapped_column("project_desc", String(500), default="")
-    platform: Mapped[str] = mapped_column("platform_cd", String(20), default="Web")
+    platform: Mapped[str] = mapped_column(
+        "platform_cd", CodedStr("PLATFORM", length=20), default="Web"
+    )
     status: Mapped[str] = mapped_column(
         "status_cd", CodedStr("PROJECT_STATUS"), default="Draft"
     )
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
-    requirements_text: Mapped[str] = mapped_column(Text, default="")
+    requirements_text: Mapped[str] = mapped_column("requirements_desc", Text, default="")
 
     concept_count: Mapped[int] = mapped_column("concept_cnt", Integer, default=1)
     variant_count: Mapped[int] = mapped_column("variant_cnt", Integer, default=3)
     ds_mode: Mapped[str] = mapped_column(
-        "ds_mode_cd", String(20), default=DS_MODE_PER_CONCEPT
+        "ds_mode_cd", CodedStr("DS_MODE", length=20), default=DS_MODE_PER_CONCEPT
     )
     target_screen: Mapped[str] = mapped_column("target_screen_cd", String(60), default="")
     target_screen_title: Mapped[str] = mapped_column(
         "target_screen_nm", String(120), default=""
     )
-    target_screen_inferred: Mapped[bool] = mapped_column(Boolean, default=True)
+    target_screen_inferred: Mapped[bool] = mapped_column(
+        "is_target_screen_inferred", Boolean, default=True
+    )
     concept_briefs: Mapped[list | None] = mapped_column(
         "concept_brief_json", JSON, nullable=True
     )

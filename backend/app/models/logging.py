@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
+from app.core.codes import CodedStr
 from app.core.database import Base
 from app.models.base import TimestampMixin, pk_column, public_id_column
 
@@ -25,7 +26,9 @@ class AppLogEvent(Base, TimestampMixin):
     occurred_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), index=True
     )
-    level: Mapped[str] = mapped_column("level_cd", String(10), index=True)
+    level: Mapped[str] = mapped_column(
+        "level_cd", CodedStr("LOG_LEVEL", length=10), index=True
+    )
     tier: Mapped[str] = mapped_column("tier_cd", String(2), default=TIER_TELEMETRY)
     kind: Mapped[str] = mapped_column("kind_cd", String(80), index=True)
     message: Mapped[str | None] = mapped_column(
