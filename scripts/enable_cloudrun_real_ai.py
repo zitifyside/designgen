@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -42,8 +43,11 @@ def main() -> None:
         f"GEMINI_MODEL={MODEL},"
         f"GEMINI_API_KEY={key}"
     )
+    gcloud = shutil.which("gcloud") or shutil.which("gcloud.cmd")
+    if not gcloud:
+        raise SystemExit("gcloud 를 PATH 에서 찾지 못했습니다.")
     cmd = [
-        "gcloud",
+        gcloud,
         "run",
         "deploy",
         SERVICE,
