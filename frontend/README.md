@@ -29,7 +29,7 @@ npx tsc --noEmit
 |---|---|
 | `/login`, `/signup` | 로그인·회원가입 (허니팟 `website`, 2FA 2단계) |
 | `/dashboard` | 프로젝트 그리드·사용량·공지 배너 |
-| `/projects/new` | 요건 입력·생성 옵션 (컨셉·시안·DS 방식·대상 화면) |
+| `/projects/new` | 요건 입력·생성 옵션 (컨셉·시안·DS 방식·대표 장면) |
 | `/projects/[id]` | Workspace (DS 컨트롤러 + 시안 뷰어 + 확정·화면 추가) |
 | `/projects/[id]/export` | Export 대상·형식·미리보기·이력 |
 | `/templates`, `/templates/[id]` | 템플릿 마켓·리뷰 |

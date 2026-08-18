@@ -11,13 +11,14 @@ from app.schemas.common import CamelModel
 class ConceptBrief(CamelModel):
     """컨셉 직접 입력 모드에서 User 가 지정하는 컨셉 방향성."""
 
-    name: str = Field(min_length=1, max_length=60)
+    name: str = Field(default="", max_length=60)
     direction: str = Field(default="", max_length=400)
     keywords: str = Field(default="", max_length=120)
 
 
 class ProjectCreate(CamelModel):
-    name: str = Field(min_length=1, max_length=200)
+    # 임시저장은 필수값을 강제하지 않는다. 빈 이름은 서버가 자리표시로 채운다.
+    name: str = Field(default="", max_length=200)
     requirements_text: str = Field(default="", max_length=10_000)
     platform: str = "Web"
     # 요건 입력 화면에서 확정되는 생성 옵션 (기능정의서 v0.2.0 §4.1).

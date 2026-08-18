@@ -16,6 +16,7 @@ import {
   VIEWPORT_WIDTH,
 } from "@/components/workspace/MockupCanvas";
 import type { ElementSelection } from "@/components/workspace/MockupRenderer";
+import { ConceptGallery } from "@/components/workspace/ConceptGallery";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useRouteId } from "@/lib/route-id";
@@ -25,11 +26,12 @@ import { useWorkspaceStore } from "@/store/workspace-store";
 import type { ConceptLabel, Generation } from "@/lib/types";
 
 const SCREEN_PRESETS = [
+  { value: "main", label: "메인" },
+  { value: "landing", label: "랜딩" },
   { value: "login", label: "로그인" },
   { value: "dashboard", label: "대시보드" },
   { value: "list", label: "목록" },
   { value: "detail", label: "상세" },
-  { value: "landing", label: "랜딩" },
 ];
 
 export default function WorkspaceClient() {
@@ -83,7 +85,7 @@ export default function WorkspaceClient() {
 
   const [busy, setBusy] = useState<string | null>(null);
   const [screenModal, setScreenModal] = useState(false);
-  const [screenPreset, setScreenPreset] = useState("login");
+  const [screenPreset, setScreenPreset] = useState("main");
   const [customScreen, setCustomScreen] = useState("");
   const [screenDesc, setScreenDesc] = useState("");
   const [pendingGeneration, setPendingGeneration] = useState<Generation | null>(
@@ -101,10 +103,17 @@ export default function WorkspaceClient() {
   const [syncView, setSyncView] = useState(true);
   const [syncOffset, setSyncOffset] = useState({ x: 0, y: 0 });
   const [saveHint, setSaveHint] = useState(false);
+  const [view, setView] = useState<"gallery" | "studio">("gallery");
 
   useEffect(() => {
     if (projectId) void loadWorkspace(projectId);
   }, [projectId, loadWorkspace]);
+
+  useEffect(() => {
+    if (project?.status === "Draft") {
+      router.replace(`/projects/new?draft=${encodeURIComponent(project.id)}`);
+    }
+  }, [project, router]);
 
   // CSS Fallback 으로 완료된 생성이 있으면 무차감 재시도 대상을 찾는다.
   const refreshWarning = useCallback(async () => {
@@ -321,7 +330,7 @@ export default function WorkspaceClient() {
       setCustomScreen("");
       void refreshUser();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "화면 추가에 실패했다.");
+      alert(e instanceof Error ? e.message : "장면 추가에 실패했다.");
     } finally {
       setBusy(null);
     }
@@ -364,11 +373,8 @@ export default function WorkspaceClient() {
               )}
             </div>
             <div className="text-[10px] text-ink-500">
-              {project.platform} · {project.targetScreenTitle || "화면 미지정"}
-              {project.targetScreenInferred && project.targetScreen
-                ? " (AI 선택)"
-                : ""}{" "}
-              · 컨셉 {project.conceptCount} × 변형 {project.variantCount}
+              {project.platform} · 콘셉 {project.conceptCount} × 시안{" "}
+              {project.variantCount}
             </div>
           </div>
         </div>
@@ -385,6 +391,36 @@ export default function WorkspaceClient() {
                     ? "동기화 실패"
                     : ""}
           </span>
+          {!notGenerated && (
+            <div className="inline-flex rounded-lg bg-ink-100 p-0.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setView("gallery")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-medium transition",
+                  view === "gallery"
+                    ? "bg-surface text-ink-900 shadow-sm"
+                    : "text-ink-500 hover:text-ink-800",
+                )}
+              >
+                갤러리
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("studio")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-medium transition",
+                  view === "studio"
+                    ? "bg-surface text-ink-900 shadow-sm"
+                    : "text-ink-500 hover:text-ink-800",
+                )}
+              >
+                다듬기
+              </button>
+            </div>
+          )}
+          {view === "studio" && (
+            <>
           <button
             onClick={() => undoTokens(activeConcept)}
             disabled={(tokenHistory[activeConcept]?.length ?? 0) === 0}
@@ -445,8 +481,10 @@ export default function WorkspaceClient() {
             onClick={toggleCompare}
             disabled={notGenerated}
           >
-            컨셉 비교
+            콘셉 비교
           </Button>
+            </>
+          )}
           {isLocked ? (
             <Button
               variant="outline"
@@ -501,17 +539,50 @@ export default function WorkspaceClient() {
       )}
       {pendingGeneration && (
         <div className="border-b border-brand-200 bg-brand-50 px-5 py-2 text-xs text-brand-700">
-          화면을 추가 생성 중이다 — 확정 Token 을 주입한 경량 파이프라인(Layout
-          Engine → Renderer)이 실행 중이다.
+          장면 시안을 추가 생성 중이다.
         </div>
       )}
 
       {notGenerated ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-500">
-          <p>아직 생성된 디자인 시스템이 없다.</p>
+          <p>아직 뽑힌 콘셉 시안이 없다.</p>
           <Link href="/projects/new">
-            <Button size="sm">새 생성 시작</Button>
+            <Button size="sm">프롬프트로 뽑기</Button>
           </Link>
+        </div>
+      ) : view === "gallery" ? (
+        <div className="min-h-0 flex-1 overflow-auto bg-[#f4f3ef] px-6 py-6">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-ink-900">
+                한 프롬프트에서 나온 콘셉 시안
+              </h2>
+              <p className="mt-0.5 text-[11px] text-ink-500">
+                서로 다른 시각 방향이다. 카드를 고른 뒤 확정하거나, 더블클릭으로
+                다듬는다.
+              </p>
+            </div>
+            <div className="text-[11px] text-ink-500">
+              {designSystems.length} 콘셉 · {mockups.length}장
+            </div>
+          </div>
+          <ConceptGallery
+            mockups={mockups}
+            designSystems={designSystems}
+            projectName={project.name}
+            selectedId={activeMockup?.id}
+            onSelect={(m) => {
+              setConcept(m.conceptLabel);
+              setScreen(m.screen);
+              setMockup(m.index);
+            }}
+            onOpen={(m) => {
+              setConcept(m.conceptLabel);
+              setScreen(m.screen);
+              setMockup(m.index);
+              setView("studio");
+            }}
+          />
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
@@ -603,12 +674,12 @@ export default function WorkspaceClient() {
                 disabled={!isLocked || !!pendingGeneration}
                 title={
                   isLocked
-                    ? "확정 Token 으로 화면을 추가 생성한다"
-                    : "화면 추가는 컨셉 확정 이후에만 가능하다"
+                    ? "확정 Token 으로 장면의 컨셉 시안을 추가한다"
+                    : "장면 추가는 컨셉 확정 이후에만 가능하다"
                 }
                 onClick={() => setScreenModal(true)}
               >
-                + 화면 추가
+                + 장면 추가
               </Button>
             </div>
 
@@ -761,7 +832,7 @@ export default function WorkspaceClient() {
             {/* Mockup thumbnails */}
             <div className="flex shrink-0 items-center gap-3 border-t border-ink-200 bg-surface px-5 py-3">
               <span className="text-[10px] font-medium uppercase tracking-wider text-ink-500">
-                구조 변형
+                시안 변형
               </span>
               <div className="flex flex-1 items-center gap-2 overflow-x-auto scrollbar-thin">
                 {conceptMockups.map((m, idx) => {
@@ -911,8 +982,8 @@ export default function WorkspaceClient() {
       <Modal
         open={screenModal}
         onClose={() => setScreenModal(false)}
-        title="화면 추가 생성"
-        description="확정된 컨셉의 DS Token 을 주입해 Layout Engine → Renderer 만 실행한다. 구조 변형 3종이 생성되며, 월간 생성 한도 1회를 차감한다."
+        title="장면 추가 생성"
+        description="확정된 컨셉의 토큰으로 새 장면의 컨셉 시안을 뽑는다. 사이트 전체를 만들지 않으며, 월간 생성 한도 1회를 차감한다."
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
@@ -929,7 +1000,7 @@ export default function WorkspaceClient() {
           </div>
         }
       >
-        <div className="text-xs font-medium text-ink-700">화면</div>
+        <div className="text-xs font-medium text-ink-700">장면</div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {SCREEN_PRESETS.map((s) => (
             <button

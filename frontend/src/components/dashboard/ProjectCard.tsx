@@ -20,7 +20,7 @@ const STATUS_TONE: Record<
 };
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
-  Draft: "Draft",
+  Draft: "임시저장",
   InputReady: "준비 완료",
   Generating: "생성 중",
   Completed: "완료",
@@ -45,10 +45,14 @@ export function ProjectCard({ project }: { project: Project }) {
   const toggle = useProjectStore((s) => s.toggleFavorite);
   const c = palette(project);
   const hasDesign = (project.thumbnailColors ?? []).length > 0;
+  const isDraft = project.status === "Draft";
+  const href = isDraft
+    ? `/projects/new?draft=${encodeURIComponent(project.id)}`
+    : `/projects/${project.id}`;
 
   return (
     <Link
-      href={`/projects/${project.id}`}
+      href={href}
       className="group relative block overflow-hidden rounded-xl border border-ink-200 bg-surface transition hover:border-ink-300 hover:shadow-md"
     >
       <button

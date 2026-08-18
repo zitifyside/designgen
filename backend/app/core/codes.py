@@ -112,6 +112,7 @@ CODE_MAP: dict[str, dict[str, str]] = {
         "dashboard": "C190103",
         "list": "C190104",
         "detail": "C190105",
+        "main": "C190106",
     },
     "DS_MODE": {
         "per_concept": "C200101",

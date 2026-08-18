@@ -1,8 +1,9 @@
 """FAKE_AI_PIPELINE=true일 때 사용되는 결정론적 placeholder 출력.
 
-기획서 v0.5.0 §4 F-002 의 시안 정의를 그대로 따른다 —
-**시안은 단일 대표 화면의 레이아웃 구조 변형이며, 서로 다른 화면의 집합이 아니다.**
-따라서 한 번의 생성은 (컨셉 N종) × (동일 화면의 구조 변형 3·5종) 을 만든다.
+기획서 v0.5.0 §4 F-002 의 시안 정의를 컨셉 시안으로 해석한다 —
+**시안은 완성 사이트 목업이 아니라, 단일 대표 장면의 컨셉 보드 변형이다.**
+따라서 한 번의 생성은 (컨셉 N종) × (동일 장면의 시안 3·5종) 을 만든다.
+기본 장면은 메인(키비주얼·팔레트·타이포)이다.
 
 DS 생성 방식 2종도 여기서 분기한다.
   · per_concept : 컨셉마다 전 Token 카테고리를 독립 생성 (Primary Hue 60도 이상 구별)
@@ -83,8 +84,9 @@ CONCEPTS = [
     },
 ]
 
-# 요건 입력의 '생성 화면' 프리셋 (기능정의서 v0.2.0 §4.1).
+# 요건 입력의 '대표 장면' 프리셋 (기능정의서 v0.2.0 §4.1 + 메인 컨셉 보드).
 SCREEN_PRESETS: dict[str, str] = {
+    "main": "메인",
     "landing": "랜딩",
     "login": "로그인",
     "dashboard": "대시보드",
@@ -94,6 +96,13 @@ SCREEN_PRESETS: dict[str, str] = {
 
 # 화면 아키타입별 구조 변형 라벨 — 시안은 이 축으로만 달라진다.
 VARIANT_LABELS: dict[str, list[str]] = {
+    "main": [
+        "풀블리드 포스터",
+        "타이포 · 컬러 스플릿",
+        "워드마크 센터",
+        "에디토리얼 키비주얼",
+        "컬러필드 세로",
+    ],
     "landing": [
         "히어로 중앙 정렬 + 3열 특징 카드",
         "히어로 좌우 분할 + 우측 제품 프리뷰",
@@ -137,7 +146,8 @@ _ARCHETYPE_HINTS: list[tuple[tuple[str, ...], str]] = [
     (("대시보드", "dashboard", "통계", "분석", "analytics", "리포트", "report"), "dashboard"),
     (("목록", "리스트", "list", "table", "표", "검색", "search", "관리"), "list"),
     (("상세", "detail", "설정", "settings", "프로필", "profile", "편집", "edit"), "detail"),
-    (("랜딩", "landing", "홈", "home", "메인", "main", "소개", "intro"), "landing"),
+    (("메인", "main", "홈", "home", "대표", "키비주얼", "컨셉보드"), "main"),
+    (("랜딩", "landing", "소개", "intro"), "landing"),
 ]
 
 
@@ -149,21 +159,21 @@ def archetype_for(screen: str, title: str = "") -> str:
     for keywords, archetype in _ARCHETYPE_HINTS:
         if any(k in haystack for k in keywords):
             return archetype
-    return "landing"
+    return "main"
 
 
 def infer_target_screen(requirements: str, platform: str) -> tuple[str, str]:
-    """Input Analyzer 의 대표 화면 추론 (미지정 시 호출).
+    """Input Analyzer 의 대표 장면 추론 (미지정 시 호출).
 
+    단서가 없으면 메인 컨셉 보드를 쓴다. 사이트 구조를 추론하지 않는다.
     반환: (screen key, screen title)
     """
     text = (requirements or "").lower()
     for keywords, archetype in _ARCHETYPE_HINTS:
         if any(k in text for k in keywords):
             return archetype, SCREEN_PRESETS[archetype]
-    # 단서가 없으면 플랫폼 기본 대표 화면을 쓴다.
-    default = "dashboard" if platform == "Mobile" else "landing"
-    return default, SCREEN_PRESETS[default]
+    # 단서가 없으면 메인 컨셉 보드. 모바일도 사이트 목업으로 가지 않는다.
+    return "main", SCREEN_PRESETS["main"]
 
 
 # --- 컬러 유틸 (unified 모드의 강조색 Hue 회전에 사용) -------------------------
@@ -251,9 +261,9 @@ def _apply_briefs(concepts: list[dict], briefs: list[dict] | None) -> list[dict]
 
 
 def placeholder_layouts(
-    variants: int, screen: str = "landing", screen_title: str = "랜딩"
+    variants: int, screen: str = "main", screen_title: str = "메인"
 ) -> list[dict]:
-    """동일 화면(screen)의 구조 변형 N종을 만든다."""
+    """동일 장면(screen)의 컨셉 시안 N종을 만든다."""
     archetype = archetype_for(screen, screen_title)
     labels = VARIANT_LABELS[archetype]
     count = max(1, min(variants, len(labels)))

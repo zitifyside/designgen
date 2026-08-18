@@ -97,12 +97,19 @@ async def list_projects(
     return await _out(db, rows)
 
 
+UNTITLED_PROJECT = "제목 없음"
+
+
+def _display_name(name: str | None) -> str:
+    return (name or "").strip() or UNTITLED_PROJECT
+
+
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_project(body: ProjectCreate, user: CurrentUser, db: DbDep):
     target_screen = (body.target_screen or "").strip()
     project = Project(
         owner_id=user.id,
-        name=body.name,
+        name=_display_name(body.name),
         description=body.requirements_text[:80],
         platform=body.platform,
         status="Draft",
@@ -157,6 +164,12 @@ async def update_project(
         patch.setdefault(
             "target_screen_title", SCREEN_PRESETS.get(screen) or screen
         )
+    if "name" in patch:
+        patch["name"] = _display_name(patch.get("name"))
+    if "requirements_text" in patch:
+        text = patch["requirements_text"] or ""
+        patch["requirements_text"] = text
+        patch.setdefault("description", text[:80])
     for field, value in patch.items():
         setattr(project, field, value)
     db.add(project)

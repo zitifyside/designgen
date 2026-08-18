@@ -118,7 +118,7 @@ async def run_generation(
                 [(f.filename, f.extracted_text) for f in attachments],
             )
 
-            # 생성 화면 미지정 시 Input Analyzer 가 대표 화면을 추론한다.
+            # 대표 장면 미지정 시 Input Analyzer 가 추론한다. 기본은 메인 컨셉 보드.
             screen, screen_title = project.target_screen, project.target_screen_title
             if not screen:
                 screen, screen_title = infer_target_screen(
@@ -177,7 +177,7 @@ async def run_generation(
                             index=idx,
                             screen=layout.get("screen", screen),
                             screen_title=layout.get("screenTitle", screen_title),
-                            screen_order=0,  # 대표 화면은 항상 첫 화면이다.
+                            screen_order=0,  # 대표 장면은 항상 첫 장면이다.
                             kind=layout["kind"],
                             title=layout["title"],
                             variant_label=layout.get("variantLabel", ""),

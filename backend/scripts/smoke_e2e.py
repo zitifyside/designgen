@@ -114,7 +114,7 @@ async def main() -> None:
     from sqlalchemy import inspect as sa_inspect
 
     check("코드 그룹 30종", len(CODE_MAP) == 30, str(len(CODE_MAP)))
-    check("  MOCKUP_KIND", "MOCKUP_KIND" in CODE_MAP and "dashboard" in CODE_MAP["MOCKUP_KIND"])
+    check("  MOCKUP_KIND", "MOCKUP_KIND" in CODE_MAP and "main" in CODE_MAP["MOCKUP_KIND"] and "dashboard" in CODE_MAP["MOCKUP_KIND"])
     check("  DS_MODE", "unified" in CODE_MAP.get("DS_MODE", {}))
     check("  EXPORT_FORMAT", set(CODE_MAP.get("EXPORT_FORMAT", {})) >= {"json", "png", "css", "fig"})
     check("  LOG_LEVEL", set(CODE_MAP.get("LOG_LEVEL", {})) >= {"info", "warn", "error"})

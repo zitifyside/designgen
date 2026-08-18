@@ -132,10 +132,19 @@ export default function DashboardPage() {
             {recent.map((p) => (
               <Link
                 key={p.id}
-                href={`/projects/${p.id}`}
+                href={
+                  p.status === "Draft"
+                    ? `/projects/new?draft=${encodeURIComponent(p.id)}`
+                    : `/projects/${p.id}`
+                }
                 className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-surface px-3 py-2 text-xs text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
               >
                 <span className="font-medium text-ink-900">{p.name}</span>
+                {p.status === "Draft" && (
+                  <span className="rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-600">
+                    임시저장
+                  </span>
+                )}
                 <span className="text-[10px] text-ink-500">
                   {relativeTime(p.updatedAt)}
                 </span>

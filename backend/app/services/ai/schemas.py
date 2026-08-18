@@ -17,7 +17,7 @@ from typing import Any
 
 from app.services.ai.placeholder import SCREEN_PRESETS
 
-# 렌더 아키타입 = 요건 입력의 '생성 화면' 프리셋과 동일한 5종.
+# 렌더 아키타입 = 요건 입력의 '대표 장면' 프리셋과 동일한 6종.
 ALLOWED_KINDS: list[str] = list(SCREEN_PRESETS)
 
 ANALYSIS_SCHEMA: dict[str, Any] = {

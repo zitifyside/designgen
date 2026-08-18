@@ -6,9 +6,9 @@ import type { DesignTokens, Mockup } from "@/lib/types";
 /**
  * 시안 렌더러.
  *
- * 시안은 서로 다른 화면의 집합이 아니라 **동일 화면(kind)의 레이아웃 구조 변형**
- * 이다 (기획서 v0.5.0 §4 F-002). 따라서 화면 아키타입은 `mockup.kind` 로 고정되고,
- * `mockup.index` 가 그 화면 안에서의 구조 변형을 결정한다.
+ * 시안은 완성 사이트가 아니라 **동일 장면(kind)의 컨셉 시안 변형**이다.
+ * 화면 아키타입은 `mockup.kind` 로 고정되고, `mockup.index` 가 그 장면 안에서의
+ * 시안 변형을 결정한다. 기본 장면은 메인(컨셉 보드)이다.
  *
  * 렌더링은 v1.0 확정대로 React + CSS 변수 방식이다 (Fabric.js·Konva.js 는 v2.0 검토).
  */
@@ -81,8 +81,10 @@ export function MockupRenderer({
     case "detail":
       return <DetailScreen ctx={ctx} />;
     case "landing":
-    default:
       return <LandingScreen ctx={ctx} />;
+    case "main":
+    default:
+      return <MainScreen ctx={ctx} />;
   }
 }
 
@@ -815,6 +817,183 @@ function FormFields({ ctx, fields }: { ctx: RenderContext; fields: string[] }) {
 
 // ── 화면별 구조 변형 ───────────────────────────────────────────
 
+function PaletteRow({ ctx, chips = 5 }: { ctx: RenderContext; chips?: number }) {
+  const colors = [
+    "var(--ds-color-primary)",
+    "var(--ds-color-secondary)",
+    "var(--ds-color-neutral)",
+    "var(--ds-color-surface)",
+    "var(--ds-color-text)",
+  ].slice(0, chips);
+  return (
+    <div style={{ display: "flex", gap: "var(--ds-space-2)" }}>
+      {colors.map((bg, i) => (
+        <div
+          key={i}
+          style={{
+            flex: 1,
+            height: 36,
+            borderRadius: "var(--ds-radius-sm)",
+            background: bg,
+            border: "var(--ds-border-width) var(--ds-border-style) var(--ds-color-neutral)",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** 완성 사이트가 아니라 콘셉 방향 시안(보드)을 보여 준다. */
+function MainScreen({ ctx }: { ctx: RenderContext }) {
+  const v = ctx.variant % 5;
+  const pad = { padding: "var(--ds-space-6)" };
+  const title = ctx.projectName || "Concept";
+
+  if (v === 1) {
+    return (
+      <div
+        style={{
+          ...page,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          minHeight: "100%",
+        }}
+      >
+        <div style={{ ...pad, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div style={{ ...muted, letterSpacing: "0.18em" }}>TYPE / COLOR</div>
+          <div>
+            <Heading ctx={ctx} size="72px">
+              {title}
+            </Heading>
+            <p style={{ ...muted, marginTop: "var(--ds-space-4)", maxWidth: 360 }}>
+              타이포와 여백으로 방향을 잡는다.
+            </p>
+          </div>
+          <div>
+            <Heading ctx={ctx} size="var(--ds-font-size-lg)">
+              Aa 가나다
+            </Heading>
+            <p style={{ marginTop: "var(--ds-space-2)", color: "var(--ds-color-text-muted)" }}>
+              Regular · Medium · Bold
+            </p>
+          </div>
+        </div>
+        <div style={{ background: "var(--ds-color-primary)", padding: "var(--ds-space-6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+          <ContentSlot ctx={ctx} label="컬러 필드" height={220} />
+          <div style={{ marginTop: "var(--ds-space-4)" }}>
+            <PaletteRow ctx={ctx} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (v === 2) {
+    return (
+      <div
+        style={{
+          ...page,
+          ...pad,
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          minHeight: "100%",
+          background:
+            "radial-gradient(circle at 50% 40%, var(--ds-color-surface), var(--ds-color-bg))",
+        }}
+      >
+        <div style={{ ...muted, letterSpacing: "0.28em" }}>CONCEPT</div>
+        <div style={{ marginTop: "var(--ds-space-6)" }}>
+          <Heading ctx={ctx} size="80px" align="center">
+            {title}
+          </Heading>
+        </div>
+        <p style={{ ...muted, marginTop: "var(--ds-space-4)", letterSpacing: "0.12em" }}>
+          무드 · 톤 · 방향
+        </p>
+        <div style={{ margin: "var(--ds-space-8) auto 0", maxWidth: 360 }}>
+          <PaletteRow ctx={ctx} />
+        </div>
+      </div>
+    );
+  }
+
+  if (v === 3) {
+    return (
+      <div style={{ ...page, minHeight: "100%" }}>
+        <ContentSlot ctx={ctx} label="키비주얼" height={420} radius="0" />
+        <div style={{ ...pad, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "var(--ds-space-6)" }}>
+          <div>
+            <Heading ctx={ctx} size="56px">
+              {title}
+            </Heading>
+            <p style={{ ...muted, marginTop: "var(--ds-space-2)" }}>
+              에디토리얼 키비주얼
+            </p>
+          </div>
+          <div style={{ width: 220 }}>
+            <PaletteRow ctx={ctx} chips={4} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (v === 4) {
+    return (
+      <div style={{ ...page, display: "flex", minHeight: "100%" }}>
+        <div
+          style={{
+            width: "34%",
+            background: "var(--ds-color-primary)",
+            color: "white",
+            padding: "var(--ds-space-6)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ letterSpacing: "0.2em", fontSize: 12, opacity: 0.8 }}>FIELD</div>
+          <Heading ctx={ctx} size="48px">
+            {title}
+          </Heading>
+        </div>
+        <div style={{ ...pad, flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <PaletteRow ctx={ctx} />
+          <ContentSlot ctx={ctx} label="대표 비주얼" height={280} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...page, position: "relative", minHeight: "100%" }}>
+      <ContentSlot ctx={ctx} label="키비주얼" height="100%" radius="0" />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          padding: "var(--ds-space-8)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-end",
+          background:
+            "linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--ds-color-bg) 88%, transparent))",
+        }}
+      >
+        <div style={{ ...muted, letterSpacing: "0.2em" }}>CONCEPT POSTER</div>
+        <Heading ctx={ctx} size="72px">
+          {title}
+        </Heading>
+        <div style={{ marginTop: "var(--ds-space-4)", maxWidth: 420 }}>
+          <PaletteRow ctx={ctx} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LandingScreen({ ctx }: { ctx: RenderContext }) {
   const v = ctx.variant % 5;
   const pad = { padding: "var(--ds-space-6)" };
@@ -899,7 +1078,7 @@ function LandingScreen({ ctx }: { ctx: RenderContext }) {
               </Heading>
             </div>
             <p style={{ ...muted, marginTop: "var(--ds-space-3)", maxWidth: 460 }}>
-              컨셉별 DS 와 동일 화면의 구조 변형 시안을 한 번에 생성한다.
+              컨셉별 DS 와 같은 장면의 컨셉 시안을 한 번에 뽑는다.
             </p>
             <CtaRow ctx={ctx} />
           </div>

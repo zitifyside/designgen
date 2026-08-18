@@ -121,12 +121,12 @@ export interface DesignSystem {
   overriddenFields?: Record<string, unknown> | null;
 }
 
-/** 화면 아키타입 — 요건 입력의 '생성 화면' 프리셋과 동일한 5종. */
-export type ScreenKind = "landing" | "login" | "dashboard" | "list" | "detail";
+/** 장면 아키타입 — 요건 입력의 '대표 장면' 프리셋과 동일한 6종. */
+export type ScreenKind = "main" | "landing" | "login" | "dashboard" | "list" | "detail";
 
 /**
- * 시안 1종. 시안은 서로 다른 화면의 집합이 아니라
- * **동일 화면(screen)의 레이아웃 구조 변형(index)** 이다.
+ * 시안 1종. 완성 사이트 페이지가 아니라
+ * **동일 장면(screen)의 컨셉 시안 변형(index)** 이다.
  */
 export interface Mockup {
   id: string;
@@ -193,7 +193,7 @@ export interface Project {
   dsMode: DsMode;
   targetScreen: string;
   targetScreenTitle: string;
-  /** AI 가 대표 화면을 추론했는지 여부 (미지정 입력 시 true). */
+  /** AI 가 대표 장면을 추론했는지 여부 (미지정 입력 시 true). */
   targetScreenInferred: boolean;
   conceptBriefs?: ConceptBrief[] | null;
   confirmedConceptId?: string | null;

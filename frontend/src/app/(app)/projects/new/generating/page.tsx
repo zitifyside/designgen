@@ -16,7 +16,7 @@ const STAGES: Array<{
   {
     key: "InputAnalyzer",
     title: "Input Analyzer",
-    description: "입력 텍스트를 분석하여 컨텍스트와 대표 화면을 추출한다",
+    description: "입력 텍스트를 분석하여 컨텍스트와 대표 장면을 추출한다",
   },
   {
     key: "ConceptEngine",
@@ -26,7 +26,7 @@ const STAGES: Array<{
   {
     key: "LayoutEngine",
     title: "Layout Engine",
-    description: "대표 화면 하나의 레이아웃 구조 변형을 설계한다",
+    description: "대표 장면의 컨셉 시안 변형을 설계한다. 사이트 목업이 아니다",
   },
   {
     key: "Renderer",
@@ -130,7 +130,7 @@ export default function GeneratingPage() {
                 ? "생성에 실패했다"
                 : cancelled
                   ? "생성을 취소했다"
-                  : "AI 가 시안을 생성 중이다"}
+                  : "한 프롬프트로 여러 콘셉 시안을 뽑는 중이다"}
           </h1>
           <p className="mt-1 text-xs text-ink-500">
             {done

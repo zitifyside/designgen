@@ -15,8 +15,8 @@
       각각은 W3C DTCG 스타일의 토큰 세트다: {conceptLabel, conceptName, description, tokens}.
 
   generate_layouts(concept, variants) -> [layout, ...]   (len == variants)
-      Stage 3 · LayoutEngine — 컨셉별로 `variants` 개의 목업 레이아웃을 생성한다:
-      {kind, title, nodeTree}.
+      Stage 3 · LayoutEngine — 컨셉별로 `variants` 개의 컨셉 시안을 생성한다:
+      {kind, title, nodeTree}. 사이트 목업 페이지가 아니다.
 
   render(layout, tokens) -> {imageUrl?, nodeTree?}
       Stage 4 · Renderer — 레이아웃 + 토큰을 렌더링된 산출물로 변환한다.

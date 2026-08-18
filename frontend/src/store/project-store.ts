@@ -23,7 +23,7 @@ interface ProjectState {
     targetScreenTitle?: string;
     conceptBriefs?: ConceptBrief[];
   }) => Promise<Project>;
-  update: (id: string, patch: Partial<Project>) => Promise<void>;
+  update: (id: string, patch: Partial<Project>) => Promise<Project>;
   remove: (id: string) => Promise<void>;
   /** 서버가 돌려준 최신 프로젝트를 목록에 반영한다. */
   upsert: (project: Project) => void;
@@ -76,6 +76,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   update: async (id, patch) => {
     const updated = await api.projects.update(id, patch);
     get().upsert(updated);
+    return updated;
   },
 
   remove: async (id) => {

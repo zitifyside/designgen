@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { useProjectStore } from "@/store/project-store";
-import type { ConceptBrief, DsMode, Platform } from "@/lib/types";
+import type { ConceptBrief, DsMode, Platform, Project } from "@/lib/types";
 
 const PLATFORMS: Array<{ value: Platform; label: string; enabled: boolean }> = [
   { value: "Web", label: "Web", enabled: true },
@@ -20,9 +20,10 @@ const PLATFORMS: Array<{ value: Platform; label: string; enabled: boolean }> = [
   { value: "APP", label: "APP", enabled: false },
 ];
 
-/** 생성 화면 프리셋 (기능정의서 v0.2.0 §4.1) — 빈 값은 'AI 자동 선택'이다. */
+/** 대표 장면 프리셋 — 빈 값은 'AI 자동 선택', 기본은 메인 컨셉 보드. */
 const SCREEN_PRESETS: Array<{ value: string; label: string }> = [
   { value: "", label: "AI 자동 선택" },
+  { value: "main", label: "메인" },
   { value: "landing", label: "랜딩" },
   { value: "login", label: "로그인" },
   { value: "dashboard", label: "대시보드" },
@@ -60,9 +61,11 @@ type ConceptMode = "auto" | "manual";
 const DRAFT_KEY = "adg.newProject.draft.v1";
 const DRAFT_INTERVAL_MS = 30_000;
 const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const UNTITLED_PROJECT = "제목 없음";
 
 interface Draft {
   savedAt: number;
+  projectId?: string | null;
   name: string;
   requirements: string;
   platform: Platform;
@@ -91,11 +94,20 @@ function readDraft(): Draft | null {
   }
 }
 
+function persistDraft(current: Omit<Draft, "savedAt">): Date | null {
+  if (typeof window === "undefined") return null;
+  const savedAt = Date.now();
+  localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...current, savedAt }));
+  return new Date(savedAt);
+}
+
 export default function NewProjectPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const refreshUser = useAuthStore((s) => s.refreshUser);
   const create = useProjectStore((s) => s.create);
+  const update = useProjectStore((s) => s.update);
 
   const isFree = user?.plan === "Free" || user?.plan === undefined;
   const canUnifiedDs = user?.plan === "Pro" || user?.plan === "Team" || user?.plan === "Admin";
@@ -111,7 +123,7 @@ export default function NewProjectPage() {
   const [conceptCount, setConceptCount] = useState<1 | 2 | 3>(isFree ? 1 : 3);
   const [variantCount, setVariantCount] = useState<3 | 5>(isFree ? 3 : 5);
   const [dsMode, setDsMode] = useState<DsMode>("per_concept");
-  const [screenPreset, setScreenPreset] = useState<string>("");
+  const [screenPreset, setScreenPreset] = useState<string>("main");
   const [customScreen, setCustomScreen] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [conceptMode, setConceptMode] = useState<ConceptMode>("auto");
@@ -121,53 +133,163 @@ export default function NewProjectPage() {
     { ...EMPTY_CONCEPT },
   ]);
   const [submitting, setSubmitting] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftRestored, setDraftRestored] = useState<Date | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const draftIdRef = useRef<string | null>(null);
   const stateRef = useRef<Record<string, unknown>>({});
 
   // 현재 입력값을 ref 에 담아 두어, 저장 타이머가 매번 재생성되지 않게 한다.
   stateRef.current = {
+    projectId: draftId,
     name, requirements, platform, conceptCount, variantCount,
     dsMode, screenPreset, customScreen, conceptMode, concepts,
   };
+  draftIdRef.current = draftId;
 
-  // 재진입 시 복원 (한 번만).
-  useEffect(() => {
-    const draft = readDraft();
-    if (!draft) return;
-    setName(draft.name ?? "");
+  const applyLocalDraft = (draft: Draft) => {
+    setName(draft.name === UNTITLED_PROJECT ? "" : (draft.name ?? ""));
     setRequirements(draft.requirements ?? "");
     setPlatform(draft.platform ?? "Web");
     setConceptCount(draft.conceptCount ?? 1);
     setVariantCount(draft.variantCount ?? 3);
     setDsMode(draft.dsMode ?? "per_concept");
-    setScreenPreset(draft.screenPreset ?? "");
+    setScreenPreset(draft.screenPreset ?? "main");
     setCustomScreen(draft.customScreen ?? "");
     setConceptMode(draft.conceptMode ?? "auto");
     if (Array.isArray(draft.concepts) && draft.concepts.length === 3) {
       setConcepts(draft.concepts);
     }
+    if (draft.projectId) {
+      setDraftId(draft.projectId);
+      draftIdRef.current = draft.projectId;
+    }
     setDraftRestored(new Date(draft.savedAt));
+  };
+
+  const applyServerProject = (project: Project) => {
+    const known = new Set(["main", "landing", "login", "dashboard", "list", "detail"]);
+    const screen = project.targetScreen || "";
+    setName(project.name === UNTITLED_PROJECT ? "" : project.name);
+    setRequirements(project.requirementsText ?? "");
+    setPlatform(project.platform ?? "Web");
+    setConceptCount((project.conceptCount as 1 | 2 | 3) || 1);
+    setVariantCount((project.variantCount as 3 | 5) || 3);
+    setDsMode(project.dsMode ?? "per_concept");
+    if (!screen) {
+      setScreenPreset("");
+      setCustomScreen("");
+    } else if (known.has(screen)) {
+      setScreenPreset(screen);
+      setCustomScreen("");
+    } else {
+      setScreenPreset("custom");
+      setCustomScreen(screen);
+    }
+    const briefs = project.conceptBriefs ?? [];
+    const filled = briefs.some((b) => b.name.trim() || b.direction.trim());
+    setConceptMode(filled ? "manual" : "auto");
+    setConcepts([
+      briefs[0] ?? { ...EMPTY_CONCEPT },
+      briefs[1] ?? { ...EMPTY_CONCEPT },
+      briefs[2] ?? { ...EMPTY_CONCEPT },
+    ]);
+    setDraftId(project.id);
+    draftIdRef.current = project.id;
+    setDraftRestored(new Date(project.updatedAt));
+  };
+
+  // 재진입 시 복원 (한 번만). URL 의 draft id 가 있으면 서버 값을 우선한다.
+  useEffect(() => {
+    const fromUrl = searchParams.get("draft");
+    if (fromUrl) {
+      void api.projects
+        .get(fromUrl)
+        .then((project) => {
+          if (project.status !== "Draft") {
+            router.replace(`/projects/${project.id}`);
+            return;
+          }
+          applyServerProject(project);
+        })
+        .catch(() => {
+          setError("임시저장 프로젝트를 불러오지 못했다.");
+        });
+      return;
+    }
+    const draft = readDraft();
+    if (draft) applyLocalDraft(draft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const snapshotDraft = (): Omit<Draft, "savedAt"> =>
+    stateRef.current as unknown as Omit<Draft, "savedAt">;
+
+  const saveDraftNow = (): boolean => {
+    try {
+      const saved = persistDraft(snapshotDraft());
+      if (saved) setDraftSavedAt(saved);
+      return saved !== null;
+    } catch {
+      return false;
+    }
+  };
+
   // 30초마다 자동 저장 — 입력이 없으면 저장하지 않는다.
+  // 수동 임시저장은 빈 값도 그대로 남긴다 (필수값과 무관).
   useEffect(() => {
     const timer = setInterval(() => {
-      const current = stateRef.current as unknown as Omit<Draft, "savedAt">;
+      const current = snapshotDraft();
       if (!current.name?.trim() && !current.requirements?.trim()) return;
-      try {
-        localStorage.setItem(
-          DRAFT_KEY,
-          JSON.stringify({ ...current, savedAt: Date.now() }),
-        );
-        setDraftSavedAt(new Date());
-      } catch {
-        /* 저장 실패(용량·프라이빗 모드)는 입력을 막지 않는다. */
-      }
+      saveDraftNow();
     }, DRAFT_INTERVAL_MS);
     return () => clearInterval(timer);
   }, []);
+
+  const targetScreenValue = () =>
+    screenPreset === "custom" ? customScreen.trim() : screenPreset;
+
+  const buildProjectPayload = () => {
+    const briefs =
+      conceptMode === "manual" ? concepts.slice(0, conceptCount) : undefined;
+    return {
+      name: name.trim() || UNTITLED_PROJECT,
+      requirementsText: requirements,
+      platform,
+      conceptCount,
+      variantCount,
+      dsMode,
+      targetScreen: targetScreenValue() || undefined,
+      conceptBriefs: briefs,
+    };
+  };
+
+  const handleDraftSave = async () => {
+    setError(null);
+    setDrafting(true);
+    try {
+      const payload = buildProjectPayload();
+      const existing = draftIdRef.current;
+      const project = existing
+        ? await update(existing, payload)
+        : await create(payload);
+      setDraftId(project.id);
+      draftIdRef.current = project.id;
+      persistDraft({ ...snapshotDraft(), projectId: project.id });
+      setDraftSavedAt(new Date());
+      setDraftRestored(null);
+      if (!existing) {
+        router.replace(`/projects/new?draft=${encodeURIComponent(project.id)}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "임시저장에 실패했다.");
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const updateConcept = (idx: number, patch: Partial<ConceptBrief>) => {
     setConcepts((arr) => arr.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
@@ -198,12 +320,11 @@ export default function NewProjectPage() {
       briefs = active;
     }
 
-    const targetScreen =
-      screenPreset === "custom" ? customScreen.trim() : screenPreset;
+    const targetScreen = targetScreenValue();
 
     setSubmitting(true);
     try {
-      const project = await create({
+      const payload = {
         name: name.trim(),
         requirementsText: requirements.trim(),
         platform,
@@ -212,7 +333,11 @@ export default function NewProjectPage() {
         dsMode,
         targetScreen: targetScreen || undefined,
         conceptBriefs: briefs,
-      });
+      };
+      const existing = draftIdRef.current;
+      const project = existing
+        ? await update(existing, payload)
+        : await create(payload);
       // 첨부는 프로젝트 생성 직후에 올린다 — 서버가 텍스트를 추출해
       // 요건과 합쳐 분석 입력으로 쓴다.
       if (files.length > 0) {
@@ -245,8 +370,8 @@ export default function NewProjectPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <PageHeader
-        title="새 프로젝트"
-        description="요건사항을 입력하면 AI 가 DS 와 단일 화면의 구조 변형 시안을 자동 생성한다."
+        title="콘셉 시안 뽑기"
+        description="한 프롬프트로 서로 다른 시각 방향의 시안을 갤러리로 뽑는다. 사이트를 만들지 않는다."
         breadcrumb={
           <>
             <span>대시보드</span>
@@ -259,7 +384,7 @@ export default function NewProjectPage() {
       {draftRestored && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-700">
           <span>
-            {draftRestored.toLocaleString("ko-KR")} 에 자동 저장된 입력을 복원했다.
+            {draftRestored.toLocaleString("ko-KR")} 에 저장된 임시 프로젝트를 불러왔다.
           </span>
           <button
             className="font-medium underline"
@@ -273,7 +398,10 @@ export default function NewProjectPage() {
               setRequirements("");
               setCustomScreen("");
               setConcepts([{ ...EMPTY_CONCEPT }, { ...EMPTY_CONCEPT }, { ...EMPTY_CONCEPT }]);
+              setDraftId(null);
+              draftIdRef.current = null;
               setDraftRestored(null);
+              router.replace("/projects/new");
             }}
           >
             새로 작성
@@ -288,7 +416,7 @@ export default function NewProjectPage() {
             label="프로젝트명"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="예: 투자자 미팅용 SaaS 대시보드"
+            placeholder="예: 핀테크 브랜드 컨셉"
             required
             maxLength={200}
           />
@@ -297,13 +425,13 @@ export default function NewProjectPage() {
         <Card>
           <Textarea
             id="requirements"
-            label="요건사항"
-            hint="기획 의도·톤·핵심 화면을 자유롭게 적는다. Markdown 일부 지원."
+            label="프롬프트"
+            hint="무드·대상·느낌을 한 번에 적는다. 여러 콘셉 시안이 갤러리로 나온다."
             value={requirements}
             onChange={(e) => setRequirements(e.target.value)}
             countMax={10000}
             maxLength={10000}
-            placeholder={`예시:\n\nB2B SaaS 분석 대시보드. 좌측 사이드바, 상단 지표 카드 4개, 시계열 차트 2개. 톤은 차분하고 신뢰감 있게.`}
+            placeholder={`예시:\n\n투자자 미팅용 핀테크 브랜드. 네이비·골드, 큰 타이포, 여백이 넓은 신뢰감. 대표 장면은 메인 컨셉 보드.`}
             required
           />
         </Card>
@@ -381,13 +509,21 @@ export default function NewProjectPage() {
           </div>
         </Card>
 
-        <Card>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="text-[11px] font-medium text-ink-500 hover:text-ink-800 hover:underline"
+        >
+          {showAdvanced ? "고급 옵션 접기" : "고급 옵션 (장면·DS·직접 콘셉)"}
+        </button>
+
+        {showAdvanced && <Card>
           <div className="text-xs font-medium text-ink-700">
-            생성 화면 <span className="font-normal text-ink-500">(선택)</span>
+            대표 장면 <span className="font-normal text-ink-500">(선택)</span>
           </div>
           <p className="mt-0.5 text-[11px] text-ink-500">
-            시안은 이 화면 하나의 레이아웃 구조 변형으로 생성된다. 미지정 시 AI 가
-            요건을 분석해 대표 화면을 고른다.
+            완성 사이트가 아니라, 이 장면의 컨셉 시안을 여러 방향으로 뽑는다.
+            미지정 시 AI 가 요건에서 대표 장면을 고른다.
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {SCREEN_PRESETS.map((s) => (
@@ -433,7 +569,7 @@ export default function NewProjectPage() {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-ink-700">컨셉 수</span>
+                <span className="text-xs font-medium text-ink-700">콘셉 방향 수</span>
                 {isFree && <Badge tone="warning">Free: 1종 고정</Badge>}
               </div>
               <div className="mt-2 grid grid-cols-3 gap-1.5">
@@ -458,7 +594,7 @@ export default function NewProjectPage() {
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-ink-700">
-                  컨셉당 시안 수
+                  방향당 시안 수
                 </span>
                 {isFree && <Badge tone="warning">Free: 3종 고정</Badge>}
               </div>
@@ -483,6 +619,8 @@ export default function NewProjectPage() {
           </div>
         </Card>
 
+        {showAdvanced && (
+        <>
         <Card>
           <div className="text-xs font-medium text-ink-700">DS 생성 방식</div>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -641,6 +779,8 @@ export default function NewProjectPage() {
             </div>
           )}
         </Card>
+        </>
+        )}
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -653,24 +793,36 @@ export default function NewProjectPage() {
             <div className="text-xs text-ink-500">
               {draftSavedAt && (
                 <span className="mr-2 text-[10px] text-ink-500">
-                  자동 저장 {draftSavedAt.toLocaleTimeString("ko-KR")}
+                  저장됨 {draftSavedAt.toLocaleTimeString("ko-KR")}
                 </span>
               )}
-              컨셉 {conceptCount} × 구조 변형 {variantCount} ={" "}
-              {conceptCount * variantCount}종 시안 · 예상 소요 2~3분 · 월간 생성
+              컨셉 {conceptCount} × 시안 {variantCount} ={" "}
+              {conceptCount * variantCount}종 · 예상 소요 2~3분 · 월간 생성
               한도 <span className="font-medium text-ink-700">1회 차감</span>
               <span className="ml-1 text-[10px] text-ink-500">
                 (v1.0 균일제)
               </span>
             </div>
-            <Button
-              type="submit"
-              size="lg"
-              loading={submitting}
-              disabled={!name || !requirements}
-            >
-              생성 시작
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="submit"
+                size="lg"
+                loading={submitting}
+                disabled={!name || !requirements}
+              >
+                생성 시작
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                loading={drafting}
+                disabled={submitting}
+                onClick={handleDraftSave}
+              >
+                임시저장
+              </Button>
+            </div>
           </div>
         </div>
       </form>
