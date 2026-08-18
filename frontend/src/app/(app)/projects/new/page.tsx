@@ -517,7 +517,8 @@ export default function NewProjectPage() {
           {showAdvanced ? "고급 옵션 접기" : "고급 옵션 (장면·DS·직접 콘셉)"}
         </button>
 
-        {showAdvanced && <Card>
+        {showAdvanced && (
+          <Card>
           <div className="text-xs font-medium text-ink-700">
             대표 장면 <span className="font-normal text-ink-500">(선택)</span>
           </div>
@@ -563,7 +564,8 @@ export default function NewProjectPage() {
               />
             </div>
           )}
-        </Card>
+          </Card>
+        )}
 
         <Card>
           <div className="grid grid-cols-2 gap-6">
