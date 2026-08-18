@@ -431,26 +431,36 @@ async def health_components(admin: AdminUser, db: DbDep):
 
     if settings.fake_ai_pipeline:
         ai_detail = "FAKE_AI_PIPELINE=true — placeholder 출력으로 동작 중"
-    elif settings.ai_provider == "codex":
-        ai_detail = f"Codex CLI ({settings.codex_model})"
+        resolved = None
     else:
-        ai_detail = f"provider 활성 ({settings.gemini_model})"
+        try:
+            from app.services.ai.pipeline import resolve_provider_name
+
+            resolved = resolve_provider_name()
+        except Exception as exc:  # noqa: BLE001
+            resolved = None
+            ai_detail = f"실제 파이프라인 설정 오류: {exc}"
+        else:
+            if resolved == "codex":
+                ai_detail = f"실제 파이프라인 · Codex CLI ({settings.codex_model})"
+            else:
+                ai_detail = f"실제 파이프라인 · Gemini ({settings.gemini_model})"
     out.append(
         HealthComponentOut(
             name="AI Pipeline",
-            status="degraded" if settings.fake_ai_pipeline else "operational",
+            status="degraded" if settings.fake_ai_pipeline or resolved is None else "operational",
             detail=ai_detail,
         )
     )
     from app.services.ai.codex_cli import codex_cli_available
 
-    if settings.ai_provider == "codex":
+    if resolved == "codex" or (settings.ai_provider == "codex" and not settings.gemini_api_key):
         cli_ok = codex_cli_available()
         key_ok = cli_ok
         key_detail = "Codex CLI 사용 가능" if cli_ok else "Codex CLI 없음 — `codex login` 확인"
     else:
-        key_ok = bool(settings.gemini_api_key or settings.openai_api_key)
-        key_detail = "Gemini / OpenAI 키 설정 여부"
+        key_ok = bool(settings.gemini_api_key)
+        key_detail = "Gemini 키 설정됨" if key_ok else "Gemini 키 없음"
     out.append(
         HealthComponentOut(
             name="AI Provider Key",

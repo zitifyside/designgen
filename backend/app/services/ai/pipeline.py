@@ -12,9 +12,9 @@ FastAPI BackgroundTask로 실행된다. 프로덕션에서는 재시도와 우�
 기계적으로 이뤄질 수 있도록 작성되어 있다.
 
 Provider 선택:
-  - FAKE_AI_PIPELINE=true  → 결정론적 placeholder 출력(기본값; API 키 없이도
-    실행되어 프론트엔드가 처음부터 끝까지 동작한다).
-  - FAKE_AI_PIPELINE=false → AI_PROVIDER(기본 codex = 로컬 Codex CLI)를 호출한다. Renderer 가 3회
+  - FAKE_AI_PIPELINE=true  → 결정론적 placeholder 출력.
+  - FAKE_AI_PIPELINE=false → 실제 LLM. 로컬은 Codex CLI, Cloud Run 처럼
+    CLI 가 없으면 GEMINI_API_KEY 로 Gemini 에 붙는다. Renderer 가 3회
     실패하면 Token 기반 CSS 렌더링으로 Fallback 하고 Completed (Warning) 으로
     마감한다 (기획서 v0.5.0 §6 시나리오 4).
 """
@@ -65,13 +65,37 @@ FALLBACK_REASON = (
 )
 
 
+def resolve_provider_name(name: str | None = None) -> str:
+    """실제로 호출할 provider 를 고른다.
+
+    운영 Cloud Run 에는 Codex CLI 가 없다. AI_PROVIDER=codex 여도
+    CLI 가 없고 Gemini 키가 있으면 Gemini 로 내린다.
+    """
+    requested = (name or settings.ai_provider or "codex").strip().lower()
+    if requested == "gemini":
+        if not (settings.gemini_api_key or "").strip():
+            raise RuntimeError(
+                "GEMINI_API_KEY 가 없습니다. 운영 시크릿에 Gemini 키를 넣으세요."
+            )
+        return "gemini"
+    if requested == "codex":
+        from app.services.ai.codex_cli import codex_cli_available
+
+        if codex_cli_available():
+            return "codex"
+        if (settings.gemini_api_key or "").strip():
+            return "gemini"
+        raise RuntimeError(
+            "Codex CLI 를 쓸 수 없고 GEMINI_API_KEY 도 없습니다. "
+            "로컬은 `codex login`, 운영은 Gemini 키를 설정하세요."
+        )
+    raise RuntimeError(f"알 수 없는 AI provider: {requested}")
+
+
 def get_provider(name: str | None = None) -> AIProvider:
-    key = (name or settings.ai_provider or "codex").strip().lower()
+    key = resolve_provider_name(name)
     mapping = {"gemini": GeminiProvider, "codex": CodexProvider}
-    cls = mapping.get(key)
-    if cls is None:
-        raise RuntimeError(f"알 수 없는 AI provider: {key}")
-    return cls()
+    return mapping[key]()
 
 
 def _now() -> dt.datetime:

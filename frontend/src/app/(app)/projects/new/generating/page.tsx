@@ -130,7 +130,7 @@ export default function GeneratingPage() {
                 ? "생성에 실패했다"
                 : cancelled
                   ? "생성을 취소했다"
-                  : "한 프롬프트로 여러 콘셉 시안을 뽑는 중이다"}
+                  : "실제 AI 가 요건을 읽고 콘셉 시안을 뽑는 중이다"}
           </h1>
           <p className="mt-1 text-xs text-ink-500">
             {done
