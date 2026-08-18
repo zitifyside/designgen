@@ -39,8 +39,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     try {
       const user = await api.auth.me();
+      // 조회 중에 로그인이 끝나면 그 세션을 덮어쓰지 않는다.
+      if (get().isAuthenticated && get().user) {
+        set({ hydrated: true });
+        return;
+      }
       set({ user, isAuthenticated: true, hydrated: true });
     } catch (e) {
+      if (get().isAuthenticated && get().user) {
+        set({ hydrated: true });
+        return;
+      }
       // 401 이면 토큰이 만료·폐기된 것이므로 비로그인 상태로 되돌린다.
       if (e instanceof ApiError && e.status === 401) writeTokens(null);
       set({ hydrated: true, isAuthenticated: false, user: null });

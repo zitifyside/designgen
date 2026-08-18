@@ -14,7 +14,7 @@ FastAPI BackgroundTask로 실행된다. 프로덕션에서는 재시도와 우�
 Provider 선택:
   - FAKE_AI_PIPELINE=true  → 결정론적 placeholder 출력(기본값; API 키 없이도
     실행되어 프론트엔드가 처음부터 끝까지 동작한다).
-  - FAKE_AI_PIPELINE=false → 설정된 AIProvider를 호출한다. Renderer 가 3회
+  - FAKE_AI_PIPELINE=false → AI_PROVIDER(기본 codex = 로컬 Codex CLI)를 호출한다. Renderer 가 3회
     실패하면 Token 기반 CSS 렌더링으로 Fallback 하고 Completed (Warning) 으로
     마감한다 (기획서 v0.5.0 §6 시나리오 4).
 """
@@ -65,10 +65,13 @@ FALLBACK_REASON = (
 )
 
 
-def get_provider(name: str = "gemini") -> AIProvider:
-    return {"gemini": GeminiProvider, "codex": CodexProvider}.get(
-        name, GeminiProvider
-    )()
+def get_provider(name: str | None = None) -> AIProvider:
+    key = (name or settings.ai_provider or "codex").strip().lower()
+    mapping = {"gemini": GeminiProvider, "codex": CodexProvider}
+    cls = mapping.get(key)
+    if cls is None:
+        raise RuntimeError(f"알 수 없는 AI provider: {key}")
+    return cls()
 
 
 def _now() -> dt.datetime:
@@ -85,9 +88,10 @@ async def run_generation(
     variants: int,
     ds_mode: str = "per_concept",
     concept_briefs: list[dict] | None = None,
-    provider_name: str = "gemini",
+    provider_name: str | None = None,
 ) -> None:
     """백그라운드 작업의 진입점. 자체 DB 세션을 소유한다."""
+    provider_name = provider_name or settings.ai_provider
     async with AsyncSessionLocal() as db:
         gen = await get_pub(db, Generation, generation_id)
         if gen is None or gen.status in ("Cancelled", "Done"):
@@ -238,12 +242,13 @@ async def run_screen_generation(
     screen: str,
     screen_title: str,
     variants: int = 3,
-    provider_name: str = "gemini",
+    provider_name: str | None = None,
 ) -> None:
     """확정 DS Token 을 주입하여 Layout Engine → Renderer 만 실행한다.
 
     실패해도 기존 화면·DS 는 영향을 받지 않는다 (기획서 v0.5.0 §4 제약사항).
     """
+    provider_name = provider_name or settings.ai_provider
     async with AsyncSessionLocal() as db:
         gen = await get_pub(db, Generation, generation_id)
         if gen is None or gen.status in ("Cancelled", "Done"):

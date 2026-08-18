@@ -25,7 +25,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import Session, User
-from app.seed import SEED_ACCOUNT_EMAILS
+from app.seed import LOCKED_PRODUCTION_SEED_EMAILS
 from app.services.two_factor import verify_second_factor
 from app.schemas.common import Message
 from app.schemas.user import (
@@ -153,10 +153,10 @@ async def login(
     db: DbDep,
     user_agent: str | None = Header(default=None),
 ):
-    # 운영에 남은 공개 시드 계정은 존재조차 인정하지 않는다.
+    # 운영에서 공개 관리자 시드만 거절한다. 데모 계정은 시연용으로 받는다.
     if (
         settings.environment == "production"
-        and str(body.email).lower() in SEED_ACCOUNT_EMAILS
+        and str(body.email).lower() in LOCKED_PRODUCTION_SEED_EMAILS
     ):
         verify_password(body.password, _DUMMY_HASH)
         raise HTTPException(

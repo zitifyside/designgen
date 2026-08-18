@@ -115,6 +115,12 @@ export default function LoginPage() {
           회원가입
         </Link>
       </p>
+      <p className="mt-3 text-center text-[11px] text-ink-500">
+        데모 계정{" "}
+        <span className="font-medium text-ink-700">demo@designgenerator.io</span>
+        {" / "}
+        <span className="font-medium text-ink-700">demo1234</span>
+      </p>
     </div>
   );
 }

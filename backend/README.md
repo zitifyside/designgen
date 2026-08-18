@@ -67,7 +67,7 @@ uvicorn app.main:app --reload --port 8000
 |---|---|---|
 | `DATABASE_URL` | `sqlite+aiosqlite:///./designgen.db` | Postgres 전환 시 `postgresql+asyncpg://…` |
 | `CORS_ORIGINS` | `localhost:3000~3002` | 프론트가 다른 포트로 뜨면 여기에 추가 |
-| `FAKE_AI_PIPELINE` | `true` | `false` 로 바꾸면 실제 Gemini·OpenAI 호출 |
+| `FAKE_AI_PIPELINE` | `true` | `false` + `AI_PROVIDER=codex` 면 로컬 Codex CLI 호출 |
 | `DEBUG` | `true` | SQL 쿼리를 로그에 찍습니다. 조용히 하려면 `false` |
 | `SECRET_KEY` | 개발용 플레이스홀더 | 배포 전 반드시 교체 |
 
@@ -121,8 +121,9 @@ alembic/       비동기 마이그레이션
 
 - **`FAKE_AI_PIPELINE=true`** (기본): 프론트의 mock 컨셉을 그대로 따르는
   결정적(deterministic) placeholder 출력. API 키가 필요 없습니다.
-- **`FAKE_AI_PIPELINE=false`**: 실제 프로바이더를 호출합니다. `gemini.py` /
-  `codex.py`의 프롬프트를 구현하기 전까지는 명확한 메시지와 함께 생성이 실패합니다.
+- **`FAKE_AI_PIPELINE=false`**: `AI_PROVIDER=codex`(기본) 이면 로컬
+  `codex exec` (`gpt-5.6-terra`) 를 호출한다. ChatGPT 로그인이 이 머신에
+  있어야 한다. Cloud Run 컨테이너에는 CLI 가 없으므로 운영은 placeholder 를 유지한다.
 
 ### AI 프로바이더 구현하기
 

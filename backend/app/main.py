@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     if settings.seed_on_startup:
         # 컨테이너는 매번 빈 파일시스템으로 뜨므로 플랜·데모 계정을 채운다 (멱등).
-        # 운영에서는 플랜·템플릿만 채우고 공개 데모 계정은 만들지 않는다.
+        # 운영에서도 데모 계정은 시연용으로 살리고, 공개 관리자만 잠근다.
         from app.seed import lock_published_seed_accounts, seed
 
         await seed()

@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.2.2 |
+| 문서 버전 | v1.2.3 |
 | 작성일 | 2026-08-15 |
 | 대상 | Firebase Hosting(정적) + Cloud Run(FastAPI) + SQLite/PostgreSQL |
 | 점검 기준 | 서비스정책서 보안 요건 · OWASP Top 10 관점 · ContextBuilder Security SSOT |
@@ -20,7 +20,7 @@
 | 비밀번호 정책 | 8자 이상 + 흔한 값·숫자만·문자 반복·이메일 아이디 포함 거부 |
 | 브루트포스 | 계정당 연속 5회 실패 → **15분 잠금**. 잠금 중에는 올바른 비밀번호도 거부 |
 | 사용자 열거 | 미존재 계정도 더미 해시로 **동일 검증 비용**을 치르고 동일 401 반환 |
-| 토큰 | JWT. Access 60분 / Refresh 30일, **Refresh 는 1회용 회전**. 브라우저에는 **HttpOnly+SameSite=Lax(+prod Secure)** 쿠키로 내려 주고, Bearer 는 스모크·MCP 용으로 병행. 로그아웃은 메모리 토큰이 없어도 `POST /auth/logout` 으로 쿠키 세션을 폐기한다 |
+| 토큰 | JWT. Access 60분 / Refresh 30일, **Refresh 는 1회용 회전**. 브라우저에는 **HttpOnly+SameSite=Lax(+prod Secure)** 쿠키 + 탭 단위 sessionStorage 폴백. Bearer 는 스모크·MCP 용으로 병행. 로그아웃은 메모리 토큰이 없어도 `POST /auth/logout` 으로 쿠키 세션을 폐기한다 |
 | 세션 폐기 | access 의 `sid` 로 폐기 여부를 본다. 원격 로그아웃·비밀번호 변경은 다른 기기 access 를 즉시 끊는다. refresh 재사용 시 해당 사용자 세션 전부 폐기 |
 | 2FA | TOTP setup → verify 후에만 활성화. **로그인 시 TOTP 또는 백업 코드 필수**. 이미 켠 상태에서 setup 재호출 거부. 해제는 비밀번호 + 코드 |
 | 잠금 해제 | 관리자 `POST /admin/users/{id}/unlock` (감사 로그 기록) |
@@ -163,7 +163,7 @@ cd backend && .venv/Scripts/python.exe scripts/smoke_e2e.py
 | 1 | 신뢰 경계 | 적용 | 웹 JWT·Public API Key·Admin RBAC. 타인 자원 404 |
 | 2 | HTTP 보안 헤더 | 적용 | `firebase.json` + API `SECURITY_HEADERS` (HSTS preload·COOP·CORP·Permissions-Policy) |
 | 3 | CSP | 적용 | `script-src 'self' 'unsafe-inline'` — 정적 export 인라인 부트스트랩. nonce 는 정적 호스팅과 양립하지 않음 |
-| 4 | 인증 쿠키 | 적용 | HttpOnly + SameSite=Lax + prod Secure. localStorage 토큰 제거 |
+| 4 | 인증 쿠키 | 적용 | HttpOnly + SameSite=Lax + prod Secure. localStorage 금지, sessionStorage 는 탭 세션 폴백 |
 | 5 | Postgres 앱 role | 준비 | [postgres_app_role.sql](D:/Project/designgenerator/backend/scripts/postgres_app_role.sql). 운영 DB 가 SQLite 라 적용 시점은 Postgres 전환 때 |
 | 6 | 로그 redact | 적용 | 키 재귀 마스킹 + 이메일 마스킹 + `/auth/*` 본문 `[auth-redacted]` |
 | 7 | Cloud Run 프록시 | 해당 없음 | 별도 릴레이가 아니라 Hosting rewrite. Origin CSRF·본문 2MB(청크 포함)·Server 헤더 제거 |
@@ -184,6 +184,7 @@ OP-05 레이어: L1 robots/noindex/llms.txt/ai.txt · L2 헤더 · L3 UA · L4 r
 
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |---|---|---|---|
+| v1.2.3 | 2026-08-19 | 안승준 | 운영 데모 로그인 허용. admin 시드만 잠금. sessionStorage 폴백 |
 | v1.2.2 | 2026-08-16 | 안승준 | IP 는 CF 헤더 무시. CSRF 는 CORS 출처만. 팀 비멤버·미승인 템플릿 404. 쿠키 로그아웃 |
 | v1.2.1 | 2026-08-16 | 안승준 | §5·§10 계정 삭제 365일 익명화(DA 논리삭제 §7) 병기 |
 | v1.2.0 | 2026-08-16 | 안승준 | 체크리스트 14+1 전수 매핑. L7 함정·헬스 정찰면 축소·발신 SSRF·osv/semgrep·컨테이너 비루트 |

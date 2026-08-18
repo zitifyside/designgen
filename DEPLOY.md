@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.1.2 |
+| 문서 버전 | v1.1.3 |
 | 작성일 | 2026-08-14 |
 | 대상 | Firebase Hosting (프론트) + Cloud Run (백엔드 API) |
 | Firebase 프로젝트 | `design-gen-zitify` |
@@ -114,8 +114,8 @@ done
 
 . `DATABASE_URL` → PostgreSQL (Neon·Supabase·Cloud SQL).
   현재는 컨테이너 `/tmp` 의 SQLite 라 **콜드 스타트·재배포 때 데이터가 사라진다**.
-  `SEED_ON_STARTUP=true` 이면 플랜·템플릿은 다시 채운다. **운영(`ENVIRONMENT=production`)에서는
-  공개 데모·관리자 계정을 만들지 않고**, 이미 있으면 정지·세션 폐기한다.
+  `SEED_ON_STARTUP=true` 이면 플랜·템플릿·데모 계정(`demo@designgenerator.io`)을 다시 채운다.
+  **운영(`ENVIRONMENT=production`)에서는 공개 관리자만 만들지 않고**, 이미 있으면 정지·세션 폐기한다.
 . `SECRET_KEY` — `backend/.env`(Secrets SSOT 링크) 의 `CLOUDRUN_SECRET_KEY` 를 쓴다.
   값이 바뀌면 기존 토큰이 전부 무효가 된다.
 . 실제 AI 생성 — `FAKE_AI_PIPELINE=false` + `GEMINI_API_KEY`/`OPENAI_API_KEY`.
@@ -233,7 +233,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | 백엔드 Cloud Run | ✅ `adg-api` (asia-northeast3) — Hosting `/api/**` rewrite 연결 |
 | 결제 | ✅ Blaze — `zitifycorp` 결제 계정 |
 | DB | ⚠ 컨테이너 `/tmp` SQLite — **콜드 스타트·재배포 시 초기화**. **맥미니 PostgreSQL 로 이식 예정** — 코드·검증 완료, 맥미니 준비만 남았다 (§6) |
-| AI 생성 | ⚠ `FAKE_AI_PIPELINE=true` — placeholder 출력 |
+| AI 생성 | 로컬 `FAKE_AI_PIPELINE=false` + Codex CLI. 운영 Cloud Run 은 placeholder |
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
 | 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
 | 보안 하드닝 | ✅ 인증·쿠키/CSRF·레이트리밋·헤더·CSP·봇 UA·크롤 함정 (§3.5·SECURITY.md) |
@@ -337,7 +337,7 @@ gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com   --
 ```
 
 스키마·플랜·템플릿은 `SEED_ON_STARTUP=true` 가 기동 시 채운다 (멱등).
-운영에서는 공개 데모 계정을 만들지 않는다.
+운영에서도 데모 계정은 시연용으로 채운다. 공개 관리자 계정은 만들지 않는다.
 문자열 PK 잔존 스키마는 **SQLite 에서만** 비운다. Postgres 는 Alembic 을 쓰고,
 기동 중 `DROP CASCADE` 는 하지 않는다.
 
@@ -379,6 +379,7 @@ gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com   --
 
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |---|---|---|---|
+| v1.1.3 | 2026-08-19 | 안승준 | 운영 데모 계정 시드·로그인 허용. 공개 관리자만 잠금 |
 | v1.1.2 | 2026-08-18 | 안승준 | §5 DA 스키마 행 — 코드 그룹 30종·Alembic `202608161400` 반영 (3~5차 누적) |
 | v1.1.1 | 2026-08-16 | 안승준 | Postgres 기동 시 스키마 wipe 금지. Cloudflare IP 헤더는 신뢰하지 않는다 |
 | v1.1.0 | 2026-08-16 | 안승준 | §5 현재 상태 일자·DA 스키마·쿠키/CSRF/봇 반영. 운영 시드 계정 잠금 정정. 변경이력 신설 |

@@ -28,10 +28,12 @@ CODE_GROUPS = [
     for group_cd, mapping in CODE_MAP.items()
 ]
 
-# 문서·로그인 화면에 적혀 있던 데모 계정. 운영에서는 만들지도, 받지도 않는다.
-SEED_ACCOUNT_EMAILS = frozenset(
-    {"demo@designgenerator.io", "admin@designgenerator.io"}
-)
+# 문서·로그인 화면에 적혀 있는 시드 계정.
+# 데모는 운영 시연용으로 살린다. 관리자(공개 비밀번호)만 운영에서 잠근다.
+DEMO_ACCOUNT_EMAIL = "demo@designgenerator.io"
+ADMIN_ACCOUNT_EMAIL = "admin@designgenerator.io"
+SEED_ACCOUNT_EMAILS = frozenset({DEMO_ACCOUNT_EMAIL, ADMIN_ACCOUNT_EMAIL})
+LOCKED_PRODUCTION_SEED_EMAILS = frozenset({ADMIN_ACCOUNT_EMAIL})
 
 PLANS = [
     # code, name, monthly_cents, annual_cents, gens(-1=무제한), concepts, variants, credit_unit_cents
@@ -94,22 +96,14 @@ async def seed() -> None:
                 plan.max_variants = variants
                 plan.credit_unit_cents = unit
 
-        # 데모·관리자 계정은 로컬·테스트에서만 채운다.
-        # 운영에 올리면 문서에 적힌 비밀번호로 관리자 콘솔이 열린다.
+        # 데모는 로컬·운영 모두 시연용으로 살린다 (문서에 적힌 비밀번호).
+        # 관리자는 로컬·테스트에서만 만든다 — 운영에 올리면 콘솔이 열린다.
+        await _ensure_demo_user(db)
         if settings.environment != "production":
-            if await db.scalar(select(User).where(User.email == "demo@designgenerator.io")) is None:
+            if await db.scalar(select(User).where(User.email == ADMIN_ACCOUNT_EMAIL)) is None:
                 db.add(
                     User(
-                        email="demo@designgenerator.io", name="안승준",
-                        password_hash=hash_password("demo1234"), plan="Pro",
-                        credits=78, monthly_used=12, monthly_limit=30, email_verified=True,
-                    )
-                )
-
-            if await db.scalar(select(User).where(User.email == "admin@designgenerator.io")) is None:
-                db.add(
-                    User(
-                        email="admin@designgenerator.io", name="Admin",
+                        email=ADMIN_ACCOUNT_EMAIL, name="Admin",
                         password_hash=hash_password("admin1234"), plan="Admin",
                         is_admin=True, monthly_limit=-1, email_verified=True,
                     )
@@ -128,22 +122,54 @@ async def seed() -> None:
 
         await db.commit()
     if settings.environment == "production":
-        print("Seed complete — production (plans/templates only, no demo accounts)")
+        print("Seed complete — production demo@designgenerator.io / demo1234 (admin locked)")
     else:
         print("Seed complete — demo@designgenerator.io / demo1234, admin@designgenerator.io / admin1234")
 
 
-async def lock_published_seed_accounts() -> int:
-    """운영에 남아 있는 공개 시드 계정을 정지하고 세션을 폐기한다.
+async def _ensure_demo_user(db) -> None:
+    """데모 계정을 만들고, 이미 있으면 시연 가능한 상태로 되돌린다."""
+    user = await db.scalar(select(User).where(User.email == DEMO_ACCOUNT_EMAIL))
+    if user is None:
+        db.add(
+            User(
+                email=DEMO_ACCOUNT_EMAIL,
+                name="안승준",
+                password_hash=hash_password("demo1234"),
+                plan="Pro",
+                credits=78,
+                monthly_used=12,
+                monthly_limit=30,
+                email_verified=True,
+            )
+        )
+        return
+    user.status = "Active"
+    user.deleted_at = None
+    user.password_hash = hash_password("demo1234")
+    user.plan = "Pro"
+    user.is_admin = False
+    user.monthly_limit = 30
+    user.email_verified = True
+    user.locked_until = None
+    user.failed_login_attempts = 0
+    user.two_factor_enabled = False
+    user.two_factor_secret = None
 
-    콜드 스타트 전 이미 떠 있는 인스턴스의 JWT 를 즉시 무효로 만든다.
+
+async def lock_published_seed_accounts() -> int:
+    """운영에 남아 있는 공개 관리자 시드를 정지하고 세션을 폐기한다.
+
+    데모 계정은 시연용이라 잠그지 않는다.
     """
     if settings.environment != "production":
         return 0
     locked = 0
     async with AsyncSessionLocal() as db:
         rows = (
-            await db.scalars(select(User).where(User.email.in_(tuple(SEED_ACCOUNT_EMAILS))))
+            await db.scalars(
+                select(User).where(User.email.in_(tuple(LOCKED_PRODUCTION_SEED_EMAILS)))
+            )
         ).all()
         for user in rows:
             user.status = "Suspended"

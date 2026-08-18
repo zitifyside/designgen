@@ -1,11 +1,8 @@
-"""Codex / OpenAI provider.
+"""Codex CLI provider.
 
-Docs: https://platform.openai.com/docs  (SDK: `openai`)
-
-4단계 전부 Chat Completions의 structured outputs
-(`response_format={"type": "json_schema", "strict": true, ...}`)로 구조화된
-출력을 강제한다 — `schemas.py`의 스키마가 곧 프론트엔드 계약이므로 자유서술
-출력을 파싱하는 방식은 쓰지 않는다.
+ChatGPT 구독의 `codex exec` 를 호출한다. OpenAI API 키는 쓰지 않는다.
+스키마는 `schemas.py` 계약이며, CLI 가 자유 서술을 섞을 수 있어
+`codex_cli.extract_json_object` 로 JSON 만 꺼낸 뒤 기존 검증을 태운다.
 
 Stage 4(Renderer)는 의도적으로 API를 호출하지 않는다 — `nodeTree`를 실제로
 소비하는 프론트엔드 코드가 없고(placeholder.py도 항상 None을 반환), 스키마도
@@ -15,11 +12,10 @@ Stage 4(Renderer)는 의도적으로 API를 호출하지 않는다 — `nodeTree
 """
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from app.core.config import settings
 from app.services.ai.base import AIProvider
+from app.services.ai.codex_cli import run_codex_json
 from app.services.ai.placeholder import archetype_for
 from app.services.ai.schemas import (
     ANALYSIS_SCHEMA,
@@ -68,20 +64,6 @@ PROMPT_RENDERER = (
 class CodexProvider(AIProvider):
     name = "codex"
 
-    def __init__(self) -> None:
-        self._client = None  # 키 없이도 앱이 부팅되도록 지연 생성
-
-    def _get_client(self):
-        if self._client is None:
-            if not settings.openai_api_key:
-                raise RuntimeError(
-                    "OPENAI_API_KEY is not set — cannot call the OpenAI/Codex API."
-                )
-            from openai import AsyncOpenAI  # 지연 임포트
-
-            self._client = AsyncOpenAI(api_key=settings.openai_api_key)
-        return self._client
-
     async def _complete(
         self,
         prompt: str,
@@ -90,30 +72,11 @@ class CodexProvider(AIProvider):
         schema: dict[str, Any],
         schema_name: str,
     ) -> dict[str, Any]:
-        """구조화된 JSON을 반환하는 단일 OpenAI 호출."""
-        client = self._get_client()
-        response = await client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": prompt},
-                {
-                    "role": "user",
-                    "content": f"입력 데이터(JSON):\n{json.dumps(payload, ensure_ascii=False)}",
-                },
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": schema_name,
-                    "schema": schema,
-                    "strict": True,
-                },
-            },
+        """구조화된 JSON을 반환하는 단일 Codex CLI 호출."""
+        del schema_name  # CLI 는 스키마 파일로 전달한다.
+        return await run_codex_json(
+            system_prompt=prompt, payload=payload, schema=schema
         )
-        content = response.choices[0].message.content
-        if not content:
-            raise RuntimeError("OpenAI returned an empty response")
-        return json.loads(content)
 
     # ── 파이프라인 단계 ────────────────────────────────────────────
     async def analyze_input(self, requirements: str, platform: str) -> dict[str, Any]:

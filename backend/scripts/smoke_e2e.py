@@ -98,6 +98,16 @@ async def main() -> None:
     if _EXTERNAL_DB:
         await reset_external_schema()
     await seed()  # 플랜·데모 계정·관리자 계정 시드
+    from app.seed import DEMO_ACCOUNT_EMAIL, LOCKED_PRODUCTION_SEED_EMAILS
+
+    check(
+        "운영 잠금에서 데모 제외",
+        DEMO_ACCOUNT_EMAIL not in LOCKED_PRODUCTION_SEED_EMAILS,
+    )
+    check(
+        "운영 잠금은 admin",
+        "admin@designgenerator.io" in LOCKED_PRODUCTION_SEED_EMAILS,
+    )
     from app.core.codes import CODE_MAP
     from app.core.database import engine
     from app.core.soft_delete import ACTIVE_VIEWS, ALL_VIEWS

@@ -56,7 +56,30 @@ interface TokenPair {
   refreshToken: string;
 }
 
-let memoryTokens: TokenPair | null = null;
+function readStoredTokens(): TokenPair | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(TOKEN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TokenPair>;
+    if (
+      typeof parsed.accessToken === "string" &&
+      parsed.accessToken &&
+      typeof parsed.refreshToken === "string" &&
+      parsed.refreshToken
+    ) {
+      return {
+        accessToken: parsed.accessToken,
+        refreshToken: parsed.refreshToken,
+      };
+    }
+  } catch {
+    /* 깨진 값은 무시한다 */
+  }
+  return null;
+}
+
+let memoryTokens: TokenPair | null = readStoredTokens();
 
 export function readTokens(): TokenPair | null {
   return memoryTokens;
@@ -65,6 +88,12 @@ export function readTokens(): TokenPair | null {
 export function writeTokens(tokens: TokenPair | null) {
   memoryTokens = tokens;
   if (typeof window === "undefined") return;
+  try {
+    if (tokens) sessionStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* 비공개 모드 등 */
+  }
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {
@@ -175,11 +204,9 @@ export async function request<T>(
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (auth) {
-    const tokens = readTokens();
-    if (tokens?.accessToken) {
-      headers.Authorization = `Bearer ${tokens.accessToken}`;
-    }
+  const sentAccess = auth ? readTokens()?.accessToken : undefined;
+  if (auth && sentAccess) {
+    headers.Authorization = `Bearer ${sentAccess}`;
   }
 
   let res: Response;
@@ -201,6 +228,11 @@ export async function request<T>(
   if (res.status === 401 && auth) {
     if (!retried && (await refreshTokens())) {
       return request<T>(path, { method, body, query, auth, retried: true });
+    }
+    // 이 요청이 쓴 토큰이 이미 교체됐으면 (그 사이 로그인) 새 세션을 지우지 않는다.
+    const latest = readTokens()?.accessToken;
+    if (latest && latest !== sentAccess) {
+      throw new ApiError(401, "세션이 만료되었습니다. 다시 로그인해 주세요.");
     }
     // 갱신까지 실패하면 세션이 끝난 것이다. 토큰을 지우고 앱에 알려
     // 로그인 화면으로 돌려보낸다 — 백엔드 원문 메시지를 그대로 보여주지 않는다.

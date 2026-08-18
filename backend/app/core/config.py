@@ -38,10 +38,15 @@ class Settings(BaseSettings):
 
     # AI 파이프라인
     fake_ai_pipeline: bool = True
+    # gemini | codex (codex = 로컬 Codex CLI, ChatGPT 구독)
+    ai_provider: str = "codex"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    codex_cli: str = ""
+    codex_model: str = "gpt-5.6-terra"
+    codex_timeout_seconds: int = 180
 
     # 결제 (Stripe) — 스텁 처리됨
     stripe_secret_key: str = ""

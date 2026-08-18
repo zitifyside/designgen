@@ -429,22 +429,33 @@ async def health_components(admin: AdminUser, db: DbDep):
     except Exception:  # noqa: BLE001
         out.append(HealthComponentOut(name="Database", status="down", detail="연결 실패"))
 
+    if settings.fake_ai_pipeline:
+        ai_detail = "FAKE_AI_PIPELINE=true — placeholder 출력으로 동작 중"
+    elif settings.ai_provider == "codex":
+        ai_detail = f"Codex CLI ({settings.codex_model})"
+    else:
+        ai_detail = f"provider 활성 ({settings.gemini_model})"
     out.append(
         HealthComponentOut(
             name="AI Pipeline",
             status="degraded" if settings.fake_ai_pipeline else "operational",
-            detail=(
-                "FAKE_AI_PIPELINE=true — placeholder 출력으로 동작 중"
-                if settings.fake_ai_pipeline
-                else f"provider 활성 ({settings.gemini_model})"
-            ),
+            detail=ai_detail,
         )
     )
+    from app.services.ai.codex_cli import codex_cli_available
+
+    if settings.ai_provider == "codex":
+        cli_ok = codex_cli_available()
+        key_ok = cli_ok
+        key_detail = "Codex CLI 사용 가능" if cli_ok else "Codex CLI 없음 — `codex login` 확인"
+    else:
+        key_ok = bool(settings.gemini_api_key or settings.openai_api_key)
+        key_detail = "Gemini / OpenAI 키 설정 여부"
     out.append(
         HealthComponentOut(
             name="AI Provider Key",
-            status="operational" if (settings.gemini_api_key or settings.openai_api_key) else "not_configured",
-            detail="Gemini / OpenAI 키 설정 여부",
+            status="operational" if key_ok else "not_configured",
+            detail=key_detail,
         )
     )
     out.append(
