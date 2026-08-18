@@ -441,8 +441,20 @@ async def health_components(admin: AdminUser, db: DbDep):
             resolved = None
             ai_detail = f"실제 파이프라인 설정 오류: {exc}"
         else:
-            if resolved == "codex":
+            if resolved == "mae":
+                from app.services.ai.mae_cli import mae_channels_available
+
+                ai_detail = (
+                    "실제 파이프라인 · 마에 CLI 사다리 ("
+                    + ",".join(mae_channels_available())
+                    + ")"
+                )
+            elif resolved == "codex":
                 ai_detail = f"실제 파이프라인 · Codex CLI ({settings.codex_model})"
+            elif resolved == "antigravity":
+                ai_detail = f"실제 파이프라인 · Antigravity ({settings.antigravity_model})"
+            elif resolved == "claude":
+                ai_detail = "실제 파이프라인 · Claude CLI"
             else:
                 ai_detail = f"실제 파이프라인 · Gemini ({settings.gemini_model})"
     out.append(

@@ -233,7 +233,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | 백엔드 Cloud Run | ✅ `adg-api` (asia-northeast3) — Hosting `/api/**` rewrite 연결 |
 | 결제 | ✅ Blaze — `zitifycorp` 결제 계정 |
 | DB | ⚠ 컨테이너 `/tmp` SQLite — **콜드 스타트·재배포 시 초기화**. **맥미니 PostgreSQL 로 이식 예정** — 코드·검증 완료, 맥미니 준비만 남았다 (§6) |
-| AI 생성 | 로컬 Codex CLI. 운영 Cloud Run 은 Gemini (`FAKE_AI_PIPELINE=false`, CLI 없으면 자동 폴백) |
+| AI 생성 | 로컬 마에 CLI 사다리(antigravity→codex→claude). Cloud Run 은 CLI 부재 시 Gemini API 폴백 |
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
 | 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
 | 보안 하드닝 | ✅ 인증·쿠키/CSRF·레이트리밋·헤더·CSP·봇 UA·크롤 함정 (§3.5·SECURITY.md) |

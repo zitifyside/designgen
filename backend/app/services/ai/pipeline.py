@@ -13,8 +13,9 @@ FastAPI BackgroundTask로 실행된다. 프로덕션에서는 재시도와 우�
 
 Provider 선택:
   - FAKE_AI_PIPELINE=true  → 결정론적 placeholder 출력.
-  - FAKE_AI_PIPELINE=false → 실제 LLM. 로컬은 Codex CLI, Cloud Run 처럼
-    CLI 가 없으면 GEMINI_API_KEY 로 Gemini 에 붙는다. Renderer 가 3회
+  - FAKE_AI_PIPELINE=false → 실제 LLM. 기본은 마에 제공 CLI 사다리
+    (antigravity→codex→claude). Cloud Run 처럼 CLI 가 없으면 GEMINI_API_KEY 로
+    Gemini API 에 붙는다. Renderer 가 3회
     실패하면 Token 기반 CSS 렌더링으로 Fallback 하고 Completed (Warning) 으로
     마감한다 (기획서 v0.5.0 §6 시나리오 4).
 """
@@ -34,9 +35,12 @@ from app.models.notification import Notification
 from app.models.project import DS_MODE_UNIFIED, Project
 from app.models.upload import FileUpload
 from app.models.user import User
+from app.services.ai.antigravity import AntigravityProvider
 from app.services.ai.base import AIProvider
+from app.services.ai.claude_cli import ClaudeCliProvider
 from app.services.ai.codex import CodexProvider
 from app.services.ai.gemini import GeminiProvider
+from app.services.ai.mae_ladder import MaeLadderProvider
 from app.services.ai.placeholder import (
     archetype_for,
     infer_target_screen,
@@ -71,30 +75,57 @@ def resolve_provider_name(name: str | None = None) -> str:
     운영 Cloud Run 에는 Codex CLI 가 없다. AI_PROVIDER=codex 여도
     CLI 가 없고 Gemini 키가 있으면 Gemini 로 내린다.
     """
-    requested = (name or settings.ai_provider or "codex").strip().lower()
-    if requested == "gemini":
-        if not (settings.gemini_api_key or "").strip():
-            raise RuntimeError(
-                "GEMINI_API_KEY 가 없습니다. 운영 시크릿에 Gemini 키를 넣으세요."
-            )
-        return "gemini"
-    if requested == "codex":
-        from app.services.ai.codex_cli import codex_cli_available
+    requested = (name or settings.ai_provider or "mae").strip().lower()
+    from app.services.ai.codex_cli import codex_cli_available
+    from app.services.ai.mae_cli import (
+        antigravity_available,
+        claude_cli_available,
+        mae_channels_available,
+    )
 
-        if codex_cli_available():
-            return "codex"
-        if (settings.gemini_api_key or "").strip():
+    has_gemini = bool((settings.gemini_api_key or "").strip())
+    if requested in ("mae", "mae-ladder"):
+        if mae_channels_available():
+            return "mae"
+        if has_gemini:
             return "gemini"
         raise RuntimeError(
-            "Codex CLI 를 쓸 수 없고 GEMINI_API_KEY 도 없습니다. "
-            "로컬은 `codex login`, 운영은 Gemini 키를 설정하세요."
+            "마에 CLI(antigravity·codex·claude) 가 없고 GEMINI_API_KEY 도 없습니다."
+        )
+    if requested == "antigravity":
+        if antigravity_available():
+            return "antigravity"
+        raise RuntimeError("Antigravity(agy) 를 찾지 못했습니다.")
+    if requested == "claude":
+        if claude_cli_available():
+            return "claude"
+        raise RuntimeError("Claude CLI 를 찾지 못했습니다.")
+    if requested == "gemini":
+        if not has_gemini:
+            raise RuntimeError("GEMINI_API_KEY 가 없습니다.")
+        return "gemini"
+    if requested == "codex":
+        if codex_cli_available():
+            return "codex"
+        if mae_channels_available():
+            return "mae"
+        if has_gemini:
+            return "gemini"
+        raise RuntimeError(
+            "Codex CLI 를 쓸 수 없습니다. 마에 CLI 또는 GEMINI_API_KEY 를 확인하세요."
         )
     raise RuntimeError(f"알 수 없는 AI provider: {requested}")
 
 
 def get_provider(name: str | None = None) -> AIProvider:
     key = resolve_provider_name(name)
-    mapping = {"gemini": GeminiProvider, "codex": CodexProvider}
+    mapping = {
+        "gemini": GeminiProvider,
+        "codex": CodexProvider,
+        "antigravity": AntigravityProvider,
+        "claude": ClaudeCliProvider,
+        "mae": MaeLadderProvider,
+    }
     return mapping[key]()
 
 
@@ -137,8 +168,8 @@ async def run_generation(
                     select(FileUpload).where(FileUpload.project_id == project.id)
                 )
             ).all()
-            analysis_input = merge_requirements(
-                project.requirements_text,
+            analysis_input = _compose_prompt(
+                project,
                 [(f.filename, f.extracted_text) for f in attachments],
             )
 
@@ -398,6 +429,21 @@ async def run_screen_generation(
 # --- 공통 헬퍼 ---------------------------------------------------------------
 
 
+UNTITLED_PROJECT = "제목 없음"
+
+
+def _compose_prompt(project: Project, attachments: list[tuple[str, str | None]]) -> str:
+    """프로젝트명 + 사용자 프롬프트 + 첨부를 분석 입력으로 합친다."""
+    merged = merge_requirements(
+        project.requirements_text,
+        [(name, text or "") for name, text in attachments],
+    )
+    name = (project.name or "").strip()
+    if name and name != UNTITLED_PROJECT:
+        return f"프로젝트명: {name}\n\n{merged}"
+    return merged
+
+
 async def _fail(db, generation_id: str, exc: Exception, *, reset_project_status: str):
     await db.rollback()
     gen = await get_pub(db, Generation, generation_id)
@@ -480,6 +526,8 @@ async def _run_real(
     analysis.setdefault("dsMode", ds_mode)
     analysis.setdefault("targetScreen", screen)
     analysis.setdefault("targetScreenTitle", screen_title)
+    analysis["userPrompt"] = project.requirements_text or ""
+    analysis["projectName"] = project.name or ""
     if concept_briefs:
         # 사용자가 컨셉 방향성을 직접 지정한 경우 Concept Engine 에 그대로 전달한다.
         analysis["conceptBriefs"] = concept_briefs
@@ -493,6 +541,8 @@ async def _run_real(
     for c in concept_sets:
         c.setdefault("targetScreen", screen)
         c.setdefault("targetScreenTitle", screen_title)
+        c.setdefault("userPrompt", project.requirements_text or "")
+        c.setdefault("projectName", project.name or "")
         layouts = await provider.generate_layouts(c, variants)
         layouts = _normalize_layouts(layouts, variants, screen, screen_title)
         if await _render_layouts(provider, layouts, c["tokens"]):

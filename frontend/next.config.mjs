@@ -21,10 +21,14 @@ const nextConfig = {
       }
     : {
         async rewrites() {
+          // 8000 은 승격된 구버전(placeholder)이 점유하는 경우가 있어
+          // 로컬 실생성 API 기본은 8010. ADG_API_ORIGIN 으로 덮어쓴다.
+          const apiOrigin =
+            process.env.ADG_API_ORIGIN || "http://127.0.0.1:8010";
           return [
             {
               source: "/api/:path*",
-              destination: "http://127.0.0.1:8000/api/:path*",
+              destination: `${apiOrigin}/api/:path*`,
             },
           ];
         },

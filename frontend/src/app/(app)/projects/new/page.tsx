@@ -345,6 +345,7 @@ export default function NewProjectPage() {
       }
 
       const generation = await api.generations.start(project.id, {
+        requirementsText: requirements.trim(),
         concepts: conceptCount,
         variants: variantCount,
         dsMode,

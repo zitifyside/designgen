@@ -11,7 +11,8 @@ from app.models.generation import GEN_KIND_FULL, Generation
 from app.models.project import Project
 from app.schemas.common import Message
 from app.schemas.generation import GenerationOut, GenerationStart
-from app.services.ai.pipeline import run_generation
+from app.core.config import settings
+from app.services.ai.pipeline import resolve_provider_name, run_generation
 from app.services.ai.placeholder import SCREEN_PRESETS
 from app.services.quota import (
     cap_concepts,
@@ -76,6 +77,24 @@ async def start_generation(
     if body.requirements_text is not None:
         project.requirements_text = body.requirements_text
 
+    prompt = (project.requirements_text or "").strip()
+    if not prompt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="프롬프트가 비어 있습니다. 시안을 뽑으려면 무드·대상·느낌을 입력하세요.",
+        )
+
+    if settings.fake_ai_pipeline:
+        resolved_provider = "placeholder"
+    else:
+        try:
+            resolved_provider = resolve_provider_name()
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
     # 등급 게이팅을 적용해 생성 옵션을 확정한다.
     concepts = cap_concepts(user.plan, body.concepts or project.concept_count)
     variants = variants_for(user.plan, body.variants or project.variant_count)
@@ -120,6 +139,8 @@ async def start_generation(
             "dsMode": ds_mode,
             "targetScreen": target_screen,
             "conceptBriefs": briefs,
+            "provider": resolved_provider,
+            "fake": settings.fake_ai_pipeline,
         },
     )
     project.status = "Generating"
@@ -145,6 +166,7 @@ async def start_generation(
             "variants": variants,
             "dsMode": ds_mode,
             "targetScreen": target_screen or "(ai)",
+            "provider": resolved_provider,
         },
     )
     await db.commit()

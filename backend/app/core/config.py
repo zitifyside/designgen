@@ -2,15 +2,22 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+# uvicorn 작업 디렉터리와 무관하게 backend/.env 를 읽는다.
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_ENV_FILE = _BACKEND_DIR / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=str(_ENV_FILE) if _ENV_FILE.is_file() else ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     # 앱
@@ -36,10 +43,11 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
     jwt_algorithm: str = "HS256"
 
-    # AI 파이프라인
-    fake_ai_pipeline: bool = True
-    # gemini | codex (codex = 로컬 Codex CLI, ChatGPT 구독)
-    ai_provider: str = "codex"
+    # AI 파이프라인. 기본은 실제 생성. 스모크·결정론 검증만 true.
+    fake_ai_pipeline: bool = False
+    # mae = 마에 제공 CLI 사다리(antigravity→codex→claude)
+    # gemini = Gemini API (Cloud Run 폴백) · codex / antigravity / claude 단독
+    ai_provider: str = "mae"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
     openai_api_key: str = ""
@@ -47,6 +55,10 @@ class Settings(BaseSettings):
     codex_cli: str = ""
     codex_model: str = "gpt-5.6-terra"
     codex_timeout_seconds: int = 180
+    mae_ladder: str = "antigravity,codex,claude"
+    antigravity_model: str = "gemini-3.7-flash-medium"
+    claude_cli_model: str = "sonnet"
+    mae_cli_timeout_seconds: int = 180
 
     # 결제 (Stripe) — 스텁 처리됨
     stripe_secret_key: str = ""
