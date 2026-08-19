@@ -4,9 +4,12 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+import yaml
 
 GCLOUD = Path(r"C:\Users\Joon\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd")
 BACKEND = Path(__file__).resolve().parents[1]
@@ -29,9 +32,75 @@ def gcloud(args: list[str], *, capture: bool = True) -> subprocess.CompletedProc
     )
 
 
+def export_spec() -> dict:
+    raw = gcloud(
+        [
+            "run",
+            "services",
+            "describe",
+            SERVICE,
+            "--project",
+            PROJECT,
+            "--region",
+            REGION,
+            "--account",
+            ACCOUNT,
+            "--format",
+            "export",
+        ]
+    ).stdout
+    return yaml.safe_load(raw)
+
+
+def set_app_image(spec: dict, image: str) -> dict:
+    containers = spec["spec"]["template"]["spec"]["containers"]
+    app = next((item for item in containers if item.get("name") == "app"), None)
+    if app is None:
+        raise SystemExit("app-container-missing")
+    app["image"] = image
+    spec.pop("status", None)
+    names = [item.get("name") for item in containers]
+    if "cloudflared" not in names:
+        raise SystemExit("sidecar-missing")
+    return spec
+
+
+def replace(spec: dict) -> None:
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".yaml",
+        delete=False,
+        encoding="utf-8",
+    ) as handle:
+        yaml.safe_dump(spec, handle, sort_keys=False, allow_unicode=True)
+        path = handle.name
+    try:
+        gcloud(
+            [
+                "run",
+                "services",
+                "replace",
+                path,
+                "--project",
+                PROJECT,
+                "--region",
+                REGION,
+                "--account",
+                ACCOUNT,
+            ],
+            capture=False,
+        )
+    finally:
+        Path(path).unlink(missing_ok=True)
+
+
 def main() -> int:
-    tag = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    image = f"{IMAGE_REPO}:{tag}"
+    skip_build = "--image" in sys.argv
+    if skip_build:
+        image = sys.argv[sys.argv.index("--image") + 1]
+    else:
+        tag = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        image = f"{IMAGE_REPO}:{tag}"
     previous = gcloud(
         [
             "run",
@@ -49,35 +118,23 @@ def main() -> int:
         ]
     ).stdout.strip()
     print("prev", previous)
-    print("build-start")
-    gcloud(
-        [
-            "builds",
-            "submit",
-            str(BACKEND),
-            f"--tag={image}",
-            f"--project={PROJECT}",
-            f"--account={ACCOUNT}",
-            "--quiet",
-        ],
-        capture=False,
-    )
-    print("update-app-image")
-    gcloud(
-        [
-            "run",
-            "services",
-            "update",
-            SERVICE,
-            "--container=app",
-            f"--image={image}",
-            f"--project={PROJECT}",
-            f"--region={REGION}",
-            f"--account={ACCOUNT}",
-            "--quiet",
-        ],
-        capture=False,
-    )
+    if not skip_build:
+        print("build-start")
+        gcloud(
+            [
+                "builds",
+                "submit",
+                str(BACKEND),
+                f"--tag={image}",
+                f"--project={PROJECT}",
+                f"--account={ACCOUNT}",
+                "--quiet",
+            ],
+            capture=False,
+        )
+    print("replace-app-image")
+    spec = set_app_image(export_spec(), image)
+    replace(spec)
     for _ in range(60):
         raw = gcloud(
             [

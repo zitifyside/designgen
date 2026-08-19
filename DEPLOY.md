@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.1.5 |
+| 문서 버전 | v1.1.6 |
 | 작성일 | 2026-08-14 |
 | 대상 | Firebase Hosting (프론트) + Cloud Run (백엔드 API) |
 | Firebase 프로젝트 | `design-gen-zitify` |
@@ -73,14 +73,20 @@ firebase deploy --only hosting --project design-gen-zitify
 
 ## 3. 백엔드 배포 (Cloud Run)
 
-서비스 `adg-api` (asia-northeast3) 가 이미 떠 있다. 코드 변경 후 재배포는 아래 한 줄이다.
+서비스 `adg-api` (asia-northeast3) 가 이미 떠 있다. sidecar(`cloudflared`) 가
+붙어 있으므로 **`gcloud run deploy --source` 는 쓰지 않는다.** 그 명령은
+앱만 다시 만들고 sidecar 를 떨어뜨린다.
+
+코드 변경 후 앱 이미지만 갱신한다.
 
 ```bash
-gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com \
-  --project design-gen-zitify --region asia-northeast3 --quiet
+py -3 backend/scripts/deploy_cloudrun_app_keep_sidecar.py
 ```
 
-환경 변수까지 새로 지정하려면 (`^@^` 는 값 안의 쉼표를 구분자로 오인하지 않게 하는 gcloud 문법):
+이미 빌드한 태그만 올릴 때는 `--image <태그>` 를 붙인다.
+
+환경 변수까지 새로 지정하려면 (`^@^` 는 값 안의 쉼표를 구분자로 오인하지 않게 하는 gcloud 문법).
+⚠ 아래 `--source` 예시는 **sidecar 이전 최초 구성용**이다. 지금 운영 서비스에는 쓰지 않는다:
 
 ```bash
 SECRET=$(grep '^CLOUDRUN_SECRET_KEY=' backend/.env | cut -d= -f2-)
@@ -228,7 +234,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | Firebase Hosting | ✅ https://design-gen-zitify.web.app |
 | 백엔드 Cloud Run | ✅ `adg-api` (asia-northeast3) — Hosting `/api/**` rewrite 연결 |
 | 결제 | ✅ Blaze — `zitifycorp` 결제 계정 |
-| DB | ✅ Cloud Run `adg-api-00022-zzz` → cloudflared sidecar → 맥미니 PostgreSQL `designgenerator`. 5432 미개방. 왕복 약 350ms (§6) |
+| DB | ✅ Cloud Run `adg-api-00023-jbk` → cloudflared sidecar → 맥미니 PostgreSQL `designgenerator`. 5432 미개방. 왕복 약 350ms (§6) |
 | AI 생성 | ✅ Cloud Run `FAKE_AI_PIPELINE=false` · `AI_PROVIDER=gemini`. 로컬은 마에 CLI 사다리 |
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
 | 중앙 로그 허브 | ✅ `designgenerator` `active`. 프로브 후 `http.request` 적재 확인 (§3.5) |
@@ -256,7 +262,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 
 `/tmp` SQLite 는 콜드 스타트·재배포 때마다 사라진다. 데모로는 돌아가지만 사용자가
 만든 프로젝트가 없어지므로 운영에서는 반드시 바꿔야 한다. **운영 DB 는 맥미니에
-직접 올린다** (운영자 결정 2026-08-16). Cloud Run 리비전 `adg-api-00022-zzz` 부터
+직접 올린다** (운영자 결정 2026-08-16). Cloud Run 리비전 `adg-api-00023-jbk` 부터
 앱은 sidecar 로 이 Postgres 에 붙는다. 5432 는 인터넷에 열지 않는다.
 
 ### 6.1 준비 상태
@@ -271,7 +277,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | 맥미니 DB·앱 역할 | ✅ `designgenerator` / `designgenerator_app` (postgresql@18, LAN `192.168.0.5`) |
 | 스키마·시드 | ✅ Alembic head + 플랜·데모 시드 (public 테이블 31) |
 | 백업 목록 | ✅ `MACDB_BACKUP_DATABASES` 에 `designgenerator` 편입 |
-| Cloud Run 경로 | ✅ 리비전 `adg-api-00022-zzz`. sidecar `cloudflared access tcp`, 앱은 `127.0.0.1:5432`. 5432 미개방 |
+| Cloud Run 경로 | ✅ 리비전 `adg-api-00023-jbk`. sidecar `cloudflared access tcp`, 앱은 `127.0.0.1:5432`. 5432 미개방 |
 
 ### 6.2 맥미니에서 준비할 것
 
@@ -379,6 +385,7 @@ py -3 backend/scripts/deploy_cloudrun_pg_sidecar.py
 
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |---|---|---|---|
+| v1.1.6 | 2026-08-19 | 안승준 | 앱 재배포는 sidecar 유지 스크립트만 쓴다. `--source` 는 sidecar 를 지운다. 운영 리비전 `adg-api-00023-jbk` |
 | v1.1.5 | 2026-08-19 | 안승준 | 허브 `designgenerator` `active` 전환·적재 확인. Cloud Run 실 Gemini 파이프라인은 이미 켜져 있음을 문서 반영 |
 | v1.1.4 | 2026-08-19 | 안승준 | Cloud Run `adg-api-00022-zzz` sidecar 로 맥미니 Postgres 연결. 5432 미개방. §6.3·§6.4 반영 |
 | v1.1.3 | 2026-08-19 | 안승준 | 운영 데모 계정 시드·로그인 허용. 공개 관리자만 잠금 |
