@@ -10,8 +10,10 @@ import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import type { SessionDevice } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 export default function SecurityPage() {
+  const { t, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const refreshUser = useAuthStore((s) => s.refreshUser);
 
@@ -50,7 +52,7 @@ export default function SecurityPage() {
     try {
       setNotice(await fn());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "요청에 실패했다.");
+      setError(e instanceof Error ? e.message : t("me.requestFailed"));
     } finally {
       setBusy(null);
     }
@@ -74,9 +76,11 @@ export default function SecurityPage() {
       {user?.deletionRequestedAt && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           <span>
-            계정 삭제가 접수되었다 (
-            {new Date(user.deletionRequestedAt).toLocaleDateString("ko-KR")}).
-            30일 유예 후 파기된다.
+            {t("me.deleteQueuedMsg", {
+              date: new Date(user.deletionRequestedAt).toLocaleDateString(
+                locale === "en" ? "en-US" : "ko-KR",
+              ),
+            })}
           </span>
           <Button
             size="sm"
@@ -90,27 +94,27 @@ export default function SecurityPage() {
               })
             }
           >
-            삭제 취소
+            {t("me.cancelDelete")}
           </Button>
         </div>
       )}
 
       <Card>
         <CardHeader
-          title="비밀번호 변경"
-          description="변경 후에도 기존 세션은 유지된다. 필요하면 아래에서 원격 로그아웃한다."
+          title={t("me.pwTitle")}
+          description={t("me.pwDesc")}
         />
         <div className="grid gap-3 sm:grid-cols-2">
           <Input
-            label="현재 비밀번호"
+            label={t("me.pwCurrent")}
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
           />
           <Input
-            label="새 비밀번호"
+            label={t("me.pwNew")}
             type="password"
-            hint="최소 8자"
+            hint={t("me.pwMin")}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
           />
@@ -132,18 +136,18 @@ export default function SecurityPage() {
               })
             }
           >
-            비밀번호 변경
+            {t("me.pwChange")}
           </Button>
         </div>
       </Card>
 
       <Card>
         <CardHeader
-          title="2단계 인증 (2FA)"
-          description="TOTP 앱(Google Authenticator·1Password)으로 로그인 2단계를 활성화한다."
+          title={t("me.twoFaTitle")}
+          description={t("me.twoFaDesc")}
           action={
             <Badge tone={user?.twoFactorEnabled ? "success" : "neutral"}>
-              {user?.twoFactorEnabled ? "활성" : "비활성"}
+              {user?.twoFactorEnabled ? t("me.active") : t("me.inactive")}
             </Badge>
           }
         />
@@ -151,17 +155,17 @@ export default function SecurityPage() {
         {user?.twoFactorEnabled ? (
           <div className="space-y-3">
             <p className="text-xs text-ink-500">
-              해제하려면 비밀번호와 TOTP 코드를 함께 입력한다.
+              {t("me.twoFaDisableHint")}
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
-                label="비밀번호"
+                label={t("me.password")}
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
               <Input
-                label="인증 코드 (6자리)"
+                label={t("me.totp6")}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 maxLength={6}
@@ -183,7 +187,7 @@ export default function SecurityPage() {
                   })
                 }
               >
-                2FA 해제
+                {t("me.twoFaOff")}
               </Button>
             </div>
           </div>
@@ -191,7 +195,7 @@ export default function SecurityPage() {
           <div className="space-y-3">
             <div className="rounded-lg border border-ink-200 bg-ink-50 p-3">
               <div className="text-[11px] text-ink-500">
-                인증 앱에 아래 키를 등록한다.
+                {t("me.twoFaRegister")}
               </div>
               <div className="mt-1 break-all font-mono text-xs text-ink-900">
                 {setup.secret}
@@ -202,7 +206,7 @@ export default function SecurityPage() {
             </div>
             <div>
               <div className="text-[11px] font-medium text-ink-700">
-                백업 코드 10개 — 안전한 곳에 보관한다.
+                {t("me.backupCodes")}
               </div>
               <div className="mt-1 grid grid-cols-5 gap-1.5">
                 {setup.backupCodes.map((c) => (
@@ -218,7 +222,7 @@ export default function SecurityPage() {
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <Input
-                  label="인증 코드 (6자리)"
+                  label={t("me.totp6")}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   maxLength={6}
@@ -238,7 +242,7 @@ export default function SecurityPage() {
                   })
                 }
               >
-                확인하고 활성화
+                {t("me.twoFaConfirm")}
               </Button>
             </div>
           </div>
@@ -249,19 +253,19 @@ export default function SecurityPage() {
             onClick={() =>
               run("2fa-setup", async () => {
                 setSetup(await api.users.setup2fa());
-                return "인증 앱에 키를 등록한 뒤 코드를 입력한다.";
+                return t("me.twoFaStartHint");
               })
             }
           >
-            2FA 설정 시작
+            {t("me.twoFaStart")}
           </Button>
         )}
       </Card>
 
       <Card>
         <CardHeader
-          title="로그인 세션"
-          description="현재 로그인된 기기 목록이다. 의심스러운 세션은 종료한다."
+          title={t("me.sessionsTitle")}
+          description={t("me.sessionsDesc")}
           action={
             sessions.length > 1 ? (
               <Button
@@ -276,13 +280,13 @@ export default function SecurityPage() {
                   })
                 }
               >
-                다른 기기 전체 종료
+                {t("me.revokeOthers")}
               </Button>
             ) : undefined
           }
         />
         {sessions.length === 0 ? (
-          <p className="py-3 text-xs text-ink-500">활성 세션이 없다.</p>
+          <p className="py-3 text-xs text-ink-500">{t("me.noSessions")}</p>
         ) : (
           <ul className="space-y-2">
             {sessions.map((s) => (
@@ -297,22 +301,22 @@ export default function SecurityPage() {
                     </span>
                     {s.current && (
                       <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700">
-                        현재 기기
+                        {t("me.thisDevice")}
                       </span>
                     )}
                   </div>
                   <div className="mt-0.5 text-[10px] text-ink-500">
-                    {s.location ?? "위치 미상"} ·{" "}
+                    {s.location ?? t("me.unknownLocation")} ·{" "}
                     {s.lastActive
                       ? new Date(s.lastActive).toLocaleString("ko-KR")
-                      : "최근 활동 기록 없음"}
+                      : t("me.noRecentActivity")}
                   </div>
                 </div>
                 <Button
                   size="sm"
                   variant="ghost"
                   disabled={s.current}
-                  title={s.current ? "지금 쓰는 기기는 여기서 끊지 않는다" : undefined}
+                  title={s.current ? t("me.cannotRevokeCurrent") : undefined}
                   onClick={() =>
                     run(`session-${s.id}`, async () => {
                       const res = await api.users.revokeSession(s.id);
@@ -321,7 +325,7 @@ export default function SecurityPage() {
                     })
                   }
                 >
-                  세션 종료
+                  {t("me.revokeSession")}
                 </Button>
               </li>
             ))}
@@ -331,8 +335,8 @@ export default function SecurityPage() {
 
       <Card>
         <CardHeader
-          title="내 데이터 · 계정"
-          description="GDPR 데이터 내려받기와 계정 삭제를 처리한다."
+          title={t("me.dataTitle")}
+          description={t("me.dataDesc")}
         />
         <div className="flex flex-wrap gap-2">
           <Button
@@ -351,11 +355,11 @@ export default function SecurityPage() {
                 a.download = "adg-my-data.json";
                 a.click();
                 URL.revokeObjectURL(url);
-                return "내 데이터를 JSON 으로 내려받았다.";
+                return t("me.dataDownloaded");
               })
             }
           >
-            내 데이터 내려받기 (JSON)
+            {t("me.downloadData")}
           </Button>
           <Button
             size="sm"
@@ -363,7 +367,7 @@ export default function SecurityPage() {
             className="text-red-700"
             onClick={() => setDeleteModal(true)}
           >
-            계정 삭제 요청
+            {t("me.requestDelete")}
           </Button>
         </div>
       </Card>
@@ -371,13 +375,13 @@ export default function SecurityPage() {
       <Modal
         open={deleteModal}
         onClose={() => setDeleteModal(false)}
-        title="계정 삭제 요청"
-        description="삭제 요청 후 30일 유예 기간이 있으며, 그 기간 내에는 취소할 수 있다. 유예 후에는 데이터가 파기되고 감사 로그만 익명화 보존된다."
+        title={t("me.deleteTitle")}
+        description={t("me.deleteDesc")}
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setDeleteModal(false)}>
-              취소
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -397,20 +401,20 @@ export default function SecurityPage() {
                 })
               }
             >
-              삭제 요청
+              {t("me.requestDelete")}
             </Button>
           </div>
         }
       >
         <Input
-          label="비밀번호 확인"
+          label={t("me.confirmPassword")}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
         <div className="mt-3">
           <Input
-            label="사유 (선택)"
+            label={t("me.reasonOptional")}
             value={deleteReason}
             onChange={(e) => setDeleteReason(e.target.value)}
             maxLength={500}

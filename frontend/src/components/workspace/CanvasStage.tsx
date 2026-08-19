@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 /**
  * 시안 뷰어의 조작 계층 — Zoom·Pan·미니맵 (기능정의서 v0.2.0 §3.1 '시안 뷰어').
@@ -58,6 +59,7 @@ export function CanvasStage({
   onOffsetChange,
   children,
 }: Props) {
+  const { t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const [innerOffset, setInnerOffset] = useState({ x: 0, y: 0 });
   const controlled = offsetProp !== undefined;
@@ -283,7 +285,7 @@ export function CanvasStage({
 
       {/* 조작 힌트 — 처음 쓰는 사람이 Space 드래그를 알 길이 없다. */}
       <div className="pointer-events-none absolute left-3 top-3 rounded-lg bg-ink-900/75 px-2 py-1 text-[10px] text-ink-50 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-        휠 확대 · Space 드래그 이동
+        {t("workspace.panHint")}
       </div>
 
       {overflowing && (
@@ -292,7 +294,7 @@ export function CanvasStage({
           onClick={jumpTo}
           className="absolute bottom-3 right-3 cursor-pointer overflow-hidden rounded-lg border border-ink-300 bg-surface/90 shadow-lg backdrop-blur"
           style={{ width: MINI_W, height: miniH }}
-          title="클릭한 지점으로 이동한다"
+          title={t("workspace.minimapTitle")}
         >
           <div className="absolute inset-0 bg-ink-100" />
           <div

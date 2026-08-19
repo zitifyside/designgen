@@ -17,6 +17,7 @@ import type {
   ExportScope,
   Project,
 } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Resolution = "1x" | "2x" | "3x";
 
@@ -29,25 +30,25 @@ const FORMATS: Array<{
   {
     v: "png",
     label: ".png",
-    description: "시안 미리보기. 모든 등급 사용 가능 (Free 워터마크)",
+    description: "exportPage.pngDesc",
     proOnly: false,
   },
   {
     v: "fig",
     label: ".fig",
-    description: "Figma 호환. SVG + 메타데이터 방식으로 산출",
+    description: "exportPage.figDesc",
     proOnly: true,
   },
   {
     v: "json",
     label: ".json",
-    description: "W3C DTCG 표준 Token JSON",
+    description: "exportPage.jsonDesc",
     proOnly: true,
   },
   {
     v: "css",
     label: ".css",
-    description: "CSS Variables (:root scope)",
+    description: "exportPage.cssDesc",
     proOnly: true,
   },
 ];
@@ -60,6 +61,7 @@ const FILE_SUFFIX: Record<ExportFormat, string> = {
 };
 
 export default function ExportClient() {
+  const { t } = useI18n();
   const projectId = useRouteId(1);
   const user = useAuthStore((s) => s.user);
   const isFree = user?.plan === "Free";
@@ -137,7 +139,7 @@ export default function ExportClient() {
   if (!project) {
     return (
       <div className="px-6 py-12 text-center text-sm text-ink-500">
-        프로젝트 정보를 불러오는 중…
+        {t("exportPage.loading")}
       </div>
     );
   }
@@ -174,12 +176,12 @@ export default function ExportClient() {
           record.downloadUrl,
           `${project.name}_${conceptLabel}.${FILE_SUFFIX[format]}`,
         );
-        setMessage("다운로드를 시작했다. 파일은 7일 후 만료된다.");
+        setMessage(t("exportPage.started"));
       } else {
-        setMessage("Export 를 생성했다. 아래 이력에서 다시 받을 수 있다.");
+        setMessage(t("exportPage.created"));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Export 에 실패했다.");
+      setError(e instanceof Error ? e.message : t("exportPage.failed"));
       if (format === "fig") setFigFallback(true);
     } finally {
       setBusy(false);
@@ -191,9 +193,9 @@ export default function ExportClient() {
     try {
       const tokens = await api.exports.tokens(projectId, conceptLabel);
       await navigator.clipboard?.writeText(JSON.stringify(tokens, null, 2));
-      setMessage("W3C DTCG Token JSON 을 클립보드에 복사했다.");
+      setMessage(t("exportPage.copied"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "복사에 실패했다.");
+      setError(e instanceof Error ? e.message : t("exportPage.copyFailed"));
     }
   };
 
@@ -201,26 +203,26 @@ export default function ExportClient() {
     <div className="mx-auto max-w-4xl px-6 py-8">
       <PageHeader
         title="Export"
-        description="DS Token 과 시안을 4종 형식으로 내보낸다."
+        description={t("exportPage.description")}
         breadcrumb={<ExportBreadcrumb project={project} />}
       />
 
       <div className="space-y-4">
         <Card>
-          <CardHeader title="1. Export 대상" />
+          <CardHeader title={t("exportPage.step1")} />
           <div className="grid grid-cols-3 gap-2">
             {(
               [
-                { v: "current", l: "현재 화면", h: "선택 화면의 대표 변형 1종" },
+                { v: "current", l: t("exportPage.scopeCurrent"), h: t("exportPage.scopeCurrentHint") },
                 {
                   v: "concept",
-                  l: "컨셉 전체",
-                  h: `컨셉 ${conceptLabel} 의 전 화면 변형`,
+                  l: t("exportPage.scopeConcept"),
+                  h: t("exportPage.scopeConceptHint", { label: conceptLabel }),
                 },
                 {
                   v: "all",
-                  l: "프로젝트 전체",
-                  h: `${designSystems.length} 컨셉 × 총 ${totalVariants}종`,
+                  l: t("exportPage.scopeProject"),
+                  h: t("exportPage.scopeProjectHint", { concepts: designSystems.length, variants: totalVariants }),
                 },
               ] as const
             ).map((s) => (
@@ -273,19 +275,19 @@ export default function ExportClient() {
             <div className="mt-3 border-t border-ink-100 pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-ink-700">
-                  시안 직접 선택 (선택 사항)
+                  {t("exportPage.pickVariants")}
                 </span>
                 {variantIndexes.length > 0 && (
                   <button
                     onClick={() => setVariantIndexes([])}
                     className="text-[10px] text-ink-500 underline hover:text-ink-700"
                   >
-                    선택 해제
+                    {t("exportPage.clearPick")}
                   </button>
                 )}
               </div>
               <p className="mt-0.5 text-[10px] text-ink-500">
-                고르지 않으면 위에서 정한 범위를 그대로 내보낸다.
+                {t("exportPage.pickHint")}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {currentScreenVariants.map((m) => {
@@ -324,7 +326,7 @@ export default function ExportClient() {
         </Card>
 
         <Card>
-          <CardHeader title="2. 형식" />
+          <CardHeader title={t("exportPage.step2")} />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {FORMATS.map((f) => {
               const disabled = f.proOnly && isFree;
@@ -350,7 +352,7 @@ export default function ExportClient() {
                     {f.label}
                   </div>
                   <div className="mt-1 text-[10px] text-ink-500">
-                    {f.description}
+                    {t(f.description)}
                   </div>
                 </button>
               );
@@ -358,21 +360,19 @@ export default function ExportClient() {
           </div>
           {isFree && format === "png" && (
             <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Free 등급은 우하단에 워터마크가 포함된다. Pro 업그레이드 시 제거된다.
+              {t("exportPage.watermarkNote")}
             </div>
           )}
           {(format === "png" || format === "fig") && (
             <div className="mt-3 rounded-lg bg-ink-50 px-3 py-2 text-[11px] text-ink-600">
-              현재 빌드의 .png·.fig 는 <b>SVG + 메타데이터</b> 로 산출된다. Figma
-              Plugin API 직접 생성과 래스터 변환은 Export·MCP 단계(W11~12)
-              산출물이다.
+              {t("exportPage.buildNote")}
             </div>
           )}
         </Card>
 
         {format === "png" && (
           <Card>
-            <CardHeader title="3. 해상도" />
+            <CardHeader title={t("exportPage.step3")} />
             <div className="grid grid-cols-3 gap-2">
               {(["1x", "2x", "3x"] as Resolution[]).map((r) => (
                 <button
@@ -408,7 +408,7 @@ export default function ExportClient() {
         {figFallback && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
             <span className="text-xs text-amber-800">
-              .fig 생성에 실패했다. 같은 시안을 .png 로 대신 받을 수 있다.
+              {t("exportPage.figFailed")}
             </span>
             <Button
               size="sm"
@@ -419,26 +419,26 @@ export default function ExportClient() {
                 setError(null);
               }}
             >
-              .png 로 바꾸기
+              {t("exportPage.switchPng")}
             </Button>
           </div>
         )}
 
         <Card>
           <CardHeader
-            title="미리보기 · 검증"
-            description="지금 설정으로 실제 만들어 재 본 결과다."
+            title={t("exportPage.previewTitle")}
+            description={t("exportPage.previewDesc")}
           />
           {estimate === null ? (
-            <p className="py-2 text-xs text-ink-500">확인하는 중…</p>
+            <p className="py-2 text-xs text-ink-500">{t("exportPage.checking")}</p>
           ) : (
             <>
               <div className="grid grid-cols-3 gap-3">
-                <Preview label="대상 시안" value={`${estimate.mockupCount}종`} />
-                <Preview label="예상 크기" value={formatBytes(estimate.sizeBytes)} />
+                <Preview label={t("exportPage.targetMockups")} value={t("exportPage.kinds", { n: estimate.mockupCount })} />
+                <Preview label={t("exportPage.estSize")} value={formatBytes(estimate.sizeBytes)} />
                 <Preview
-                  label="워터마크"
-                  value={estimate.watermark ? "포함" : "없음"}
+                  label={t("exportPage.watermark")}
+                  value={estimate.watermark ? t("exportPage.included") : t("common.none")}
                 />
               </div>
               {estimate.warnings.length > 0 && (
@@ -459,40 +459,40 @@ export default function ExportClient() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-200 bg-surface px-5 py-4">
           <div className="text-xs text-ink-500">
-            Export 파일은 생성 후 7일 경과 시 자동 삭제된다.
+            {t("exportPage.expireNote")}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" disabled={isFree} onClick={copyTokens}>
-              Token 클립보드 복사
+              {t("exportPage.copyToken")}
             </Button>
             <Button variant="outline" loading={busy} onClick={() => runExport(false)}>
-              Export 생성
+              {t("exportPage.create")}
             </Button>
             <Button loading={busy} onClick={() => runExport(true)}>
-              다운로드
+              {t("exportPage.download")}
             </Button>
           </div>
         </div>
 
         <Card>
           <CardHeader
-            title="Export 이력"
-            description="최근 7일간의 Export 기록. 만료된 파일은 목록에서 사라진다."
+            title={t("exportPage.historyTitle")}
+            description={t("exportPage.historyDesc")}
           />
           {history.length === 0 ? (
             <p className="py-4 text-center text-xs text-ink-500">
-              아직 Export 한 파일이 없다.
+              {t("exportPage.historyEmpty")}
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-ink-100 text-left text-ink-500">
-                    <th className="py-2 font-medium">형식</th>
-                    <th className="py-2 font-medium">범위</th>
-                    <th className="py-2 font-medium">크기</th>
-                    <th className="py-2 font-medium">생성</th>
-                    <th className="py-2 font-medium">만료</th>
+                    <th className="py-2 font-medium">{t("exportPage.colFormat")}</th>
+                    <th className="py-2 font-medium">{t("exportPage.colScope")}</th>
+                    <th className="py-2 font-medium">{t("exportPage.colSize")}</th>
+                    <th className="py-2 font-medium">{t("exportPage.colCreated")}</th>
+                    <th className="py-2 font-medium">{t("exportPage.colExpires")}</th>
                     <th />
                   </tr>
                 </thead>
@@ -503,7 +503,7 @@ export default function ExportClient() {
                         .{e.format}
                         {e.watermark && (
                           <span className="ml-1 text-[10px] text-amber-600">
-                            워터마크
+                            {t("exportPage.watermark")}
                           </span>
                         )}
                       </td>
@@ -528,12 +528,12 @@ export default function ExportClient() {
                               setError(
                                 err instanceof Error
                                   ? err.message
-                                  : "다운로드에 실패했다.",
+                                  : t("exportPage.dlFailed"),
                               ),
                             )
                           }
                         >
-                          다운로드
+                          {t("exportPage.download")}
                         </button>
                       </td>
                     </tr>
@@ -549,10 +549,11 @@ export default function ExportClient() {
 }
 
 function ExportBreadcrumb({ project }: { project: Project }) {
+  const { t } = useI18n();
   return (
     <>
       <Link href="/dashboard" className="hover:text-ink-700">
-        대시보드
+        {t("exportPage.dashboard")}
       </Link>
       <span className="px-1.5">/</span>
       <Link href={`/projects/${project.id}`} className="hover:text-ink-700">

@@ -8,6 +8,7 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api, type AnnouncementRecord } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 const AUDIENCES = ["all", "free", "pro", "team"] as const;
 const PRIORITIES = ["low", "normal", "high"] as const;
@@ -27,6 +28,7 @@ const EMPTY: Partial<AnnouncementRecord> = {
 };
 
 export default function AdminAnnouncementsPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<AnnouncementRecord[]>([]);
   const [form, setForm] = useState<Partial<AnnouncementRecord>>(EMPTY);
   const [open, setOpen] = useState(false);
@@ -38,7 +40,7 @@ export default function AdminAnnouncementsPage() {
     try {
       setItems(await api.admin.announcements());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "공지를 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("admin.annLoadFailed"));
     }
   }, []);
 
@@ -57,7 +59,7 @@ export default function AdminAnnouncementsPage() {
       setForm(EMPTY);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "저장에 실패했다.");
+      setError(e instanceof Error ? e.message : t("admin.annSaveFailed"));
     } finally {
       setBusy(false);
     }
@@ -69,7 +71,7 @@ export default function AdminAnnouncementsPage() {
       await api.admin.deleteAnnouncement(id);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "삭제에 실패했다.");
+      setError(e instanceof Error ? e.message : t("admin.annDeleteFailed"));
     }
   };
 
@@ -84,8 +86,8 @@ export default function AdminAnnouncementsPage() {
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <PageHeader
-        title="공지사항"
-        description="등록한 공지는 대시보드 배너와 인앱 알림(high)으로 노출된다."
+        title={t("admin.annTitle")}
+        description={t("admin.annDesc")}
         action={
           <Button
             size="sm"
@@ -94,7 +96,7 @@ export default function AdminAnnouncementsPage() {
               setOpen(true);
             }}
           >
-            새 공지
+            {t("admin.newAnn")}
           </Button>
         }
       />
@@ -119,7 +121,7 @@ export default function AdminAnnouncementsPage() {
                   </Badge>
                   <Badge tone="neutral">{a.status}</Badge>
                   <span className="text-[10px] text-ink-500">
-                    대상 {a.audience.join(", ")}
+                    {t("admin.audience", { list: a.audience.join(", ") })}
                   </span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-xs text-ink-600">
@@ -135,14 +137,14 @@ export default function AdminAnnouncementsPage() {
                     setOpen(true);
                   }}
                 >
-                  수정
+                  {t("admin.edit")}
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => void remove(a.id)}
                 >
-                  삭제
+                  {t("common.delete")}
                 </Button>
               </div>
             </div>
@@ -151,7 +153,7 @@ export default function AdminAnnouncementsPage() {
         {items.length === 0 && (
           <Card>
             <p className="py-6 text-center text-xs text-ink-500">
-              등록된 공지가 없다.
+              {t("admin.noAnn")}
             </p>
           </Card>
         )}
@@ -160,28 +162,28 @@ export default function AdminAnnouncementsPage() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title={form.id ? "공지 수정" : "새 공지"}
+        title={form.id ? t("admin.editAnn") : t("admin.newAnn")}
         size="md"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-              취소
+              {t("common.cancel")}
             </Button>
             <Button size="sm" loading={busy} onClick={() => void save()}>
-              저장
+              {t("common.save")}
             </Button>
           </div>
         }
       >
         <Input
-          label="제목"
+          label={t("admin.annTitleLabel")}
           value={form.title ?? ""}
           onChange={(e) => setForm({ ...form, title: e.target.value })}
           maxLength={200}
         />
         <div className="mt-3">
           <Textarea
-            label="본문 (Markdown)"
+            label={t("admin.annBody")}
             value={form.body ?? ""}
             onChange={(e) => setForm({ ...form, body: e.target.value })}
             rows={5}
@@ -192,7 +194,7 @@ export default function AdminAnnouncementsPage() {
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
             <div className="mb-1.5 text-xs font-medium text-ink-700">
-              노출 대상
+              {t("admin.audienceLabel")}
             </div>
             <div className="grid grid-cols-4 gap-1.5">
               {AUDIENCES.map((a) => (
@@ -213,7 +215,7 @@ export default function AdminAnnouncementsPage() {
           </div>
           <div>
             <div className="mb-1.5 text-xs font-medium text-ink-700">
-              우선순위
+              {t("admin.priority")}
             </div>
             <div className="grid grid-cols-3 gap-1.5">
               {PRIORITIES.map((p) => (
@@ -235,7 +237,7 @@ export default function AdminAnnouncementsPage() {
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Input
-            label="노출 시작 (선택)"
+            label={t("admin.startOptional")}
             type="datetime-local"
             value={(form.startsAt ?? "").slice(0, 16)}
             onChange={(e) =>
@@ -248,7 +250,7 @@ export default function AdminAnnouncementsPage() {
             }
           />
           <Input
-            label="노출 종료 (선택)"
+            label={t("admin.endOptional")}
             type="datetime-local"
             value={(form.endsAt ?? "").slice(0, 16)}
             onChange={(e) =>
@@ -262,7 +264,7 @@ export default function AdminAnnouncementsPage() {
           />
         </div>
         <div className="mt-3">
-          <div className="mb-1.5 text-xs font-medium text-ink-700">상태</div>
+          <div className="mb-1.5 text-xs font-medium text-ink-700">{t("admin.annStatus")}</div>
           <div className="grid grid-cols-2 gap-1.5">
             {["Draft", "Published"].map((s) => (
               <button

@@ -6,10 +6,12 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { cn } from "@/lib/cn";
 import {
   HELP_CATEGORIES,
   HELP_ITEMS,
+  localizeHelpItem,
   searchHelp,
   type HelpCategory,
 } from "@/lib/help-content";
@@ -21,16 +23,22 @@ import {
  * 던지는 사람이 많기 때문에, 카테고리 필터보다 검색창을 위에 둔다.
  */
 export default function HelpPage() {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<HelpCategory | "전체">("전체");
+  const [category, setCategory] = useState<HelpCategory | "all">("all");
   const [openIds, setOpenIds] = useState<string[]>([]);
 
+  const localized = useMemo(
+    () => HELP_ITEMS.map((item) => localizeHelpItem(item, t)),
+    [t],
+  );
+
   const results = useMemo(() => {
-    const found = searchHelp(query);
-    return category === "전체"
+    const found = searchHelp(query, localized);
+    return category === "all"
       ? found
-      : found.filter((i) => i.category === category);
-  }, [query, category]);
+      : found.filter((i) => i.categoryKey === category);
+  }, [query, category, localized]);
 
   const searching = query.trim().length > 0;
 
@@ -39,31 +47,30 @@ export default function HelpPage() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
 
-  // 검색 중에는 펼쳐 놓는다 — 찾은 항목을 한 번 더 눌러야 하면 검색한 보람이 없다.
   const isOpen = (id: string) => searching || openIds.includes(id);
 
   return (
     <div>
       <PageHeader
-        title="도움말"
-        description="사용 가이드와 자주 묻는 질문을 검색한다."
+        title={t("helpPage.title")}
+        description={t("helpPage.description")}
         action={
           <Link href="/projects/new">
-            <Button size="sm">새 프로젝트</Button>
+            <Button size="sm">{t("nav.newProject")}</Button>
           </Link>
         }
       />
 
       <Card>
         <Input
-          label="검색"
-          placeholder="예: 워터마크, 화면 추가, 계정 잠금"
+          label={t("helpPage.search")}
+          placeholder={t("helpPage.searchPh")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
 
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {(["전체", ...HELP_CATEGORIES] as const).map((c) => (
+          {(["all", ...HELP_CATEGORIES] as const).map((c) => (
             <button
               key={c}
               onClick={() => setCategory(c)}
@@ -74,15 +81,15 @@ export default function HelpPage() {
                   : "border-ink-200 bg-surface text-ink-600 hover:bg-ink-50",
               )}
             >
-              {c}
+              {c === "all" ? t("helpPage.all") : t(`help.categories.${c}`)}
             </button>
           ))}
         </div>
 
         <div className="mt-2 text-[11px] text-ink-500">
           {searching
-            ? `'${query.trim()}' 검색 결과 ${results.length}건`
-            : `전체 ${HELP_ITEMS.length}개 문항`}
+            ? t("helpPage.searchResult", { query: query.trim(), count: results.length })
+            : t("helpPage.allCount", { count: HELP_ITEMS.length })}
         </div>
       </Card>
 
@@ -91,11 +98,10 @@ export default function HelpPage() {
           <Card>
             <div className="py-6 text-center">
               <div className="text-sm font-medium text-ink-800">
-                찾는 내용이 없다.
+                {t("helpPage.emptyTitle")}
               </div>
               <p className="mx-auto mt-1.5 max-w-md text-xs text-ink-500">
-                다른 단어로 검색하거나, 우하단 [피드백] 버튼으로 물어보면
-                확인 후 가입 이메일로 답변한다.
+                {t("helpPage.emptyBody")}
               </p>
             </div>
           </Card>
@@ -127,12 +133,12 @@ export default function HelpPage() {
 
               {isOpen(item.id) && (
                 <div className="border-t border-ink-100 px-4 py-3">
-                  {item.answer.map((p, i) => (
+                  {item.answer.map((para, i) => (
                     <p
                       key={i}
                       className="mb-2 text-xs leading-relaxed text-ink-700 last:mb-0"
                     >
-                      {renderEmphasis(p)}
+                      {renderEmphasis(para)}
                     </p>
                   ))}
                   {item.link && (
@@ -154,21 +160,21 @@ export default function HelpPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium text-ink-900">
-              원하는 답이 없었다면
+              {t("helpPage.ctaTitle")}
             </div>
             <p className="mt-0.5 text-xs text-ink-500">
-              화면 우하단 [피드백] 버튼으로 보내면 확인 후 답변한다.
+              {t("helpPage.ctaBody")}
             </p>
           </div>
           <div className="flex gap-2">
             <Link href="/dashboard?tour=1">
               <Button size="sm" variant="outline">
-                투어 다시 보기
+                {t("helpPage.replayTour")}
               </Button>
             </Link>
             <Link href="/me/security">
               <Button size="sm" variant="outline">
-                계정·보안 설정
+                {t("helpPage.accountSecurity")}
               </Button>
             </Link>
           </div>

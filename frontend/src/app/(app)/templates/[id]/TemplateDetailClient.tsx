@@ -11,8 +11,10 @@ import { api, type TemplateReviews } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useRouteId } from "@/lib/route-id";
 import type { Template } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 export default function TemplateDetailClient() {
+  const { t } = useI18n();
   const id = useRouteId(1);
   const [template, setTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +60,7 @@ export default function TemplateDetailClient() {
   if (loading) {
     return (
       <div className="px-6 py-12 text-center text-sm text-ink-500">
-        템플릿을 불러오는 중…
+        {t("templates.loading")}
       </div>
     );
   }
@@ -66,9 +68,9 @@ export default function TemplateDetailClient() {
   if (!template) {
     return (
       <div className="px-6 py-12 text-center text-sm text-ink-500">
-        템플릿을 찾지 못했다.{" "}
+        {t("templates.notFound")}{" "}
         <Link href="/templates" className="text-brand-700 hover:underline">
-          템플릿 마켓으로
+          {t("templates.backMarket")}
         </Link>
       </div>
     );
@@ -82,7 +84,7 @@ export default function TemplateDetailClient() {
         breadcrumb={
           <>
             <Link href="/templates" className="hover:text-ink-700">
-              템플릿 마켓
+              {t("nav.templates")}
             </Link>
             <span className="px-1.5">/</span>
             <span className="text-ink-700">{template.category}</span>
@@ -91,11 +93,11 @@ export default function TemplateDetailClient() {
         action={
           <div className="flex items-center gap-2">
             {template.price === 0 ? (
-              <Badge tone="success">무료</Badge>
+              <Badge tone="success">{t("templates.priceFree")}</Badge>
             ) : (
               <Badge tone="brand">${template.price}</Badge>
             )}
-            <Button>현재 프로젝트에 적용</Button>
+            <Button>{t("templates.apply")}</Button>
           </div>
         }
       />
@@ -144,12 +146,12 @@ export default function TemplateDetailClient() {
 
           <Card className="mt-5">
             <h3 className="text-sm font-semibold text-ink-900">
-              리뷰{reviews ? ` · ${reviews.total}건` : ""}
+              {reviews ? t("templates.reviewsCount", { count: reviews.total }) : t("templates.reviews")}
             </h3>
 
             {reviews === null ? (
               <p className="py-6 text-center text-xs text-ink-500">
-                리뷰를 불러오는 중…
+                {t("templates.reviewsLoading")}
               </p>
             ) : (
               <>
@@ -180,7 +182,7 @@ export default function TemplateDetailClient() {
                 <div className="mt-5 space-y-3">
                   {reviews.reviews.length === 0 ? (
                     <p className="rounded-lg border border-dashed border-ink-200 py-5 text-center text-xs text-ink-500">
-                      아직 리뷰가 없다. 먼저 사용해 보고 남겨 보라.
+                      {t("templates.reviewsEmpty")}
                     </p>
                   ) : (
                     reviews.reviews.map((r) => (
@@ -217,14 +219,14 @@ export default function TemplateDetailClient() {
             )}
 
             <div className="mt-5 border-t border-ink-100 pt-4">
-              <div className="text-xs font-medium text-ink-800">리뷰 남기기</div>
+              <div className="text-xs font-medium text-ink-800">{t("templates.writeReview")}</div>
               <div className="mt-2 flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setMyRating(n)}
-                    aria-label={`${n}점`}
+                    aria-label={t("templates.starsAria", { n })}
                     className={cn(
                       "text-lg transition",
                       n <= myRating ? "text-amber-500" : "text-ink-300",
@@ -233,7 +235,7 @@ export default function TemplateDetailClient() {
                     ★
                   </button>
                 ))}
-                <span className="ml-1 text-[11px] text-ink-500">{myRating}점</span>
+                <span className="ml-1 text-[11px] text-ink-500">{t("templates.starsLabel", { n: myRating })}</span>
               </div>
               <div className="mt-2">
                 <Textarea
@@ -242,7 +244,7 @@ export default function TemplateDetailClient() {
                   rows={3}
                   maxLength={1000}
                   countMax={1000}
-                  placeholder="어떤 작업에 썼고 무엇이 좋았는지 적으면 다른 사람에게 도움이 된다."
+                  placeholder={t("templates.reviewPh")}
                 />
               </div>
               {postError && (
@@ -263,14 +265,14 @@ export default function TemplateDetailClient() {
                       await loadReviews();
                     } catch (e) {
                       setPostError(
-                        e instanceof Error ? e.message : "등록에 실패했다.",
+                        e instanceof Error ? e.message : t("templates.reviewFailed"),
                       );
                     } finally {
                       setPosting(false);
                     }
                   }}
                 >
-                  등록
+                  {t("templates.reviewSubmit")}
                 </Button>
               </div>
             </div>
@@ -279,7 +281,7 @@ export default function TemplateDetailClient() {
 
         <div className="space-y-4">
           <Card>
-            <h3 className="text-xs font-semibold text-ink-700">제공 컨셉</h3>
+            <h3 className="text-xs font-semibold text-ink-700">{t("templates.concepts")}</h3>
             <p className="mt-1 text-sm font-semibold text-ink-900">
               {template.conceptName}
             </p>
@@ -297,22 +299,22 @@ export default function TemplateDetailClient() {
           </Card>
 
           <Card>
-            <h3 className="text-xs font-semibold text-ink-700">메타</h3>
+            <h3 className="text-xs font-semibold text-ink-700">{t("templates.meta")}</h3>
             <dl className="mt-2 space-y-1.5 text-xs">
               <div className="flex justify-between">
-                <dt className="text-ink-500">작성자</dt>
+                <dt className="text-ink-500">{t("templates.author")}</dt>
                 <dd>{template.authorName}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-ink-500">카테고리</dt>
+                <dt className="text-ink-500">{t("templates.category")}</dt>
                 <dd>{template.category}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-ink-500">다운로드</dt>
+                <dt className="text-ink-500">{t("templates.downloads")}</dt>
                 <dd>{template.downloads.toLocaleString()}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-ink-500">평점</dt>
+                <dt className="text-ink-500">{t("templates.rating")}</dt>
                 <dd>★ {template.rating.toFixed(1)}</dd>
               </div>
             </dl>

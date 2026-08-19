@@ -10,6 +10,7 @@ import { Tabs } from "@/components/ui/Tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { cn } from "@/lib/cn";
 import { api, type LogEventRecord, type LogStats } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type LevelFilter = "all" | "error" | "warn" | "info";
 
@@ -29,6 +30,7 @@ const LEVEL_QUERY: Record<LevelFilter, string | undefined> = {
 };
 
 export default function AdminLogsPage() {
+  const { t } = useI18n();
   const [logs, setLogs] = useState<LogEventRecord[]>([]);
   const [stats, setStats] = useState<LogStats | null>(null);
   const [level, setLevel] = useState<LevelFilter>("all");
@@ -56,7 +58,7 @@ export default function AdminLogsPage() {
       setLogs(rows);
       setStats(summary);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "로그를 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("admin.logsFailed"));
     } finally {
       setLoading(false);
     }
@@ -77,8 +79,8 @@ export default function AdminLogsPage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <PageHeader
-        title="로그"
-        description="서비스 이벤트·접근 로그. 중앙 로그 허브가 권위 저장소이고 여기는 로컬 사본이다."
+        title={t("admin.logsTitle")}
+        description={t("admin.logsDesc")}
         action={
           <div className="flex items-center gap-2">
             <Button
@@ -86,10 +88,10 @@ export default function AdminLogsPage() {
               variant={autoRefresh ? "primary" : "outline"}
               onClick={() => setAutoRefresh((v) => !v)}
             >
-              {autoRefresh ? "자동 새로고침 켜짐" : "자동 새로고침"}
+              {autoRefresh ? t("admin.autoOn") : t("admin.autoRefresh")}
             </Button>
             <Button size="sm" variant="outline" onClick={() => void load()}>
-              새로고침
+              {t("admin.refresh")}
             </Button>
           </div>
         }
@@ -112,27 +114,27 @@ export default function AdminLogsPage() {
           )}
         >
           <span className="font-medium">
-            중앙 로그 허브 {forwarder.enabled ? "연동됨" : "미연동"}
+            {forwarder.enabled ? t("admin.hubOn") : t("admin.hubOff")}
           </span>
-          <span>프로젝트 {forwarder.projectId}</span>
-          <span>환경 {forwarder.environment}</span>
-          <span>모드 {forwarder.mode}</span>
-          <span>대기 {forwarder.buffered}건</span>
-          <span>유실 {forwarder.dropped}건</span>
-          {forwarder.circuitOpen && <span className="font-medium">서킷 열림</span>}
+          <span>{t("admin.project", { id: forwarder.projectId })}</span>
+          <span>{t("admin.env", { env: forwarder.environment })}</span>
+          <span>{t("admin.mode", { mode: forwarder.mode })}</span>
+          <span>{t("admin.buffered", { n: forwarder.buffered })}</span>
+          <span>{t("admin.dropped", { n: forwarder.dropped })}</span>
+          {forwarder.circuitOpen && <span className="font-medium">{t("admin.circuitOpen")}</span>}
         </div>
       )}
 
       <section className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label="기간 내 이벤트" value={stats?.total ?? 0} />
+        <Metric label={t("admin.eventsInRange")} value={stats?.total ?? 0} />
         <Metric
-          label="오류"
+          label={t("admin.errors")}
           value={(stats?.byLevel.error ?? 0) + (stats?.byLevel.fatal ?? 0)}
           tone="danger"
         />
-        <Metric label="경고" value={stats?.byLevel.warn ?? 0} tone="warning" />
+        <Metric label={t("admin.warns")} value={stats?.byLevel.warn ?? 0} tone="warning" />
         <Metric
-          label="오류율"
+          label={t("admin.errorRateLabel")}
           value={`${((stats?.errorRate ?? 0) * 100).toFixed(1)}%`}
           tone={(stats?.errorRate ?? 0) > 0.05 ? "danger" : "default"}
         />
@@ -145,10 +147,10 @@ export default function AdminLogsPage() {
             value={level}
             onChange={(v) => setLevel(v as LevelFilter)}
             items={[
-              { value: "all", label: "전체" },
-              { value: "error", label: "오류" },
-              { value: "warn", label: "경고" },
-              { value: "info", label: "정보" },
+              { value: "all", label: t("admin.statusAll") },
+              { value: "error", label: t("admin.errors") },
+              { value: "warn", label: t("admin.warns") },
+              { value: "info", label: t("admin.info") },
             ]}
           />
           <Tabs
@@ -156,23 +158,23 @@ export default function AdminLogsPage() {
             value={hours}
             onChange={(v) => setHours(v as "1" | "24" | "168")}
             items={[
-              { value: "1", label: "1시간" },
-              { value: "24", label: "24시간" },
-              { value: "168", label: "7일" },
+              { value: "1", label: t("admin.h1") },
+              { value: "24", label: t("admin.h24") },
+              { value: "168", label: t("admin.d7label") },
             ]}
           />
           <div className="w-44">
             <Input
-              label="종류 (접두사)"
-              placeholder="예: auth. / generation."
+              label={t("admin.kindPrefix")}
+              placeholder={t("admin.kindPh")}
               value={kind}
               onChange={(e) => setKind(e.target.value)}
             />
           </div>
           <div className="w-56">
             <Input
-              label="검색"
-              placeholder="메시지·경로"
+              label={t("admin.searchLogs")}
+              placeholder={t("admin.searchLogsPh")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -198,12 +200,12 @@ export default function AdminLogsPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-ink-200 text-left text-ink-500">
-              <th className="px-4 py-3 font-medium">시각</th>
-              <th className="px-4 py-3 font-medium">레벨</th>
-              <th className="px-4 py-3 font-medium">종류</th>
-              <th className="px-4 py-3 font-medium">메시지</th>
-              <th className="px-4 py-3 font-medium">사용자</th>
-              <th className="px-4 py-3 font-medium">응답</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colTime")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colLevel")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colKind")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colMessage")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.fieldUser")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colResponse")}</th>
             </tr>
           </thead>
           <tbody>
@@ -237,7 +239,7 @@ export default function AdminLogsPage() {
             {logs.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-ink-500">
-                  {loading ? "불러오는 중…" : "조건에 맞는 로그가 없다."}
+                  {loading ? t("common.loading") : t("admin.noLogs")}
                 </td>
               </tr>
             )}
@@ -248,21 +250,21 @@ export default function AdminLogsPage() {
       <Modal
         open={!!selected}
         onClose={() => setSelected(null)}
-        title={selected?.kind ?? "로그 상세"}
+        title={selected?.kind ?? t("admin.logDetail")}
         description={selected ? new Date(selected.occurredAt).toLocaleString("ko-KR") : ""}
         size="lg"
       >
         {selected && (
           <div className="space-y-3 text-xs">
             <dl className="grid grid-cols-2 gap-2">
-              <Field label="레벨" value={selected.level} />
-              <Field label="계층" value={selected.tier} />
-              <Field label="이벤트 ID" value={selected.eventId} mono />
-              <Field label="추적 ID" value={selected.traceId ?? "—"} mono />
-              <Field label="사용자" value={selected.userEmail ?? selected.userId ?? "—"} />
-              <Field label="소스" value={selected.source ?? "—"} />
+              <Field label={t("admin.fieldLevel")} value={selected.level} />
+              <Field label={t("admin.fieldTier")} value={selected.tier} />
+              <Field label={t("admin.fieldEvent")} value={selected.eventId} mono />
+              <Field label={t("admin.fieldTrace")} value={selected.traceId ?? "—"} mono />
+              <Field label={t("admin.fieldUser")} value={selected.userEmail ?? selected.userId ?? "—"} />
+              <Field label={t("admin.fieldSource")} value={selected.source ?? "—"} />
               <Field
-                label="요청"
+                label={t("admin.fieldReq")}
                 value={
                   selected.method
                     ? `${selected.method} ${selected.path ?? ""}`
@@ -270,7 +272,7 @@ export default function AdminLogsPage() {
                 }
               />
               <Field
-                label="응답"
+                label={t("admin.fieldRes")}
                 value={
                   selected.statusCode
                     ? `${selected.statusCode} · ${selected.durationMs ?? 0}ms`
@@ -281,7 +283,7 @@ export default function AdminLogsPage() {
 
             {selected.message && (
               <div>
-                <div className="mb-1 font-medium text-ink-700">메시지</div>
+                <div className="mb-1 font-medium text-ink-700">{t("admin.message")}</div>
                 <p className="rounded-lg bg-ink-50 px-3 py-2 text-ink-800">
                   {selected.message}
                 </p>
@@ -320,7 +322,7 @@ export default function AdminLogsPage() {
                     .catch(() => undefined);
                 }}
               >
-                같은 요청의 로그만 보기
+                {t("admin.sameRequest")}
               </Button>
             )}
           </div>

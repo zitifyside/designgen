@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 import { api, type AdminUser } from "@/lib/api";
 import type { Plan } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type StatusFilter = "all" | "Active" | "Suspended" | "Deleted";
 type PlanFilter = "all" | Plan;
@@ -26,6 +27,7 @@ const PLANS: Plan[] = ["Free", "Pro", "Team", "Admin"];
 const PAGE_SIZE = 50;
 
 export default function AdminUsersPage() {
+  const { t } = useI18n();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -51,7 +53,7 @@ export default function AdminUsersPage() {
         }),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "사용자를 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("admin.loadUsersFailed"));
     }
   }, [q, planFilter, statusFilter, page]);
 
@@ -70,7 +72,7 @@ export default function AdminUsersPage() {
       await api.admin.changeTier(id, plan);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "등급 변경에 실패했다.");
+      setError(e instanceof Error ? e.message : t("admin.planChangeFailed"));
     } finally {
       setBusy(null);
     }
@@ -86,7 +88,7 @@ export default function AdminUsersPage() {
       setSuspendReason("");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "처리에 실패했다.");
+      setError(e instanceof Error ? e.message : t("admin.actionFailed"));
     } finally {
       setBusy(null);
     }
@@ -95,8 +97,8 @@ export default function AdminUsersPage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <PageHeader
-        title="사용자 관리"
-        description="등급 변경·정지 처리는 감사 로그에 자동 기록된다."
+        title={t("admin.usersTitle")}
+        description={t("admin.usersDesc")}
       />
 
       {error && (
@@ -109,8 +111,8 @@ export default function AdminUsersPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-64">
             <Input
-              label="검색"
-              placeholder="이메일·이름"
+              label={t("admin.searchUsers")}
+              placeholder={t("admin.searchUsersPh")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -120,9 +122,9 @@ export default function AdminUsersPage() {
             value={statusFilter}
             onChange={(v) => setStatusFilter(v as StatusFilter)}
             items={[
-              { value: "all", label: "전체" },
-              { value: "Active", label: "활성" },
-              { value: "Suspended", label: "정지" },
+              { value: "all", label: t("admin.statusAll") },
+              { value: "Active", label: t("admin.statusActive") },
+              { value: "Suspended", label: t("admin.suspend") },
             ]}
           />
           <Tabs
@@ -130,7 +132,7 @@ export default function AdminUsersPage() {
             value={planFilter}
             onChange={(v) => setPlanFilter(v as PlanFilter)}
             items={[
-              { value: "all", label: "전 등급" },
+              { value: "all", label: t("admin.allPlans") },
               ...PLANS.map((p) => ({ value: p, label: p })),
             ]}
           />
@@ -141,12 +143,12 @@ export default function AdminUsersPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-ink-200 text-left text-ink-500">
-              <th className="px-4 py-3 font-medium">사용자</th>
-              <th className="px-4 py-3 font-medium">등급</th>
-              <th className="px-4 py-3 font-medium">상태</th>
-              <th className="px-4 py-3 font-medium">생성</th>
-              <th className="px-4 py-3 font-medium">가입</th>
-              <th className="px-4 py-3 font-medium">최근 활동</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colUser")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colPlan")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colStatus")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colGens")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colJoined")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colRecent")}</th>
               <th />
             </tr>
           </thead>
@@ -157,7 +159,7 @@ export default function AdminUsersPage() {
                   <button
                     className="text-left"
                     onClick={() => setDetailUserId(u.id)}
-                    title="상세 보기"
+                    title={t("admin.viewDetail")}
                   >
                     <div className="font-medium text-ink-900 hover:underline">
                       {u.name}
@@ -200,14 +202,14 @@ export default function AdminUsersPage() {
                       variant="ghost"
                       onClick={() => setDetailUserId(u.id)}
                     >
-                      상세
+                      {t("admin.detail")}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => setTarget(u)}
                     >
-                      {u.status === "Suspended" ? "정지 해제" : "정지"}
+                      {u.status === "Suspended" ? t("admin.unsuspend") : t("admin.suspend")}
                     </Button>
                   </div>
                 </td>
@@ -216,7 +218,7 @@ export default function AdminUsersPage() {
             {users.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                  조건에 맞는 사용자가 없다.
+                  {t("admin.noUsers")}
                 </td>
               </tr>
             )}
@@ -231,15 +233,15 @@ export default function AdminUsersPage() {
               disabled={page === 1}
               className="rounded-lg border border-ink-700 px-2.5 py-1.5 text-xs text-ink-300 transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:text-ink-500"
             >
-              이전
+              {t("common.prev")}
             </button>
-            <span className="text-xs text-ink-400">{page} 페이지</span>
+            <span className="text-xs text-ink-400">{t("admin.pageN", { n: page })}</span>
             <button
               onClick={() => setPage((n) => n + 1)}
               disabled={users.length < PAGE_SIZE}
               className="rounded-lg border border-ink-700 px-2.5 py-1.5 text-xs text-ink-300 transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:text-ink-500"
             >
-              다음
+              {t("common.next")}
             </button>
           </div>
         )}
@@ -255,35 +257,35 @@ export default function AdminUsersPage() {
         open={!!target}
         onClose={() => setTarget(null)}
         title={
-          target?.status === "Suspended" ? "계정 정지 해제" : "계정 정지"
+          target?.status === "Suspended" ? t("admin.unsuspendTitle") : t("admin.suspendTitle")
         }
         description={
           target?.status === "Suspended"
-            ? "정지를 해제하면 즉시 로그인이 가능해진다."
-            : "정지 사유는 10자 이상 입력한다. 감사 로그에 기록된다."
+            ? t("admin.unsuspendDesc")
+            : t("admin.suspendDesc")
         }
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>
-              취소
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
               loading={busy === "suspend"}
               onClick={() => void suspend(target?.status !== "Suspended")}
             >
-              확인
+              {t("common.confirm")}
             </Button>
           </div>
         }
       >
         <div className="mb-3 text-xs text-ink-600">
-          대상: <b>{target?.email}</b>
+          {t("admin.target")}<b>{target?.email}</b>
         </div>
         {target?.status !== "Suspended" && (
           <Textarea
-            label="정지 사유"
+            label={t("admin.suspendReason")}
             value={suspendReason}
             onChange={(e) => setSuspendReason(e.target.value)}
             rows={3}

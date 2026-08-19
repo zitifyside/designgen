@@ -1,234 +1,179 @@
 /**
- * 도움말·FAQ 원문 (기능정의서 v0.2.0 §6 '도움말 및 FAQ').
+ * 도움말·FAQ 구조 (기능정의서 v0.2.0 §6 '도움말 및 FAQ').
  *
- * 화면이 아니라 데이터로 둔다 — 검색이 본문까지 훑어야 하고, 문항이 늘어날 때
- * 레이아웃을 건드리지 않아야 하기 때문이다. 답변은 실제 동작과 어긋나면 안 되므로
- * 정책 수치(등급 한도·보관 기간 등)는 서비스정책서·기능정의서 기준으로 적는다.
+ * 문항 본문·카테고리·링크 라벨은 locale JSON `help.*` 에 둔다.
+ * 검색은 화면에서 번역문을 모아 훑는다.
  */
 
 export type HelpCategory =
-  | "시작하기"
-  | "생성과 시안"
-  | "디자인 시스템"
-  | "Export 와 연동"
-  | "요금과 크레딧"
-  | "계정과 보안";
+  | "gettingStarted"
+  | "generation"
+  | "designSystem"
+  | "export"
+  | "billing"
+  | "account";
 
 export interface HelpItem {
   id: string;
   category: HelpCategory;
-  question: string;
-  /** 문단 배열. 각 항목이 한 문단으로 렌더된다. */
-  answer: string[];
-  /** 검색 보조어 — 사용자가 쓸 법한 다른 표현. */
+  answerCount: number;
   keywords?: string[];
-  /** 바로 갈 수 있는 화면이 있으면 링크로 노출한다. */
-  link?: { href: string; label: string };
+  linkHref?: string;
 }
 
 export const HELP_CATEGORIES: HelpCategory[] = [
-  "시작하기",
-  "생성과 시안",
-  "디자인 시스템",
-  "Export 와 연동",
-  "요금과 크레딧",
-  "계정과 보안",
+  "gettingStarted",
+  "generation",
+  "designSystem",
+  "export",
+  "billing",
+  "account",
 ];
 
 export const HELP_ITEMS: HelpItem[] = [
-  // ── 시작하기 ────────────────────────────────────────────────
   {
     id: "quickstart",
-    category: "시작하기",
-    question: "처음인데 무엇부터 하면 되나요?",
-    answer: [
-      "[콘셉 시안 뽑기]에서 무드를 한 문장으로 적는 것이 시작입니다. 서로 다른 콘셉이 갤러리로 나옵니다. 사이트 전체를 만들지 않습니다.",
-      "생성이 끝나면 컨셉이 여러 개 나옵니다. 마음에 드는 컨셉을 하나 확정하면 그때부터 토큰을 다듬고 다른 장면의 시안을 추가할 수 있습니다.",
-      "확정 전에는 모든 컨셉을 비교만 하고, 확정 후에는 그 컨셉 하나를 기준으로 작업이 이어집니다.",
-    ],
+    category: "gettingStarted",
+    answerCount: 3,
     keywords: ["처음", "시작", "튜토리얼", "가이드", "온보딩"],
-    link: { href: "/projects/new", label: "새 프로젝트 만들기" },
+    linkHref: "/projects/new",
   },
   {
     id: "requirements-writing",
-    category: "시작하기",
-    question: "요건은 어떻게 적어야 결과가 좋아지나요?",
-    answer: [
-      "누가 쓰는 서비스인지, 어떤 무드·색·타이포를 원하는지를 적어 주세요. '깔끔하게'보다 '네이비·골드, 큰 타이포, 여백이 넓은 신뢰감'처럼 시각 단서가 잘 반영됩니다.",
-      "참고 자료가 있으면 첨부하세요. 기획서·요건 문서·기존 화면 캡처를 올리면 본문에서 텍스트를 뽑아 요건과 함께 사용합니다.",
-      "입력 중에는 30초마다 자동 저장되므로, 페이지를 벗어났다가 돌아와도 이어서 쓸 수 있습니다.",
-    ],
+    category: "gettingStarted",
+    answerCount: 3,
     keywords: ["요건", "프롬프트", "입력", "첨부", "자동저장", "draft"],
   },
-
-  // ── 생성과 시안 ─────────────────────────────────────────────
   {
     id: "concept-vs-variant",
-    category: "생성과 시안",
-    question: "컨셉과 시안은 무엇이 다른가요?",
-    answer: [
-      "컨셉은 **디자인 시스템의 방향**입니다. 색·타이포·모서리·그림자 같은 토큰 묶음 하나가 컨셉 하나입니다.",
-      "시안은 **같은 장면의 컨셉 보드를 다르게 짠 결과**입니다. 완성 사이트 페이지가 아니라, 메인(키비주얼·팔레트·타이포) 같은 대표 장면의 방향 시안입니다.",
-      "즉 '컨셉 3 × 시안 5' 는 서로 다른 웹페이지 15개가 아니라, 방향 3가지 각각에 대해 같은 장면의 시안 5장을 본다는 뜻입니다.",
-    ],
+    category: "generation",
+    answerCount: 3,
     keywords: ["컨셉", "시안", "variant", "차이", "구조", "레이아웃", "메인", "컨셉보드"],
   },
   {
     id: "add-screen",
-    category: "생성과 시안",
-    question: "다른 장면(메인·로그인 등)도 뽑고 싶습니다.",
-    answer: [
-      "컨셉을 확정한 뒤 작업 화면에서 [장면 추가]를 사용하세요. 확정된 디자인 시스템을 그대로 쓰면서 새 장면의 컨셉 시안만 뽑습니다.",
-      "시안 수를 늘리는 것으로는 다른 장면이 나오지 않습니다. 시안은 같은 장면의 변형이기 때문입니다.",
-      "장면 추가는 토큰을 다시 만들지 않으므로 처음 생성보다 빠르고, 결과가 기존 시안과 같은 시스템 위에 놓입니다.",
-    ],
+    category: "generation",
+    answerCount: 3,
     keywords: ["화면 추가", "로그인 화면", "메인", "다른 화면", "스크린", "장면"],
   },
   {
     id: "concept-lock",
-    category: "생성과 시안",
-    question: "컨셉을 확정했는데 다른 컨셉으로 바꾸고 싶습니다.",
-    answer: [
-      "작업 화면에서 확정을 해제하면 다시 모든 컨셉을 비교할 수 있습니다.",
-      "다만 확정 컨셉 기준으로 추가한 화면과 토큰 수정은 그 컨셉에 묶여 있습니다. 다른 컨셉으로 옮기면 그 작업은 함께 따라오지 않습니다.",
-    ],
+    category: "generation",
+    answerCount: 2,
     keywords: ["확정", "잠금", "lock", "해제", "변경"],
   },
   {
     id: "generation-warning",
-    category: "생성과 시안",
-    question: "결과에 '주의' 표시가 붙었습니다.",
-    answer: [
-      "생성 도중 일부 단계가 기대한 형식으로 나오지 않아 대체 스타일로 채운 경우입니다. 화면은 정상적으로 보이지만 의도한 결과와 다를 수 있습니다.",
-      "이 경우 **재시도 1회는 사용량을 차감하지 않습니다.** 결과가 마음에 들지 않으면 부담 없이 다시 생성하세요.",
-    ],
+    category: "generation",
+    answerCount: 2,
     keywords: ["주의", "warning", "실패", "fallback", "재시도"],
   },
   {
     id: "concurrent-generation",
-    category: "생성과 시안",
-    question: "'이미 진행 중인 생성이 있습니다' 라고 나옵니다.",
-    answer: [
-      "동시에 진행할 수 있는 생성은 계정당 하나입니다. 다른 프로젝트에서 생성이 돌고 있으면 끝난 뒤에 시작할 수 있습니다.",
-      "진행 중인 생성은 해당 프로젝트 화면에서 취소할 수 있습니다.",
-    ],
+    category: "generation",
+    answerCount: 2,
     keywords: ["동시", "409", "진행 중", "대기", "취소"],
   },
-
-  // ── 디자인 시스템 ───────────────────────────────────────────
   {
     id: "ds-mode",
-    category: "디자인 시스템",
-    question: "'단일 DS 통일' 은 어떤 기능인가요?",
-    answer: [
-      "컨셉마다 완전히 다른 시스템을 만드는 대신, 기본 토큰(타이포·간격·모서리)을 공통으로 고정하고 강조색 계열만 다르게 하는 방식입니다.",
-      "이미 브랜드 기준이 있어 색만 비교하고 싶을 때 적합합니다. Pro 이상에서 선택할 수 있습니다.",
-    ],
+    category: "designSystem",
+    answerCount: 2,
     keywords: ["단일 DS", "unified", "통일", "per concept", "브랜드"],
   },
   {
     id: "token-edit",
-    category: "디자인 시스템",
-    question: "토큰을 직접 수정할 수 있나요?",
-    answer: [
-      "작업 화면 오른쪽 패널에서 수정합니다. 값을 바꾸면 시안 미리보기에 즉시 반영됩니다.",
-      "수정할 수 있는 범위는 등급에 따라 다릅니다. Free 는 색상 계열만, Pro 이상은 타이포그래피·간격·모서리·그림자까지 조정할 수 있습니다.",
-      "실수로 바꿨다면 Ctrl/Cmd+Z 로 되돌릴 수 있습니다.",
-    ],
+    category: "designSystem",
+    answerCount: 3,
     keywords: ["토큰", "수정", "편집", "색상", "타이포", "undo", "되돌리기"],
   },
-
-  // ── Export 와 연동 ──────────────────────────────────────────
   {
     id: "export-formats",
-    category: "Export 와 연동",
-    question: "어떤 형식으로 내보낼 수 있나요?",
-    answer: [
-      "PNG 는 모든 등급에서 가능하며, Free 등급의 PNG 에는 워터마크가 들어갑니다.",
-      "토큰 JSON(W3C DTCG 표준)·CSS 변수·Figma 파일은 Pro 이상에서 제공합니다.",
-      "내보낸 이력은 프로젝트별로 남아 있어 다시 받을 수 있습니다.",
-    ],
+    category: "export",
+    answerCount: 3,
     keywords: ["export", "내보내기", "png", "json", "css", "figma", "워터마크"],
   },
   {
     id: "mcp",
-    category: "Export 와 연동",
-    question: "Cursor·Claude Code 에서 토큰을 바로 쓰고 싶습니다.",
-    answer: [
-      "[설정 → API Key]에서 키를 발급한 뒤, 저장소의 MCP 서버를 코딩 도구에 연결하면 확정 토큰·화면 구조·컴포넌트 스타일을 도구가 직접 읽습니다.",
-      "값을 손으로 옮겨 적을 필요가 없고, 토큰을 수정하면 다음 호출부터 바뀐 값이 전달됩니다.",
-      "이 경로는 읽기 전용입니다. 키가 유출되더라도 프로젝트가 변경되지는 않습니다.",
-    ],
+    category: "export",
+    answerCount: 3,
     keywords: ["mcp", "api key", "cursor", "claude code", "연동", "public api"],
-    link: { href: "/me/api-keys", label: "API Key 발급하기" },
+    linkHref: "/me/api-keys",
   },
-
-  // ── 요금과 크레딧 ───────────────────────────────────────────
   {
     id: "plan-limits",
-    category: "요금과 크레딧",
-    question: "등급별로 무엇이 다른가요?",
-    answer: [
-      "Free 는 월 3회 생성, 컨셉 1종·시안 3종, PNG(워터마크) 내보내기까지 제공합니다.",
-      "Pro 는 월 30회 생성, 컨셉 3종·시안 3 또는 5종, 단일 DS 통일, 전체 Export 형식, API Key 를 제공합니다.",
-      "Team 은 생성 횟수 제한이 없고 팀 좌석과 공유 기능이 추가됩니다.",
-    ],
+    category: "billing",
+    answerCount: 3,
     keywords: ["요금", "플랜", "등급", "free", "pro", "team", "한도", "가격"],
-    link: { href: "/me/subscription", label: "구독 관리" },
+    linkHref: "/me/subscription",
   },
   {
     id: "credits",
-    category: "요금과 크레딧",
-    question: "월 생성 횟수를 다 썼습니다.",
-    answer: [
-      "크레딧을 추가로 구매하면 월 한도와 별개로 생성할 수 있습니다. 크레딧은 사용한 만큼 차감됩니다.",
-      "한도는 매월 초기화되며, 남은 횟수는 [사용량]에서 확인합니다.",
-    ],
+    category: "billing",
+    answerCount: 2,
     keywords: ["크레딧", "한도 초과", "충전", "사용량", "리셋"],
-    link: { href: "/me/credits", label: "크레딧 보기" },
+    linkHref: "/me/credits",
   },
-
-  // ── 계정과 보안 ─────────────────────────────────────────────
   {
     id: "account-locked",
-    category: "계정과 보안",
-    question: "로그인이 잠겼습니다.",
-    answer: [
-      "비밀번호를 5회 연속 틀리면 계정이 15분 동안 잠깁니다. 자동 대입 시도를 막기 위한 조치입니다.",
-      "15분 뒤 자동으로 풀립니다. 급하다면 관리자에게 문의해 즉시 해제할 수 있습니다.",
-    ],
+    category: "account",
+    answerCount: 2,
     keywords: ["잠금", "로그인 실패", "차단", "lock", "비밀번호"],
   },
   {
     id: "two-factor",
-    category: "계정과 보안",
-    question: "2단계 인증을 쓰고 싶습니다.",
-    answer: [
-      "[설정 → 보안]에서 인증 앱(Authy·Google Authenticator 등)을 등록하면 로그인 시 6자리 코드를 함께 입력하게 됩니다.",
-      "등록할 때 나오는 백업 코드는 반드시 따로 보관하세요. 기기를 잃어버렸을 때 그 코드가 유일한 복구 수단입니다.",
-    ],
+    category: "account",
+    answerCount: 2,
     keywords: ["2fa", "2단계", "otp", "인증", "백업 코드", "보안"],
-    link: { href: "/me/security", label: "보안 설정" },
+    linkHref: "/me/security",
   },
   {
     id: "delete-account",
-    category: "계정과 보안",
-    question: "계정과 데이터를 삭제하고 싶습니다.",
-    answer: [
-      "[설정 → 보안]에서 계정 삭제를 신청할 수 있습니다. 신청 즉시 서비스 이용이 중단되고, 유예 기간이 지나면 데이터가 영구 삭제됩니다.",
-      "삭제 전에 내 데이터를 내려받을 수 있습니다. 프로젝트·토큰·생성 이력이 포함됩니다.",
-    ],
+    category: "account",
+    answerCount: 2,
     keywords: ["탈퇴", "삭제", "gdpr", "데이터 내보내기", "개인정보"],
-    link: { href: "/me/security", label: "계정 관리" },
+    linkHref: "/me/security",
   },
 ];
 
+export function localizeHelpItem(
+  item: HelpItem,
+  t: (key: string) => string,
+): {
+  id: string;
+  category: string;
+  categoryKey: HelpCategory;
+  question: string;
+  answer: string[];
+  link?: { href: string; label: string };
+  keywords?: string[];
+} {
+  const answer = Array.from({ length: item.answerCount }, (_, i) =>
+    t(`help.items.${item.id}.a${i + 1}`),
+  );
+  return {
+    id: item.id,
+    categoryKey: item.category,
+    category: t(`help.categories.${item.category}`),
+    question: t(`help.items.${item.id}.question`),
+    answer,
+    keywords: item.keywords,
+    link: item.linkHref
+      ? { href: item.linkHref, label: t(`help.items.${item.id}.link`) }
+      : undefined,
+  };
+}
+
 /** 제목·본문·키워드를 함께 훑는다 — 사용자는 답변에 있는 단어로도 검색한다. */
-export function searchHelp(query: string): HelpItem[] {
+export type LocalizedHelpItem = ReturnType<typeof localizeHelpItem>;
+
+export function searchHelp(
+  query: string,
+  localized: LocalizedHelpItem[],
+) {
   const q = query.trim().toLowerCase();
-  if (!q) return HELP_ITEMS;
+  if (!q) return localized;
   const terms = q.split(/\s+/);
-  return HELP_ITEMS.filter((item) => {
+  return localized.filter((item) => {
     const haystack = [
       item.question,
       item.category,
@@ -237,6 +182,6 @@ export function searchHelp(query: string): HelpItem[] {
     ]
       .join(" ")
       .toLowerCase();
-    return terms.every((t) => haystack.includes(t));
+    return terms.every((term) => haystack.includes(term));
   });
 }

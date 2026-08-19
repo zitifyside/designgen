@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Project, ProjectStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { useProjectStore } from "@/store/project-store";
 
 const STATUS_TONE: Record<
@@ -19,15 +20,15 @@ const STATUS_TONE: Record<
   Cancelled: "neutral",
 };
 
-const STATUS_LABEL: Record<ProjectStatus, string> = {
-  Draft: "임시저장",
-  InputReady: "준비 완료",
-  Generating: "생성 중",
-  Completed: "완료",
-  CompletedWarning: "완료 (대체 렌더)",
-  ConceptLocked: "컨셉 확정",
-  Failed: "실패",
-  Cancelled: "취소됨",
+const STATUS_KEYS: Record<ProjectStatus, string> = {
+  Draft: "status.Draft",
+  InputReady: "status.InputReady",
+  Generating: "status.Generating",
+  Completed: "status.Completed",
+  CompletedWarning: "status.CompletedWarning",
+  ConceptLocked: "status.ConceptLocked",
+  Failed: "status.Failed",
+  Cancelled: "status.Cancelled",
 };
 
 /** thumbnailColors 순서: primary · secondary · background · surface */
@@ -42,6 +43,7 @@ function palette(project: Project) {
 }
 
 export function ProjectCard({ project }: { project: Project }) {
+  const { t, locale } = useI18n();
   const toggle = useProjectStore((s) => s.toggleFavorite);
   const c = palette(project);
   const hasDesign = (project.thumbnailColors ?? []).length > 0;
@@ -61,7 +63,7 @@ export function ProjectCard({ project }: { project: Project }) {
           void toggle(project.id);
         }}
         className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-surface/80 text-sm shadow-sm backdrop-blur"
-        aria-label="즐겨찾기"
+        aria-label={t("dashboard.favoriteAria")}
       >
         {project.isFavorite ? "⭐" : "☆"}
       </button>
@@ -100,7 +102,7 @@ export function ProjectCard({ project }: { project: Project }) {
 
         {!hasDesign && (
           <div className="absolute inset-0 flex items-center justify-center bg-surface/70 text-[11px] font-medium text-ink-500">
-            아직 생성 전
+            {t("dashboard.notGenerated")}
           </div>
         )}
       </div>
@@ -111,7 +113,7 @@ export function ProjectCard({ project }: { project: Project }) {
             {project.name}
           </h3>
           <Badge tone={STATUS_TONE[project.status]}>
-            {STATUS_LABEL[project.status]}
+            {t(STATUS_KEYS[project.status])}
           </Badge>
         </div>
         <p className="mt-1 line-clamp-1 text-xs text-ink-500">
@@ -121,12 +123,15 @@ export function ProjectCard({ project }: { project: Project }) {
           <span>{project.platform}</span>
           <span>·</span>
           <span>
-            컨셉 {project.conceptCount} × 시안 {project.variantCount}
+            {t("dashboard.conceptVariant", {
+              concepts: project.conceptCount,
+              variants: project.variantCount,
+            })}
           </span>
           {project.dsMode === "unified" && (
             <>
               <span>·</span>
-              <span className="text-brand-700">단일 DS</span>
+              <span className="text-brand-700">{t("dashboard.unifiedDs")}</span>
             </>
           )}
           {project.targetScreenTitle && (
@@ -134,12 +139,12 @@ export function ProjectCard({ project }: { project: Project }) {
               <span>·</span>
               <span>
                 {project.targetScreenTitle}
-                {project.targetScreenInferred ? " (AI 선택)" : ""}
+                {project.targetScreenInferred ? t("dashboard.aiPicked") : ""}
               </span>
             </>
           )}
           <span>·</span>
-          <span>{new Date(project.updatedAt).toLocaleDateString("ko-KR")}</span>
+          <span>{new Date(project.updatedAt).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR")}</span>
         </div>
       </div>
     </Link>

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api, type AuditLogRecord } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Severity = "all" | "info" | "warning" | "critical";
 
@@ -17,6 +18,7 @@ const TONE: Record<string, "neutral" | "warning" | "danger"> = {
 };
 
 export default function AdminAuditLogsPage() {
+  const { t } = useI18n();
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);
   const [severity, setSeverity] = useState<Severity>("all");
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export default function AdminAuditLogsPage() {
         }),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "감사 로그를 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("admin.auditFailed"));
     }
   }, [severity]);
 
@@ -59,8 +61,8 @@ export default function AdminAuditLogsPage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <PageHeader
-        title="감사 로그"
-        description="로그인·권한 변경·결제·삭제 등 중요 작업 이력. 보존 기간 1년."
+        title={t("admin.auditTitle")}
+        description={t("admin.auditDesc")}
         action={
           <div className="flex items-center gap-2">
             <Tabs
@@ -68,14 +70,14 @@ export default function AdminAuditLogsPage() {
               value={severity}
               onChange={(v) => setSeverity(v as Severity)}
               items={[
-                { value: "all", label: "전체" },
+                { value: "all", label: t("admin.statusAll") },
                 { value: "info", label: "info" },
                 { value: "warning", label: "warning" },
                 { value: "critical", label: "critical" },
               ]}
             />
             <Button size="sm" variant="outline" onClick={exportCsv}>
-              CSV 내보내기
+              {t("admin.exportCsv")}
             </Button>
           </div>
         }
@@ -91,12 +93,12 @@ export default function AdminAuditLogsPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-ink-200 text-left text-ink-500">
-              <th className="px-4 py-3 font-medium">시각</th>
-              <th className="px-4 py-3 font-medium">행위자</th>
-              <th className="px-4 py-3 font-medium">액션</th>
-              <th className="px-4 py-3 font-medium">대상</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colTime")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colActor")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colAction")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colTarget")}</th>
               <th className="px-4 py-3 font-medium">IP</th>
-              <th className="px-4 py-3 font-medium">심각도</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colSeverity")}</th>
             </tr>
           </thead>
           <tbody>
@@ -117,7 +119,7 @@ export default function AdminAuditLogsPage() {
             {logs.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                  기록이 없다.
+                  {t("admin.noRecords")}
                 </td>
               </tr>
             )}

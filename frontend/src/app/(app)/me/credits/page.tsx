@@ -7,11 +7,13 @@ import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import type { CreditTransaction, PlanInfo } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 /** 충전 패키지 (기능정의서 v0.2.0 §3.1 '크레딧 충전'). */
 const PACKAGES = [10, 50, 100, 500];
 
 export default function CreditsPage() {
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const refreshUser = useAuthStore((s) => s.refreshUser);
   const [selected, setSelected] = useState(50);
@@ -45,9 +47,9 @@ export default function CreditsPage() {
       await api.billing.purchaseCredits(selected);
       await refreshUser();
       await load();
-      setNotice("크레딧을 충전했다.");
+      setNotice(t("me.charged"));
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "충전에 실패했다.");
+      setNotice(e instanceof Error ? e.message : t("me.chargeFailed"));
     } finally {
       setBusy(false);
     }
@@ -57,31 +59,31 @@ export default function CreditsPage() {
     <div className="space-y-4">
       <Card>
         <CardHeader
-          title="크레딧 잔액"
-          description="월간 무료 제공량을 모두 쓴 뒤에는 크레딧이 차감된다."
+          title={t("me.creditsTitle")}
+          description={t("me.creditsDesc")}
         />
         <div className="flex items-end gap-2">
           <span className="text-3xl font-semibold text-ink-900">
             {user?.credits ?? 0}
           </span>
-          <span className="pb-1 text-sm text-ink-500">회</span>
+          <span className="pb-1 text-sm text-ink-500">{t("me.times")}</span>
         </div>
         <p className="mt-2 text-xs text-ink-500">
-          이번 달 생성 {user?.monthlyGenerations.used ?? 0}
+          {t("me.usedThisMonth", { used: user?.monthlyGenerations.used ?? 0 })}
           {user?.monthlyGenerations.limit === -1
-            ? " / 무제한"
+            ? t("me.unlimited")
             : ` / ${user?.monthlyGenerations.limit ?? 0}`}{" "}
-          회 사용
+          {t("me.usedSuffix")}
         </p>
       </Card>
 
       <Card>
         <CardHeader
-          title="크레딧 충전"
+          title={t("me.topupTitle")}
           description={
             unitCents > 0
-              ? `현재 등급 단가 $${(unitCents / 100).toFixed(2)} / 회`
-              : "유료 등급에서 크레딧 단가가 적용된다."
+              ? t("me.unitPrice", { price: (unitCents / 100).toFixed(2) })
+              : t("me.paidOnly")
           }
         />
         <div className="grid grid-cols-4 gap-2">
@@ -96,7 +98,7 @@ export default function CreditsPage() {
                   : "border-ink-200 bg-surface hover:bg-ink-50",
               )}
             >
-              <div className="text-sm font-semibold text-ink-900">{n}회</div>
+              <div className="text-sm font-semibold text-ink-900">{t("me.packTimes", { n })}</div>
               <div className="mt-0.5 text-[10px] text-ink-500">
                 {unitCents > 0
                   ? `$${((unitCents * n) / 100).toFixed(2)}`
@@ -114,30 +116,30 @@ export default function CreditsPage() {
 
         <div className="mt-4 flex items-center justify-between">
           <p className="text-[11px] text-ink-500">
-            결제는 Stripe Checkout 으로 처리된다.
+            {t("me.stripeNote")}
           </p>
           <Button loading={busy} onClick={handlePurchase}>
-            {selected}회 충전
+            {t("me.chargeN", { n: selected })}
           </Button>
         </div>
       </Card>
 
       <Card>
         <CardHeader
-          title="크레딧 이력"
-          description="충전·소비·환불 내역이다."
+          title={t("me.historyTitle")}
+          description={t("me.historyDesc")}
         />
         {transactions.length === 0 ? (
-          <p className="py-3 text-xs text-ink-500">아직 이력이 없다.</p>
+          <p className="py-3 text-xs text-ink-500">{t("me.historyEmpty")}</p>
         ) : (
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-ink-100 text-left text-ink-500">
-                <th className="py-2 font-medium">유형</th>
-                <th className="py-2 font-medium">변동</th>
-                <th className="py-2 font-medium">잔액</th>
-                <th className="py-2 font-medium">메모</th>
-                <th className="py-2 font-medium">일시</th>
+                <th className="py-2 font-medium">{t("me.colType")}</th>
+                <th className="py-2 font-medium">{t("me.colDelta")}</th>
+                <th className="py-2 font-medium">{t("me.colBalance")}</th>
+                <th className="py-2 font-medium">{t("me.colMemo")}</th>
+                <th className="py-2 font-medium">{t("me.colWhen")}</th>
               </tr>
             </thead>
             <tbody>

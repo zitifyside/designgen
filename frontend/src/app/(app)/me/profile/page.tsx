@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/Input";
 import { applyTheme } from "@/components/layout/ThemeProvider";
 import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/store/auth-store";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 export default function ProfilePage() {
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const updateProfile = useAuthStore((s) => s.updateProfile);
 
@@ -33,24 +35,24 @@ export default function ProfilePage() {
     setError(null);
     try {
       await updateProfile({ name, language, theme });
-      setMessage("프로필을 저장했다.");
+      setMessage(t("me.savedProfile"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "저장에 실패했다.");
+      setError(err instanceof Error ? err.message : t("me.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   if (!user) {
-    return <div className="text-sm text-ink-500">불러오는 중…</div>;
+    return <div className="text-sm text-ink-500">{t("me.loading")}</div>;
   }
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <Card>
         <CardHeader
-          title="프로필"
-          description="팀원과 협업 화면에 노출되는 정보이다."
+          title={t("me.profileTitle")}
+          description={t("me.profileDesc")}
         />
 
         <div className="flex items-center gap-4">
@@ -58,14 +60,14 @@ export default function ProfilePage() {
             {user.name.slice(0, 1)}
           </div>
           <div className="text-xs text-ink-500">
-            아바타 업로드는 파일 저장소 연동(S3) 이후 활성화된다.
+            {t("me.avatarSoon")}
           </div>
         </div>
 
         <div className="mt-4 space-y-3">
           <Input
             id="name"
-            label="이름"
+            label={t("me.name")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={100}
@@ -74,11 +76,11 @@ export default function ProfilePage() {
           <div>
             <Input
               id="email"
-              label="이메일"
+              label={t("auth.email")}
               value={user.email}
               readOnly
               disabled
-              hint="이메일 변경은 재검증 절차가 필요하다 (v1.0 인증 플로우에서 제공)."
+              hint={t("me.emailHint")}
               onChange={() => undefined}
             />
           </div>
@@ -86,11 +88,11 @@ export default function ProfilePage() {
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <div className="mb-1.5 text-xs font-medium text-ink-700">언어</div>
+            <div className="mb-1.5 text-xs font-medium text-ink-700">{t("me.language")}</div>
             <div className="grid grid-cols-2 gap-1.5">
               {(
                 [
-                  { v: "ko", l: "한국어" },
+                  { v: "ko", l: t("common.localeKo") },
                   { v: "en", l: "English" },
                 ] as const
               ).map((o) => (
@@ -110,12 +112,12 @@ export default function ProfilePage() {
               ))}
             </div>
             <p className="mt-1 text-[10px] text-ink-500">
-              일본어·중국어는 v2.0 예정이다.
+              {t("me.langSoon")}
             </p>
           </div>
 
           <div>
-            <div className="mb-1.5 text-xs font-medium text-ink-700">테마</div>
+            <div className="mb-1.5 text-xs font-medium text-ink-700">{t("me.theme")}</div>
             <div className="grid grid-cols-3 gap-1.5">
               {(
                 [
@@ -148,11 +150,11 @@ export default function ProfilePage() {
 
         <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-ink-100 pt-4 text-xs">
           <div>
-            <dt className="text-ink-500">현재 등급</dt>
+            <dt className="text-ink-500">{t("me.currentPlan")}</dt>
             <dd className="mt-0.5 font-medium text-ink-900">{user.plan}</dd>
           </div>
           <div>
-            <dt className="text-ink-500">가입일</dt>
+            <dt className="text-ink-500">{t("me.joined")}</dt>
             <dd className="mt-0.5 font-medium text-ink-900">
               {new Date(user.createdAt).toLocaleDateString("ko-KR")}
             </dd>
@@ -175,7 +177,7 @@ export default function ProfilePage() {
 
       <div className="flex justify-end">
         <Button type="submit" loading={saving}>
-          변경 사항 저장
+          {t("me.saveChanges")}
         </Button>
       </div>
     </form>

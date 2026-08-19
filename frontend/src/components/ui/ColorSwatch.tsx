@@ -2,6 +2,7 @@
 
 import { ChangeEvent } from "react";
 import { contrastRatio, isHex } from "@/lib/token-utils";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 export function ColorSwatch({
   label,
@@ -14,6 +15,7 @@ export function ColorSwatch({
   onChange: (hex: string) => void;
   contrastAgainst?: string;
 }) {
+  const { t } = useI18n();
   const handle = (e: ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     if (e.target.type === "color") onChange(v);
@@ -42,7 +44,7 @@ export function ColorSwatch({
               className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-mono ${
                 ratioOk ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"
               }`}
-              title={ratioOk ? "WCAG AA 통과" : "WCAG AA 미달 (4.5:1 미만)"}
+              title={ratioOk ? t("common.wcagPass") : t("common.wcagFail")}
             >
               {ratio.toFixed(2)}:1
             </span>

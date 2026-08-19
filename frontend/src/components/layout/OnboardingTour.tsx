@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuthStore } from "@/store/auth-store";
 
 /**
@@ -27,47 +28,37 @@ interface Step {
   link?: { href: string; label: string };
 }
 
-const STEPS: Step[] = [
-  {
-    title: "3분이면 여러 콘셉 시안이 나온다",
-    body:
-      "한 문장으로 무드를 적으면 서로 다른 시각 방향의 시안이 갤러리로 나온다. 사이트 페이지를 만드는 도구가 아니다.",
-  },
+const STEP_DEFS: Array<Omit<Step, "title" | "body" | "link"> & {
+  titleKey: string;
+  bodyKey: string;
+  link?: { href: string; labelKey: string };
+}> = [
+  { titleKey: "onboarding.s1Title", bodyKey: "onboarding.s1Body" },
   {
     target: '[data-tour="new-project"]',
-    title: "여기서 시작한다",
-    body:
-      "요건을 적고 참고 자료를 첨부하면 된다. 입력 중에는 30초마다 자동 저장되므로 페이지를 벗어나도 이어서 쓸 수 있다.",
-    link: { href: "/projects/new", label: "새 프로젝트 만들기" },
+    titleKey: "onboarding.s2Title",
+    bodyKey: "onboarding.s2Body",
+    link: { href: "/projects/new", labelKey: "onboarding.s2Link" },
   },
-  {
-    title: "컨셉과 시안은 다른 축이다",
-    body:
-      "컨셉은 디자인 시스템의 방향이고, 시안은 같은 장면의 컨셉 보드를 다르게 짠 결과다. '컨셉 3 × 시안 5' 는 사이트 페이지 15개가 아니라 방향 3가지 × 메인 시안 5장이다.",
-  },
-  {
-    title: "컨셉을 확정하면 작업이 이어진다",
-    body:
-      "마음에 드는 컨셉 하나를 확정하면 그 시스템 위에서 토큰을 다듬고 다른 장면(메인·로그인 등)의 컨셉 시안을 추가할 수 있다. 확정은 언제든 해제할 수 있다.",
-  },
+  { titleKey: "onboarding.s3Title", bodyKey: "onboarding.s3Body" },
+  { titleKey: "onboarding.s4Title", bodyKey: "onboarding.s4Body" },
   {
     target: '[data-tour="templates"]',
-    title: "빈 화면에서 시작하기 어렵다면",
-    body:
-      "템플릿 마켓의 검증된 프리셋을 현재 프로젝트에 바로 적용할 수 있다. 적용한 뒤 토큰을 고치면 된다.",
+    titleKey: "onboarding.s5Title",
+    bodyKey: "onboarding.s5Body",
   },
   {
     target: '[data-tour="help"]',
-    title: "막히면 도움말을 검색한다",
-    body:
-      "사용 가이드와 자주 묻는 질문을 단어로 찾을 수 있다. 답이 없으면 우하단 [피드백] 버튼으로 물어보면 된다.",
-    link: { href: "/help", label: "도움말 열기" },
+    titleKey: "onboarding.s6Title",
+    bodyKey: "onboarding.s6Body",
+    link: { href: "/help", labelKey: "onboarding.s6Link" },
   },
 ];
 
 type Rect = { top: number; left: number; width: number; height: number };
 
 export function OnboardingTour() {
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -85,7 +76,17 @@ export function OnboardingTour() {
     if (forced || !user.onboardedAt) setOpen(true);
   }, [user]);
 
-  const step = STEPS[index];
+  const def = STEP_DEFS[index];
+  const step = def
+    ? {
+        target: def.target,
+        title: t(def.titleKey),
+        body: t(def.bodyKey),
+        link: def.link
+          ? { href: def.link.href, label: t(def.link.labelKey) }
+          : undefined,
+      }
+    : undefined;
 
   // 대상 위치는 스크롤·리사이즈로 바뀌므로 매번 다시 잰다.
   useEffect(() => {
@@ -129,7 +130,7 @@ export function OnboardingTour() {
 
   if (!open || !step) return null;
 
-  const last = index === STEPS.length - 1;
+  const last = index === STEP_DEFS.length - 1;
   const pad = 6;
 
   // 대상이 있으면 그 아래(공간이 없으면 위)에, 없으면 화면 가운데에 카드를 둔다.
@@ -176,7 +177,7 @@ export function OnboardingTour() {
       >
         <div className="flex items-center justify-between">
           <div className="flex gap-1" aria-hidden>
-            {STEPS.map((_, i) => (
+            {STEP_DEFS.map((_, i) => (
               <span
                 key={i}
                 className={cn(
@@ -187,7 +188,7 @@ export function OnboardingTour() {
             ))}
           </div>
           <span className="text-[10px] text-ink-500">
-            {index + 1} / {STEPS.length}
+            {index + 1} / {STEP_DEFS.length}
           </span>
         </div>
 
@@ -209,7 +210,7 @@ export function OnboardingTour() {
             onClick={() => void finish()}
             className="text-[11px] text-ink-500 hover:text-ink-700 hover:underline"
           >
-            건너뛰기
+            {t("onboarding.skip")}
           </button>
           <div className="flex gap-2">
             {index > 0 && (
@@ -218,14 +219,14 @@ export function OnboardingTour() {
                 variant="ghost"
                 onClick={() => setIndex((i) => i - 1)}
               >
-                이전
+                {t("common.prev")}
               </Button>
             )}
             <Button
               size="sm"
               onClick={() => (last ? void finish() : setIndex((i) => i + 1))}
             >
-              {last ? "시작하기" : "다음"}
+              {last ? t("onboarding.start") : t("common.next")}
             </Button>
           </div>
         </div>

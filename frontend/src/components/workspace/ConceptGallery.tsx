@@ -3,6 +3,7 @@
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { tokensToCssVars } from "@/lib/token-utils";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { DesignSystem, Mockup } from "@/lib/types";
 import { MockupRenderer } from "./MockupRenderer";
 
@@ -29,6 +30,7 @@ export function ConceptGallery({
   onSelect: (mockup: Mockup) => void;
   onOpen?: (mockup: Mockup) => void;
 }) {
+  const { t } = useI18n();
   const dsByLabel = useMemo(
     () => Object.fromEntries(designSystems.map((d) => [d.conceptLabel, d])),
     [designSystems],
@@ -46,7 +48,7 @@ export function ConceptGallery({
   if (items.length === 0) {
     return (
       <div className="py-20 text-center text-sm text-ink-500">
-        아직 뽑힌 시안이 없다.
+        {t("workspace.noMockups")}
       </div>
     );
   }

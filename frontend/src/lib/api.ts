@@ -6,6 +6,7 @@
  * 백엔드(FastAPI)는 camelCase 로 직렬화하므로 프론트 타입과 필드명이 1:1 이다.
  * 인증은 JWT 이며, 401 이 오면 refresh 토큰으로 1회 자동 갱신 후 재시도한다.
  */
+import { tStored } from "@/lib/i18n";
 import type {
   ApiKey,
   ConceptBrief,
@@ -221,7 +222,7 @@ export async function request<T>(
   } catch {
     throw new ApiError(
       0,
-      "서버에 연결하지 못했습니다. 백엔드가 실행 중인지 확인해 주세요.",
+      tStored("errors.serverUnreachable"),
     );
   }
 
@@ -232,13 +233,13 @@ export async function request<T>(
     // 이 요청이 쓴 토큰이 이미 교체됐으면 (그 사이 로그인) 새 세션을 지우지 않는다.
     const latest = readTokens()?.accessToken;
     if (latest && latest !== sentAccess) {
-      throw new ApiError(401, "세션이 만료되었습니다. 다시 로그인해 주세요.");
+      throw new ApiError(401, tStored("errors.sessionExpired"));
     }
     // 갱신까지 실패하면 세션이 끝난 것이다. 토큰을 지우고 앱에 알려
     // 로그인 화면으로 돌려보낸다 — 백엔드 원문 메시지를 그대로 보여주지 않는다.
     writeTokens(null);
     notifyUnauthorized();
-    throw new ApiError(401, "세션이 만료되었습니다. 다시 로그인해 주세요.");
+    throw new ApiError(401, tStored("errors.sessionExpired"));
   }
 
   if (!res.ok) {
@@ -249,12 +250,11 @@ export async function request<T>(
     if (!contentType.includes("json")) {
       throw new ApiError(
         res.status,
-        `API 서버에 연결되지 않았습니다 (${res.status}). ` +
-          `요청 주소 ${API_BASE} 에 백엔드가 실행 중인지 확인해 주세요.`,
+        tStored("errors.apiDown", { status: res.status, base: API_BASE }),
       );
     }
 
-    let detail = `요청이 실패했습니다 (${res.status})`;
+    let detail = tStored("errors.requestFailed", { status: res.status });
     let code: string | undefined;
     try {
       const data = await res.json();
@@ -289,7 +289,7 @@ export async function downloadFile(path: string, filename: string, retried = fal
     return downloadFile(path, filename, true);
   }
   if (!res.ok) {
-    let detail = `다운로드에 실패했습니다 (${res.status})`;
+    let detail = tStored("errors.downloadFailed", { status: res.status });
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") detail = data.detail;
@@ -334,7 +334,7 @@ export async function uploadMultipart<T>(
     return uploadMultipart<T>(path, files, true);
   }
   if (!res.ok) {
-    let detail = `업로드에 실패했습니다 (${res.status})`;
+    let detail = tStored("errors.uploadFailed", { status: res.status });
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") detail = data.detail;

@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api, type AdminRefund } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 const TONE: Record<string, "neutral" | "success" | "danger" | "warning"> = {
   Pending: "warning",
@@ -16,6 +17,7 @@ const TONE: Record<string, "neutral" | "success" | "danger" | "warning"> = {
 };
 
 export default function AdminRefundsPage() {
+  const { t } = useI18n();
   const [refunds, setRefunds] = useState<AdminRefund[]>([]);
   const [target, setTarget] = useState<AdminRefund | null>(null);
   const [approve, setApprove] = useState(true);
@@ -28,7 +30,7 @@ export default function AdminRefundsPage() {
     try {
       setRefunds(await api.admin.refunds());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "환불 요청을 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("admin.refundLoadFailed"));
     }
   }, []);
 
@@ -45,7 +47,7 @@ export default function AdminRefundsPage() {
       setNote("");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "처리에 실패했다.");
+      setError(e instanceof Error ? e.message : t("admin.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -56,8 +58,8 @@ export default function AdminRefundsPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <PageHeader
-        title="환불 처리"
-        description={`대기 ${pending.length}건 · 승인 시 Stripe Refund API 호출은 결제 연동 후 활성화된다.`}
+        title={t("admin.refundTitle")}
+        description={t("admin.refundDesc", { n: pending.length })}
       />
 
       {error && (
@@ -70,11 +72,11 @@ export default function AdminRefundsPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-ink-200 text-left text-ink-500">
-              <th className="px-4 py-3 font-medium">요청자</th>
-              <th className="px-4 py-3 font-medium">금액</th>
-              <th className="px-4 py-3 font-medium">사유</th>
-              <th className="px-4 py-3 font-medium">상태</th>
-              <th className="px-4 py-3 font-medium">요청일</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colRequester")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colAmount")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colReason")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colStatus")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colRequested")}</th>
               <th />
             </tr>
           </thead>
@@ -104,7 +106,7 @@ export default function AdminRefundsPage() {
                           setApprove(true);
                         }}
                       >
-                        승인
+                        {t("admin.approve")}
                       </Button>
                       <Button
                         size="sm"
@@ -114,7 +116,7 @@ export default function AdminRefundsPage() {
                           setApprove(false);
                         }}
                       >
-                        거부
+                        {t("admin.reject")}
                       </Button>
                     </div>
                   )}
@@ -124,7 +126,7 @@ export default function AdminRefundsPage() {
             {refunds.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-ink-500">
-                  환불 요청이 없다.
+                  {t("admin.noRefunds")}
                 </td>
               </tr>
             )}
@@ -135,29 +137,29 @@ export default function AdminRefundsPage() {
       <Modal
         open={!!target}
         onClose={() => setTarget(null)}
-        title={approve ? "환불 승인" : "환불 거부"}
+        title={approve ? t("admin.approveRefund") : t("admin.rejectRefund")}
         description={
           approve
-            ? "승인 시 감사 로그에 기록되고 요청자에게 통지된다."
-            : "거부 사유는 요청자에게 전달된다."
+            ? t("admin.approveRefundDesc")
+            : t("admin.rejectRefundDesc")
         }
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>
-              취소
+              {t("common.cancel")}
             </Button>
             <Button size="sm" loading={busy} onClick={() => void resolve()}>
-              확인
+              {t("common.confirm")}
             </Button>
           </div>
         }
       >
         <div className="mb-3 text-xs text-ink-600">
-          금액 <b>${((target?.amountCents ?? 0) / 100).toFixed(2)}</b>
+          {t("admin.amount")}<b>${((target?.amountCents ?? 0) / 100).toFixed(2)}</b>
         </div>
         <Textarea
-          label="메모"
+          label={t("admin.memo")}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={3}

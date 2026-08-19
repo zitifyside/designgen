@@ -6,14 +6,15 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { useNotificationStore } from "@/store/notification-store";
 import type { Notification } from "@/lib/types";
 
-const CATEGORY_LABEL: Record<Notification["category"], string> = {
-  generation: "생성",
-  billing: "결제",
-  system: "시스템",
-  marketing: "마케팅",
+const CATEGORY_KEY: Record<Notification["category"], string> = {
+  generation: "inbox.generation",
+  billing: "inbox.billing",
+  system: "inbox.system",
+  marketing: "inbox.marketing",
 };
 
 const CATEGORY_TONE: Record<
@@ -27,6 +28,7 @@ const CATEGORY_TONE: Record<
 };
 
 export default function NotificationsPage() {
+  const { t, locale } = useI18n();
   const load = useNotificationStore((s) => s.load);
   const notifications = useNotificationStore((s) => s.notifications);
   const markRead = useNotificationStore((s) => s.markRead);
@@ -42,20 +44,20 @@ export default function NotificationsPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <PageHeader
-        title="알림 센터"
+        title={t("inbox.title")}
         description={
           unread > 0
-            ? `읽지 않은 알림 ${unread}건이 있다. 30일 경과 시 자동 삭제된다.`
-            : "모든 알림을 확인했다."
+            ? t("inbox.unreadDesc", { count: unread })
+            : t("inbox.allReadDesc")
         }
         action={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={markAllRead}>
-              전체 읽음
+              {t("inbox.markAll")}
             </Button>
             <Link href="/me/notifications">
               <Button variant="ghost" size="sm">
-                알림 설정 →
+                {t("inbox.settings")}
               </Button>
             </Link>
           </div>
@@ -64,8 +66,8 @@ export default function NotificationsPage() {
 
       {notifications.length === 0 ? (
         <EmptyState
-          title="알림이 없다"
-          description="시안 생성·결제·공지 등 중요한 이벤트가 여기에 표시된다."
+          title={t("inbox.emptyTitle")}
+          description={t("inbox.emptyDesc")}
         />
       ) : (
         <ul className="space-y-2">
@@ -86,13 +88,13 @@ export default function NotificationsPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <Badge tone={CATEGORY_TONE[n.category]}>
-                    {CATEGORY_LABEL[n.category]}
+                    {t(CATEGORY_KEY[n.category])}
                   </Badge>
                   <span className="text-sm font-semibold text-ink-900">
                     {n.title}
                   </span>
                   <span className="ml-auto text-[10px] text-ink-500">
-                    {new Date(n.createdAt).toLocaleString("ko-KR")}
+                    {new Date(n.createdAt).toLocaleString(locale === "en" ? "en-US" : "ko-KR")}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-ink-600">{n.body}</p>
@@ -103,7 +105,7 @@ export default function NotificationsPage() {
                       onClick={() => markRead(n.id)}
                       className="font-medium text-brand-700 hover:underline"
                     >
-                      관련 페이지로
+                      {t("inbox.openRelated")}
                     </Link>
                   )}
                   {!n.read && (
@@ -111,14 +113,14 @@ export default function NotificationsPage() {
                       onClick={() => markRead(n.id)}
                       className="text-ink-500 hover:text-ink-800"
                     >
-                      읽음 처리
+                      {t("inbox.markRead")}
                     </button>
                   )}
                   <button
                     onClick={() => remove(n.id)}
                     className="text-ink-500 hover:text-red-700"
                   >
-                    삭제
+                    {t("common.delete")}
                   </button>
                 </div>
               </div>

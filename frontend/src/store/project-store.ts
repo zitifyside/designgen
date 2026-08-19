@@ -1,4 +1,5 @@
 "use client";
+import { tStored } from "@/lib/i18n";
 
 import { create } from "zustand";
 import { api } from "@/lib/api";
@@ -47,7 +48,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({
         loading: false,
         loaded: true,
-        error: e instanceof Error ? e.message : "프로젝트를 불러오지 못했습니다.",
+        error: e instanceof Error ? e.message : tStored("errors.loadProjects"),
       });
     }
   },

@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LocaleSwitch } from "@/components/i18n/LocaleSwitch";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuthStore } from "@/store/auth-store";
 import { useNotificationStore } from "@/store/notification-store";
 
 export function Header() {
   const router = useRouter();
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const load = useNotificationStore((s) => s.load);
@@ -25,15 +28,17 @@ export function Header() {
       <div className="flex-1">
         <input
           type="search"
-          placeholder="프로젝트 검색…"
+          placeholder={t("common.searchProjects")}
           className="block w-full max-w-sm rounded-lg border border-ink-200 bg-ink-50 px-3 py-1.5 text-sm placeholder:text-ink-500 focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
       </div>
 
+      <LocaleSwitch />
+
       <Link
         href="/notifications"
         className="relative flex h-9 w-9 items-center justify-center rounded-lg text-ink-600 hover:bg-ink-100"
-        aria-label="알림"
+        aria-label={t("common.notifications")}
       >
         <span className="text-base">🔔</span>
         {unread > 0 && (
@@ -53,10 +58,13 @@ export function Header() {
           </span>
           <div className="hidden text-left sm:block">
             <div className="text-xs font-semibold leading-none text-ink-900">
-              {user?.name ?? "Guest"}
+              {user?.name ?? t("common.guest")}
             </div>
             <div className="mt-0.5 text-[10px] text-ink-500">
-              {user?.plan} · {user?.credits} 크레딧
+              {t("header.planCredits", {
+                plan: user?.plan ?? "",
+                credits: user?.credits ?? 0,
+              })}
             </div>
           </div>
         </button>
@@ -71,21 +79,21 @@ export function Header() {
               className="block px-3 py-1.5 text-xs text-ink-700 hover:bg-ink-50"
               onClick={() => setMenuOpen(false)}
             >
-              프로필 설정
+              {t("header.profileSettings")}
             </Link>
             <Link
               href="/me/subscription"
               className="block px-3 py-1.5 text-xs text-ink-700 hover:bg-ink-50"
               onClick={() => setMenuOpen(false)}
             >
-              구독 관리
+              {t("header.manageSubscription")}
             </Link>
             <Link
               href="/me/credits"
               className="block px-3 py-1.5 text-xs text-ink-700 hover:bg-ink-50"
               onClick={() => setMenuOpen(false)}
             >
-              크레딧
+              {t("header.credits")}
             </Link>
             {user?.plan === "Admin" && (
               <>
@@ -95,7 +103,7 @@ export function Header() {
                   className="block px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50"
                   onClick={() => setMenuOpen(false)}
                 >
-                  Admin Console →
+                  {t("header.adminConsole")}
                 </Link>
               </>
             )}
@@ -108,7 +116,7 @@ export function Header() {
               }}
               className="block w-full px-3 py-1.5 text-left text-xs text-red-700 hover:bg-red-50"
             >
-              로그아웃
+              {t("header.logout")}
             </button>
           </div>
         )}

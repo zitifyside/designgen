@@ -1,4 +1,5 @@
 "use client";
+import { tStored } from "@/lib/i18n";
 
 import { create } from "zustand";
 import { api, type DeepPartial } from "@/lib/api";
@@ -170,7 +171,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (e) {
       set({
         loading: false,
-        error: e instanceof Error ? e.message : "작업 화면을 불러오지 못했습니다.",
+        error: e instanceof Error ? e.message : tStored("errors.loadWorkspace"),
       });
     }
   },
@@ -301,7 +302,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           set({
             syncState: "error",
             error:
-              e instanceof Error ? e.message : "Token 동기화에 실패했습니다.",
+              e instanceof Error ? e.message : tStored("errors.tokenSync"),
           });
           try {
             const fresh = await api.designSystems.list(projectId);
@@ -360,7 +361,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       } catch (e) {
         set({
           syncState: "error",
-          error: e instanceof Error ? e.message : "되돌리기에 실패했습니다.",
+          error: e instanceof Error ? e.message : tStored("errors.undo"),
         });
       }
     })();
@@ -397,7 +398,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   addScreen: async (input) => {
     const projectId = get().projectId;
-    if (!projectId) throw new Error("프로젝트가 선택되지 않았습니다.");
+    if (!projectId) throw new Error(tStored("errors.noProject"));
     return api.projects.addScreen(projectId, input);
   },
 

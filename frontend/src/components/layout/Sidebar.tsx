@@ -2,29 +2,40 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { cn } from "@/lib/cn";
 
-// tour: 온보딩 투어가 가리키는 앵커 (components/layout/OnboardingTour.tsx STEPS 와 짝)
 const NAV = [
-  { href: "/dashboard", label: "대시보드", icon: "📊" },
-  { href: "/projects/new", label: "새 프로젝트", icon: "✨", tour: "new-project" },
-  { href: "/templates", label: "템플릿 마켓", icon: "🧩", tour: "templates" },
-  { href: "/notifications", label: "알림 센터", icon: "🔔" },
-  { href: "/help", label: "도움말", icon: "❓", tour: "help" },
+  { href: "/dashboard", labelKey: "nav.dashboard", icon: "📊" },
+  {
+    href: "/projects/new",
+    labelKey: "nav.newProject",
+    icon: "✨",
+    tour: "new-project",
+  },
+  {
+    href: "/templates",
+    labelKey: "nav.templates",
+    icon: "🧩",
+    tour: "templates",
+  },
+  { href: "/notifications", labelKey: "nav.notificationCenter", icon: "🔔" },
+  { href: "/help", labelKey: "nav.help", icon: "❓", tour: "help" },
 ] as const;
 
 const ME_NAV = [
-  { href: "/me/profile", label: "프로필" },
-  { href: "/me/subscription", label: "구독" },
-  { href: "/me/credits", label: "크레딧" },
-  { href: "/me/usage", label: "사용량" },
-  { href: "/me/security", label: "보안" },
-  { href: "/me/notifications", label: "알림 설정" },
-  { href: "/me/api-keys", label: "API Key" },
+  { href: "/me/profile", labelKey: "nav.profile" },
+  { href: "/me/subscription", labelKey: "nav.subscription" },
+  { href: "/me/credits", labelKey: "nav.credits" },
+  { href: "/me/usage", labelKey: "nav.usage" },
+  { href: "/me/security", labelKey: "nav.security" },
+  { href: "/me/notifications", labelKey: "nav.notificationSettings" },
+  { href: "/me/api-keys", labelKey: "nav.apiKeys" },
 ] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <aside className="hidden h-screen w-60 shrink-0 border-r border-ink-200 bg-surface md:flex md:flex-col">
@@ -34,17 +45,17 @@ export function Sidebar() {
         </div>
         <div>
           <div className="text-sm font-semibold leading-none text-ink-900">
-            Design Generator
+            {t("brand.name")}
           </div>
           <div className="mt-0.5 text-[10px] text-ink-500">
-            DS Infrastructure
+            {t("brand.tagline")}
           </div>
         </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin">
         <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
-          작업
+          {t("nav.work")}
         </div>
         <ul className="space-y-0.5">
           {NAV.map((item) => {
@@ -62,7 +73,7 @@ export function Sidebar() {
                   )}
                 >
                   <span className="text-base">{item.icon}</span>
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </Link>
               </li>
             );
@@ -70,7 +81,7 @@ export function Sidebar() {
         </ul>
 
         <div className="mb-1 mt-5 px-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
-          마이페이지
+          {t("nav.me")}
         </div>
         <ul className="space-y-0.5">
           {ME_NAV.map((item) => {
@@ -86,7 +97,7 @@ export function Sidebar() {
                       : "text-ink-600 hover:bg-ink-50 hover:text-ink-900",
                   )}
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </Link>
               </li>
             );
@@ -99,10 +110,10 @@ export function Sidebar() {
           href="/me/subscription"
           className="block rounded-lg bg-brand-50 px-3 py-2.5 text-xs"
         >
-          <div className="font-semibold text-brand-700">Pro 업그레이드</div>
-          <div className="mt-0.5 text-brand-700">
-            월 3회 → 30회 생성 + 전체 Export
+          <div className="font-semibold text-brand-700">
+            {t("upgrade.title")}
           </div>
+          <div className="mt-0.5 text-brand-700">{t("upgrade.body")}</div>
         </Link>
       </div>
     </aside>

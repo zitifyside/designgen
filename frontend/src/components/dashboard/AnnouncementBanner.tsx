@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { api, type AnnouncementRecord } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuthStore } from "@/store/auth-store";
 
 /** 닫은 공지 ID 보관 키. 공지는 계정이 아니라 이 브라우저 기준으로 닫는다. */
@@ -33,6 +34,7 @@ const TONE = {
  * 되면 곤란하기 때문이다.
  */
 export function AnnouncementBanner() {
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const [items, setItems] = useState<AnnouncementRecord[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -89,7 +91,7 @@ export function AnnouncementBanner() {
                 tone.label,
               )}
             >
-              {a.priority === "high" ? "중요" : "공지"}
+              {a.priority === "high" ? t("dashboard.announcementHigh") : t("dashboard.announcementNormal")}
             </span>
             <div className="min-w-0 flex-1">
               <div className={cn("text-xs font-semibold", tone.title)}>
@@ -104,7 +106,7 @@ export function AnnouncementBanner() {
             {a.priority !== "high" && (
               <button
                 onClick={() => dismiss(a.id)}
-                aria-label="공지 닫기"
+                aria-label={t("dashboard.dismissAnnouncement")}
                 className={cn("shrink-0 rounded px-1.5 text-xs transition", tone.close)}
               >
                 ✕

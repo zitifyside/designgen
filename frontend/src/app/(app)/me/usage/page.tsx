@@ -7,15 +7,16 @@ import { cn } from "@/lib/cn";
 import { api, type UsageSummary } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import type { ExportRecord } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Granularity = "day" | "week" | "month";
 
 /** 단위별 기본 구간 수 — 화면에 적당히 차는 길이로 잡는다. */
 const PERIODS: Record<Granularity, number> = { day: 30, week: 12, month: 6 };
 const UNIT_LABEL: Record<Granularity, string> = {
-  day: "일별",
-  week: "주별",
-  month: "월별",
+  day: "me.byDay",
+  week: "me.byWeek",
+  month: "me.byMonth",
 };
 
 /** Export 형식별 막대 색 — 형식을 눈으로 구분하려는 용도다. */
@@ -33,6 +34,7 @@ const FORMAT_TONE: Record<string, string> = {
  * 화면에서 합산했는데, 프로젝트가 늘수록 요청이 그만큼 늘고 합계도 매번 다시 셌다.
  */
 export default function UsagePage() {
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const refreshUser = useAuthStore((s) => s.refreshUser);
 
@@ -53,7 +55,7 @@ export default function UsagePage() {
       setUsage(summary);
       setExports(history);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "사용량을 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("me.usageLoadFailed"));
     } finally {
       setLoading(false);
     }
@@ -71,10 +73,10 @@ export default function UsagePage() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="사용량 요약" />
+        <CardHeader title={t("me.usageTitle")} />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric
-            label="이번 달 생성"
+            label={t("me.monthlyGen")}
             value={`${user?.monthlyGenerations.used ?? 0}${
               user?.monthlyGenerations.limit === -1
                 ? " / ∞"
@@ -83,31 +85,31 @@ export default function UsagePage() {
             note={
               usage
                 ? diff === 0
-                  ? "전월과 동일"
-                  : `전월 대비 ${diff > 0 ? "+" : ""}${diff}회`
+                  ? t("me.sameAsLast")
+                  : t("me.vsLast", { diff: `${diff > 0 ? "+" : ""}${diff}` })
                 : undefined
             }
             tone={diff > 0 ? "up" : diff < 0 ? "down" : "flat"}
           />
-          <Metric label="크레딧 잔액" value={`${user?.credits ?? 0}회`} />
-          <Metric label="프로젝트" value={`${usage?.projectCount ?? 0}개`} />
-          <Metric label="Export" value={`${usage?.exportTotal ?? 0}건`} />
+          <Metric label={t("me.creditBalance")} value={t("me.timesUnit", { n: user?.credits ?? 0 })} />
+          <Metric label={t("me.projects")} value={t("me.countUnit", { n: usage?.projectCount ?? 0 })} />
+          <Metric label="Export" value={t("me.exportCount", { n: usage?.exportTotal ?? 0 })} />
         </div>
       </Card>
 
       <Card>
         <CardHeader
-          title={`${UNIT_LABEL[granularity]} 생성 추이`}
-          description="전체 생성과 화면 추가 생성을 합산한 수치이다."
+          title={t("me.trendTitle", { unit: t(UNIT_LABEL[granularity]) })}
+          description={t("me.trendDesc")}
           action={
             <Tabs
               size="sm"
               value={granularity}
               onChange={(v) => setGranularity(v as Granularity)}
               items={[
-                { value: "day", label: "일별" },
-                { value: "week", label: "주별" },
-                { value: "month", label: "월별" },
+                { value: "day", label: t("me.byDay") },
+                { value: "week", label: t("me.byWeek") },
+                { value: "month", label: t("me.byMonth") },
               ]}
             />
           }
@@ -116,14 +118,14 @@ export default function UsagePage() {
         {error ? (
           <p className="py-6 text-center text-xs text-red-700">{error}</p>
         ) : loading && !usage ? (
-          <p className="py-6 text-center text-xs text-ink-500">불러오는 중…</p>
+          <p className="py-6 text-center text-xs text-ink-500">{t("common.loading")}</p>
         ) : (
           <>
             <div className="flex h-32 items-end gap-[3px]">
               {usage?.buckets.map((b) => (
                 <div
                   key={b.label}
-                  title={`${b.label} · 생성 ${b.generations}회 (화면 추가 ${b.screenAdds}회)`}
+                  title={t("me.barTitle", { label: b.label, gens: b.generations, adds: b.screenAdds })}
                   className="flex flex-1 flex-col justify-end"
                   style={{ height: "100%" }}
                 >
@@ -145,17 +147,17 @@ export default function UsagePage() {
             <div className="mt-1.5 flex justify-between text-[10px] text-ink-500">
               <span>{usage?.buckets[0]?.label}</span>
               <span className="flex items-center gap-2">
-                <Legend className="bg-brand-600">전체 생성</Legend>
-                <Legend className="bg-brand-400">화면 추가</Legend>
+                <Legend className="bg-brand-600">{t("me.legendAll")}</Legend>
+                <Legend className="bg-brand-400">{t("me.legendAdds")}</Legend>
               </span>
               <span>{usage?.buckets[usage.buckets.length - 1]?.label}</span>
             </div>
 
             <div className="mt-3 grid grid-cols-3 gap-3 border-t border-ink-100 pt-3 text-xs">
-              <Stat label="기간 내 생성" value={`${usage?.totalGenerations ?? 0}회`} />
-              <Stat label="화면 추가 생성" value={`${usage?.totalScreenAdds ?? 0}회`} />
+              <Stat label={t("me.statPeriod")} value={t("me.timesUnit", { n: usage?.totalGenerations ?? 0 })} />
+              <Stat label={t("me.statAdds")} value={t("me.timesUnit", { n: usage?.totalScreenAdds ?? 0 })} />
               <Stat
-                label="실패 · 대체 렌더"
+                label={t("me.statFail")}
                 value={`${usage?.failures ?? 0} · ${usage?.warnings ?? 0}`}
               />
             </div>
@@ -165,11 +167,11 @@ export default function UsagePage() {
 
       <Card>
         <CardHeader
-          title="Export 형식별 분포"
-          description="어떤 형식으로 주로 내보내는지 본다."
+          title={t("me.exportDist")}
+          description={t("me.exportDistDesc")}
         />
         {(usage?.exportFormats.length ?? 0) === 0 ? (
-          <p className="py-3 text-xs text-ink-500">Export 이력이 없다.</p>
+          <p className="py-3 text-xs text-ink-500">{t("me.noExport")}</p>
         ) : (
           <div className="space-y-2">
             {usage?.exportFormats.map((f) => (
@@ -184,7 +186,7 @@ export default function UsagePage() {
                   />
                 </div>
                 <span className="w-10 shrink-0 text-right text-[11px] text-ink-600">
-                  {f.count}건
+                  {t("me.exportCount", { n: f.count })}
                 </span>
               </div>
             ))}
@@ -193,17 +195,17 @@ export default function UsagePage() {
       </Card>
 
       <Card>
-        <CardHeader title="최근 Export" description="최근 7일 보존분이다." />
+        <CardHeader title={t("me.recentExport")} description={t("me.recentExportDesc")} />
         {exports.length === 0 ? (
-          <p className="py-3 text-xs text-ink-500">Export 이력이 없다.</p>
+          <p className="py-3 text-xs text-ink-500">{t("me.noExport")}</p>
         ) : (
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-ink-100 text-left text-ink-500">
-                <th className="py-2 font-medium">프로젝트</th>
-                <th className="py-2 font-medium">형식</th>
-                <th className="py-2 font-medium">범위</th>
-                <th className="py-2 font-medium">일시</th>
+                <th className="py-2 font-medium">{t("me.colProject")}</th>
+                <th className="py-2 font-medium">{t("me.colFormat")}</th>
+                <th className="py-2 font-medium">{t("me.colScope")}</th>
+                <th className="py-2 font-medium">{t("me.colWhen")}</th>
               </tr>
             </thead>
             <tbody>

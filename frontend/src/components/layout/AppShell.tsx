@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { FeedbackWidget } from "./FeedbackWidget";
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
   const hydrated = useAuthStore((s) => s.hydrated);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { t } = useI18n();
 
   useEffect(() => {
     hydrate();
@@ -27,7 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!hydrated) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-ink-500">
-        세션 확인 중…
+        {t("common.loadingSession")}
       </div>
     );
   }

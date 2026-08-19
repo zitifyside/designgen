@@ -6,38 +6,24 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { Generation, GenerationStage } from "@/lib/types";
 
-const STAGES: Array<{
+const STAGE_KEYS: Array<{
   key: GenerationStage;
   title: string;
-  description: string;
+  descKey: string;
 }> = [
-  {
-    key: "InputAnalyzer",
-    title: "Input Analyzer",
-    description: "입력 텍스트를 분석하여 컨텍스트와 대표 장면을 추출한다",
-  },
-  {
-    key: "ConceptEngine",
-    title: "Concept Engine",
-    description: "컨셉별 DS Token (W3C DTCG) 을 생성한다",
-  },
-  {
-    key: "LayoutEngine",
-    title: "Layout Engine",
-    description: "대표 장면의 컨셉 시안 변형을 설계한다. 사이트 목업이 아니다",
-  },
-  {
-    key: "Renderer",
-    title: "Renderer",
-    description: "시안과 썸네일을 렌더링하고 QA 검증한다",
-  },
+  { key: "InputAnalyzer", title: "Input Analyzer", descKey: "generating.inputAnalyzerDesc" },
+  { key: "ConceptEngine", title: "Concept Engine", descKey: "generating.conceptEngineDesc" },
+  { key: "LayoutEngine", title: "Layout Engine", descKey: "generating.layoutEngineDesc" },
+  { key: "Renderer", title: "Renderer", descKey: "generating.rendererDesc" },
 ];
 
 const POLL_INTERVAL_MS = 900;
 
 export default function GeneratingPage() {
+  const { t } = useI18n();
   const params = useSearchParams();
   const router = useRouter();
   const refreshUser = useAuthStore((s) => s.refreshUser);
@@ -80,7 +66,7 @@ export default function GeneratingPage() {
         timer.current = setTimeout(poll, POLL_INTERVAL_MS);
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "상태를 조회하지 못했다.");
+        setError(e instanceof Error ? e.message : t("generating.statusFailed"));
       }
     };
 
@@ -94,7 +80,7 @@ export default function GeneratingPage() {
   const stageIndex = generation
     ? Math.max(
         0,
-        STAGES.findIndex((s) => s.key === generation.stage),
+        STAGE_KEYS.findIndex((s) => s.key === generation.stage),
       )
     : 0;
   const done = generation?.status === "Done";
@@ -111,7 +97,7 @@ export default function GeneratingPage() {
       void refreshUser();
       router.push("/dashboard");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "취소하지 못했다.");
+      setError(e instanceof Error ? e.message : t("generating.cancelFailed"));
       setCancelling(false);
     }
   };
@@ -125,27 +111,27 @@ export default function GeneratingPage() {
           </div>
           <h1 className="mt-3 text-base font-semibold text-ink-900">
             {done
-              ? "생성이 완료되었다"
+              ? t("generating.titleDone")
               : failed
-                ? "생성에 실패했다"
+                ? t("generating.titleFailed")
                 : cancelled
-                  ? "생성을 취소했다"
-                  : "실제 AI 가 요건을 읽고 콘셉 시안을 뽑는 중이다"}
+                  ? t("generating.titleCancelled")
+                  : t("generating.titleRunning")}
           </h1>
           <p className="mt-1 text-xs text-ink-500">
             {done
-              ? "잠시 후 작업 화면으로 이동한다."
+              ? t("generating.bodyDone")
               : failed
-                ? "월간 생성 한도는 자동 환불되었다."
+                ? t("generating.bodyFailed")
                 : cancelled
-                  ? "진행률 30% 미만이면 생성 횟수가 환불된다."
-                  : "보통 2~3분 소요된다. 완료 시 알림이 발송된다."}
+                  ? t("generating.bodyCancelled")
+                  : t("generating.bodyRunning")}
           </p>
         </div>
 
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between text-xs">
-            <span className="font-medium text-ink-700">전체 진행률</span>
+            <span className="font-medium text-ink-700">{t("generating.overall")}</span>
             <span className="font-mono text-ink-500">{progress}%</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-ink-100">
@@ -170,7 +156,7 @@ export default function GeneratingPage() {
         )}
 
         <ol className="mt-6 space-y-3">
-          {STAGES.map((s, idx) => {
+          {STAGE_KEYS.map((s, idx) => {
             const active = idx === stageIndex && !done && !failed && !cancelled;
             const completed = done || idx < stageIndex;
             return (
@@ -200,12 +186,12 @@ export default function GeneratingPage() {
                     <span>{s.title}</span>
                     {active && (
                       <span className="font-mono text-[10px] text-brand-700">
-                        진행 중
+                        {t("generating.inProgress")}
                       </span>
                     )}
                   </div>
                   <p className="mt-0.5 text-[11px] text-ink-500">
-                    {s.description}
+                    {t(s.descKey)}
                   </p>
                 </div>
               </li>
@@ -219,7 +205,7 @@ export default function GeneratingPage() {
             size="sm"
             onClick={() => router.push("/dashboard")}
           >
-            {done || failed || cancelled ? "대시보드로" : "백그라운드로 실행"}
+{done || failed || cancelled ? t("generating.toDashboard") : t("generating.runBackground")}
           </Button>
           {failed || cancelled ? (
             <Button
@@ -227,7 +213,7 @@ export default function GeneratingPage() {
               size="sm"
               onClick={() => router.push(`/projects/${projectId}`)}
             >
-              프로젝트 열기
+              {t("generating.openProject")}
             </Button>
           ) : (
             <Button
@@ -237,7 +223,7 @@ export default function GeneratingPage() {
               loading={cancelling}
               onClick={handleCancel}
             >
-              취소
+              {t("common.cancel")}
             </Button>
           )}
         </div>

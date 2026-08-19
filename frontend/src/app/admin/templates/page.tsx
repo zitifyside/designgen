@@ -10,14 +10,15 @@ import { Tabs } from "@/components/ui/Tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api } from "@/lib/api";
 import type { Template, TemplateStatus } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Filter = "all" | TemplateStatus;
 
 const LABEL: Record<TemplateStatus, string> = {
-  Pending: "심사 대기",
-  Approved: "게시 중",
-  Rejected: "거부됨",
-  RequestChanges: "수정 요청",
+  Pending: "admin.tplPending",
+  Approved: "admin.tplApproved",
+  Rejected: "admin.tplRejected",
+  RequestChanges: "admin.tplChanges",
 };
 
 const TONE: Record<TemplateStatus, "warning" | "success" | "danger" | "neutral"> =
@@ -29,6 +30,7 @@ const TONE: Record<TemplateStatus, "warning" | "success" | "danger" | "neutral">
   };
 
 export default function AdminTemplatesPage() {
+  const { t, locale } = useI18n();
   const [items, setItems] = useState<Template[]>([]);
   const [filter, setFilter] = useState<Filter>("Pending");
   const [target, setTarget] = useState<Template | null>(null);
@@ -46,7 +48,7 @@ export default function AdminTemplatesPage() {
         }),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "템플릿을 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("admin.tplLoadFailed"));
     }
   }, [filter]);
 
@@ -57,7 +59,7 @@ export default function AdminTemplatesPage() {
   const moderate = async () => {
     if (!target) return;
     if (decision !== "Approved" && !reason.trim()) {
-      setError("거부·수정 요청은 사유 입력이 필수다.");
+      setError(t("admin.reasonRequired"));
       return;
     }
     setBusy(true);
@@ -68,7 +70,7 @@ export default function AdminTemplatesPage() {
       setReason("");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "처리에 실패했다.");
+      setError(e instanceof Error ? e.message : t("admin.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -77,18 +79,18 @@ export default function AdminTemplatesPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <PageHeader
-        title="템플릿 심사"
-        description="마켓 등록 요청을 검토한다. 승인 시 즉시 게시된다."
+        title={t("admin.tplTitle")}
+        description={t("admin.tplDesc")}
         action={
           <Tabs
             size="sm"
             value={filter}
             onChange={(v) => setFilter(v as Filter)}
             items={[
-              { value: "Pending", label: "대기" },
-              { value: "Approved", label: "게시" },
-              { value: "Rejected", label: "거부" },
-              { value: "all", label: "전체" },
+              { value: "Pending", label: t("admin.pending") },
+              { value: "Approved", label: t("admin.published") },
+              { value: "Rejected", label: t("admin.rejected") },
+              { value: "all", label: t("admin.statusAll") },
             ]}
           />
         }
@@ -104,63 +106,63 @@ export default function AdminTemplatesPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-ink-200 text-left text-ink-500">
-              <th className="px-4 py-3 font-medium">이름</th>
-              <th className="px-4 py-3 font-medium">작성자</th>
-              <th className="px-4 py-3 font-medium">카테고리</th>
-              <th className="px-4 py-3 font-medium">가격</th>
-              <th className="px-4 py-3 font-medium">상태</th>
-              <th className="px-4 py-3 font-medium">등록</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colName")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colAuthor")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colCategory")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colPrice")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colStatus")}</th>
+              <th className="px-4 py-3 font-medium">{t("admin.colRegistered")}</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {items.map((t) => (
-              <tr key={t.id} className="border-b border-ink-100">
+            {items.map((tpl) => (
+              <tr key={tpl.id} className="border-b border-ink-100">
                 <td className="px-4 py-3">
-                  <div className="font-medium text-ink-900">{t.name}</div>
-                  <div className="text-[10px] text-ink-500">{t.description}</div>
+                  <div className="font-medium text-ink-900">{tpl.name}</div>
+                  <div className="text-[10px] text-ink-500">{tpl.description}</div>
                 </td>
-                <td className="px-4 py-3 text-ink-600">{t.authorName}</td>
-                <td className="px-4 py-3 text-ink-600">{t.category}</td>
+                <td className="px-4 py-3 text-ink-600">{tpl.authorName}</td>
+                <td className="px-4 py-3 text-ink-600">{tpl.category}</td>
                 <td className="px-4 py-3">
-                  {t.price === 0 ? "무료" : `$${t.price}`}
+                  {tpl.price === 0 ? t("templates.priceFree") : `$${tpl.price}`}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone={TONE[t.status]}>{LABEL[t.status]}</Badge>
+                  <Badge tone={TONE[tpl.status]}>{t(LABEL[tpl.status])}</Badge>
                 </td>
                 <td className="px-4 py-3 text-ink-500">
-                  {new Date(t.createdAt).toLocaleDateString("ko-KR")}
+                  {new Date(tpl.createdAt).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR")}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">
                     <Button
                       size="sm"
                       onClick={() => {
-                        setTarget(t);
+                        setTarget(tpl);
                         setDecision("Approved");
                       }}
                     >
-                      승인
+                      {t("admin.approve")}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        setTarget(t);
+                        setTarget(tpl);
                         setDecision("Rejected");
                       }}
                     >
-                      거부
+                      {t("admin.reject")}
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => {
-                        setTarget(t);
+                        setTarget(tpl);
                         setDecision("RequestChanges");
                       }}
                     >
-                      수정 요청
+                      {t("admin.requestChanges")}
                     </Button>
                   </div>
                 </td>
@@ -169,7 +171,7 @@ export default function AdminTemplatesPage() {
             {items.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-ink-500">
-                  해당 상태의 템플릿이 없다.
+                  {t("admin.noTpl")}
                 </td>
               </tr>
             )}
@@ -180,25 +182,25 @@ export default function AdminTemplatesPage() {
       <Modal
         open={!!target}
         onClose={() => setTarget(null)}
-        title={`템플릿 ${LABEL[decision]}`}
-        description="처리 결과는 작성자에게 인앱 알림으로 통지된다."
+        title={t("admin.tplAction", { action: decision ? t(LABEL[decision]) : "" })}
+        description={t("admin.tplActionDesc")}
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>
-              취소
+              {t("common.cancel")}
             </Button>
             <Button size="sm" loading={busy} onClick={() => void moderate()}>
-              확인
+              {t("common.confirm")}
             </Button>
           </div>
         }
       >
         <div className="mb-3 text-xs text-ink-600">
-          대상: <b>{target?.name}</b>
+          {t("admin.target")}<b>{target?.name}</b>
         </div>
         <Textarea
-          label={decision === "Approved" ? "메모 (선택)" : "사유 (필수)"}
+          label={decision === "Approved" ? t("admin.memoOptional") : t("admin.reasonRequiredLabel")}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={3}

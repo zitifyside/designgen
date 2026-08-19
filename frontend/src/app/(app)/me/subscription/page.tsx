@@ -9,29 +9,31 @@ import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import type { PlanInfo, Subscription } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 const PLAN_FEATURES: Record<string, string[]> = {
   Free: [
-    "월 3회 생성 (컨셉 1종 × 시안 3종)",
-    "Color Token 수정",
-    "PNG Export (워터마크)",
+    "me.freeF1",
+    "me.freeF2",
+    "me.freeF3",
   ],
   Pro: [
-    "월 30회 생성 (컨셉 1~3종 × 시안 3/5종)",
-    "전체 Token 수정 · 단일 DS 통일",
-    ".fig·.json·.css Export",
-    "API Key · MCP Server 연동",
-    "템플릿 등록·판매",
+    "me.proF1",
+    "me.proF2",
+    "me.proExport",
+    "me.proF3",
+    "me.proF4",
   ],
   Team: [
-    "무제한 생성",
-    "팀 워크스페이스 (기본 5시드)",
-    "공유 DS 라이브러리",
-    "우선 처리 큐",
+    "me.teamF1",
+    "me.teamF2",
+    "me.teamF3",
+    "me.teamF4",
   ],
 };
 
 export default function SubscriptionPage() {
+  const { t, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const [plans, setPlans] = useState<PlanInfo[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -64,7 +66,7 @@ export default function SubscriptionPage() {
       setNotice(res.detail);
       await load();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "결제를 시작하지 못했다.");
+      setNotice(e instanceof Error ? e.message : t("me.payFailed"));
     } finally {
       setBusy(null);
     }
@@ -78,7 +80,7 @@ export default function SubscriptionPage() {
       setNotice(res.detail);
       await load();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "구독 취소에 실패했다.");
+      setNotice(e instanceof Error ? e.message : t("me.cancelSubFailed"));
     } finally {
       setBusy(null);
     }
@@ -90,7 +92,7 @@ export default function SubscriptionPage() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="현재 구독" />
+        <CardHeader title={t("me.currentSub")} />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -103,11 +105,13 @@ export default function SubscriptionPage() {
             </div>
             <div className="mt-1 text-xs text-ink-500">
               {subscription?.currentPeriodEnd
-                ? `다음 결제일 ${new Date(
-                    subscription.currentPeriodEnd,
-                  ).toLocaleDateString("ko-KR")}`
-                : "결제 주기 정보 없음"}
-              {subscription?.cancelAtPeriodEnd && " · 기간 만료 시 해지 예정"}
+                ? t("me.nextBill", {
+                    date: new Date(subscription.currentPeriodEnd).toLocaleDateString(
+                      locale === "en" ? "en-US" : "ko-KR",
+                    ),
+                  })
+                : t("me.noCycle")}
+              {subscription?.cancelAtPeriodEnd && t("me.cancelScheduled")}
             </div>
           </div>
           {user?.plan !== "Free" && (
@@ -117,24 +121,24 @@ export default function SubscriptionPage() {
               loading={busy === "cancel"}
               onClick={handleCancel}
             >
-              구독 취소
+              {t("me.cancelSub")}
             </Button>
           )}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 border-t border-ink-100 pt-4 text-xs">
           <div>
-            <div className="text-ink-500">이번 달 생성</div>
+            <div className="text-ink-500">{t("me.genThisMonth")}</div>
             <div className="mt-0.5 font-medium text-ink-900">
               {user?.monthlyGenerations.used ?? 0}
               {user?.monthlyGenerations.limit === -1
-                ? " / 무제한"
+                ? t("me.unlimited")
                 : ` / ${user?.monthlyGenerations.limit ?? 0}`}
             </div>
           </div>
           <div>
-            <div className="text-ink-500">크레딧</div>
+            <div className="text-ink-500">{t("me.creditsLabel")}</div>
             <div className="mt-0.5 font-medium text-ink-900">
-              {user?.credits ?? 0}회
+              {t("me.timesN", { n: user?.credits ?? 0 })}
             </div>
           </div>
         </div>
@@ -148,16 +152,16 @@ export default function SubscriptionPage() {
 
       <Card>
         <CardHeader
-          title="플랜"
-          description="서비스정책서 기준 요금이다."
+          title={t("me.plans")}
+          description={t("me.plansDesc")}
           action={
             <Tabs
               size="sm"
               value={interval}
               onChange={(v) => setInterval(v as "monthly" | "annual")}
               items={[
-                { value: "monthly", label: "월간" },
-                { value: "annual", label: "연간" },
+                { value: "monthly", label: t("me.monthly") },
+                { value: "annual", label: t("me.annual") },
               ]}
             />
           }
@@ -177,17 +181,17 @@ export default function SubscriptionPage() {
                   <div className="text-sm font-semibold text-ink-900">
                     {p.name}
                   </div>
-                  {current && <Badge tone="brand">현재</Badge>}
+                  {current && <Badge tone="brand">{t("me.currentBadge")}</Badge>}
                 </div>
                 <div className="mt-2 text-2xl font-semibold text-ink-900">
                   ${(price(p) / 100).toFixed(0)}
                   <span className="text-xs font-normal text-ink-500">
-                    {interval === "monthly" ? "/월" : "/년"}
+                    {interval === "monthly" ? t("me.perMonth") : t("me.perYear")}
                   </span>
                 </div>
                 <ul className="mt-3 space-y-1.5 text-[11px] text-ink-600">
                   {(PLAN_FEATURES[p.code] ?? []).map((f) => (
-                    <li key={f}>· {f}</li>
+                    <li key={f}>· {t(f)}</li>
                   ))}
                 </ul>
                 <Button
@@ -199,7 +203,7 @@ export default function SubscriptionPage() {
                   loading={busy === p.code}
                   onClick={() => handleCheckout(p.code)}
                 >
-                  {current ? "이용 중" : `${p.name} 시작`}
+                  {current ? t("me.inUse") : t("me.startPlan", { name: p.name })}
                 </Button>
               </div>
             );

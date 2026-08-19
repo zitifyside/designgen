@@ -22,19 +22,21 @@ import { cn } from "@/lib/cn";
 import { useRouteId } from "@/lib/route-id";
 import { useAuthStore } from "@/store/auth-store";
 import { useProjectStore } from "@/store/project-store";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import type { ConceptLabel, Generation } from "@/lib/types";
 
 const SCREEN_PRESETS = [
-  { value: "main", label: "메인" },
-  { value: "landing", label: "랜딩" },
-  { value: "login", label: "로그인" },
-  { value: "dashboard", label: "대시보드" },
-  { value: "list", label: "목록" },
-  { value: "detail", label: "상세" },
+  { value: "main", labelKey: "projectNew.sceneMain" },
+  { value: "landing", labelKey: "projectNew.sceneLanding" },
+  { value: "login", labelKey: "projectNew.sceneLogin" },
+  { value: "dashboard", labelKey: "projectNew.sceneDashboard" },
+  { value: "list", labelKey: "projectNew.sceneList" },
+  { value: "detail", labelKey: "projectNew.sceneDetail" },
 ];
 
 export default function WorkspaceClient() {
+  const { t } = useI18n();
   const router = useRouter();
   // /projects/[id] — 경로 두 번째 세그먼트가 프로젝트 ID 다.
   const projectId = useRouteId(1);
@@ -273,7 +275,7 @@ export default function WorkspaceClient() {
   if (loading && !project) {
     return (
       <div className="px-6 py-12 text-center text-sm text-ink-500">
-        작업 화면을 불러오는 중…
+        {t("workspace.loading")}
       </div>
     );
   }
@@ -281,9 +283,9 @@ export default function WorkspaceClient() {
   if (!project) {
     return (
       <div className="px-6 py-12 text-center text-sm text-ink-500">
-        프로젝트를 찾지 못했다.{" "}
+        {t("workspace.notFound")}{" "}
         <Link href="/dashboard" className="text-brand-700 hover:underline">
-          대시보드로
+          {t("workspace.toDashboard")}
         </Link>
       </div>
     );
@@ -298,7 +300,7 @@ export default function WorkspaceClient() {
       const fresh = await api.projects.get(projectId);
       upsertProject(fresh);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "컨셉 확정에 실패했다.");
+      alert(e instanceof Error ? e.message : t("workspace.lockFailed"));
     } finally {
       setBusy(null);
     }
@@ -311,7 +313,7 @@ export default function WorkspaceClient() {
       const fresh = await api.projects.get(projectId);
       upsertProject(fresh);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "확정 해제에 실패했다.");
+      alert(e instanceof Error ? e.message : t("workspace.unlockFailed"));
     } finally {
       setBusy(null);
     }
@@ -330,7 +332,7 @@ export default function WorkspaceClient() {
       setCustomScreen("");
       void refreshUser();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "장면 추가에 실패했다.");
+      alert(e instanceof Error ? e.message : t("workspace.addScreenFailed"));
     } finally {
       setBusy(null);
     }
@@ -345,7 +347,7 @@ export default function WorkspaceClient() {
         `/projects/new/generating?projectId=${projectId}&generationId=${gen.id}`,
       );
     } catch (e) {
-      alert(e instanceof Error ? e.message : "재시도에 실패했다.");
+      alert(e instanceof Error ? e.message : t("workspace.retryFailed"));
       setBusy(null);
     }
   };
@@ -359,7 +361,7 @@ export default function WorkspaceClient() {
             href="/dashboard"
             className="text-xs text-ink-500 hover:text-ink-800"
           >
-            ← 대시보드
+            {t("workspace.backDashboard")}
           </Link>
           <div className="h-4 w-px bg-ink-200" />
           <div>
@@ -367,14 +369,13 @@ export default function WorkspaceClient() {
               <span className="text-sm font-semibold text-ink-900">
                 {project.name}
               </span>
-              {isLocked && <Badge tone="brand">컨셉 {project.confirmedConceptLabel} 확정</Badge>}
+              {isLocked && <Badge tone="brand">{t("workspace.lockedBadge", { label: project.confirmedConceptLabel ?? "" })}</Badge>}
               {project.dsMode === "unified" && (
-                <Badge tone="neutral">단일 DS</Badge>
+                <Badge tone="neutral">{t("workspace.unifiedDs")}</Badge>
               )}
             </div>
             <div className="text-[10px] text-ink-500">
-              {project.platform} · 콘셉 {project.conceptCount} × 시안{" "}
-              {project.variantCount}
+              {t("workspace.meta", { platform: project.platform, concepts: project.conceptCount, variants: project.variantCount })}
             </div>
           </div>
         </div>
@@ -382,13 +383,13 @@ export default function WorkspaceClient() {
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-ink-500">
             {saveHint
-              ? "자동 저장된다"
+              ? t("workspace.autoSaving")
               : syncState === "saving"
-                ? "동기화 중…"
+                ? t("workspace.syncing")
                 : syncState === "saved"
-                  ? "저장됨"
+                  ? t("workspace.saved")
                   : syncState === "error"
-                    ? "동기화 실패"
+                    ? t("workspace.syncFailed")
                     : ""}
           </span>
           {!notGenerated && (
@@ -403,7 +404,7 @@ export default function WorkspaceClient() {
                     : "text-ink-500 hover:text-ink-800",
                 )}
               >
-                갤러리
+                {t("workspace.gallery")}
               </button>
               <button
                 type="button"
@@ -415,7 +416,7 @@ export default function WorkspaceClient() {
                     : "text-ink-500 hover:text-ink-800",
                 )}
               >
-                다듬기
+                {t("workspace.refine")}
               </button>
             </div>
           )}
@@ -424,7 +425,7 @@ export default function WorkspaceClient() {
           <button
             onClick={() => undoTokens(activeConcept)}
             disabled={(tokenHistory[activeConcept]?.length ?? 0) === 0}
-            title="Token 수정 되돌리기 (Ctrl/Cmd+Z)"
+            title={t("workspace.undoTitle")}
             className={cn(
               "rounded-lg border border-ink-200 bg-surface px-2 py-1 text-xs transition",
               (tokenHistory[activeConcept]?.length ?? 0) === 0
@@ -432,11 +433,11 @@ export default function WorkspaceClient() {
                 : "text-ink-600 hover:bg-ink-50 hover:text-ink-900",
             )}
           >
-            ↩ 되돌리기
+            {t("workspace.undo")}
           </button>
           <button
             onClick={() => setShortcutHelp(true)}
-            title="단축키 (?)"
+            title={t("workspace.shortcutsTitle")}
             className="rounded-lg border border-ink-200 bg-surface px-2 py-1 text-xs text-ink-600 transition hover:bg-ink-50 hover:text-ink-900"
           >
             ?
@@ -469,10 +470,10 @@ export default function WorkspaceClient() {
             </button>
             <button
               onClick={() => setFitSignal((n) => n + 1)}
-              title="화면에 맞춤 (Ctrl/Cmd+0)"
+              title={t("workspace.fitTitle")}
               className="border-l border-ink-200 px-2 py-1 text-[11px] text-ink-500 hover:text-ink-900"
             >
-              맞춤
+              {t("workspace.fit")}
             </button>
           </div>
           <Button
@@ -481,7 +482,7 @@ export default function WorkspaceClient() {
             onClick={toggleCompare}
             disabled={notGenerated}
           >
-            콘셉 비교
+            {t("workspace.compareConcepts")}
           </Button>
             </>
           )}
@@ -492,7 +493,7 @@ export default function WorkspaceClient() {
               loading={busy === "unlock"}
               onClick={handleUnlock}
             >
-              확정 해제
+              {t("workspace.unlock")}
             </Button>
           ) : (
             <Button
@@ -502,7 +503,7 @@ export default function WorkspaceClient() {
               loading={busy === "confirm"}
               onClick={handleConfirm}
             >
-              컨셉 확정
+              {t("workspace.lock")}
             </Button>
           )}
           <Link href={`/projects/${project.id}/export`}>
@@ -516,38 +517,37 @@ export default function WorkspaceClient() {
         <div className="flex items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-2 text-xs text-red-700">
           <span>{error}</span>
           <button className="font-medium underline" onClick={clearError}>
-            닫기
+            {t("workspace.close")}
           </button>
         </div>
       )}
       {project.status === "CompletedWarning" && (
         <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800">
           <span>
-            이미지 생성에 일부 문제가 있어 CSS 렌더링으로 대체했다. 콘텐츠 슬롯은
-            단색 Placeholder 로 표시된다.
+            {t("workspace.fallbackWarn")}
           </span>
           {warningGeneration ? (
             <Button size="sm" variant="outline" loading={busy === "retry"} onClick={handleRetry}>
-              다시 시도 (무차감 1회)
+              {t("workspace.retryFree")}
             </Button>
           ) : (
             <span className="text-[10px] text-amber-700">
-              무차감 재시도를 이미 사용했다.
+              {t("workspace.retryUsed")}
             </span>
           )}
         </div>
       )}
       {pendingGeneration && (
         <div className="border-b border-brand-200 bg-brand-50 px-5 py-2 text-xs text-brand-700">
-          장면 시안을 추가 생성 중이다.
+          {t("workspace.addingScreen")}
         </div>
       )}
 
       {notGenerated ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-500">
-          <p>아직 뽑힌 콘셉 시안이 없다.</p>
+          <p>{t("workspace.emptyGallery")}</p>
           <Link href="/projects/new">
-            <Button size="sm">프롬프트로 뽑기</Button>
+            <Button size="sm">{t("workspace.promptGenerate")}</Button>
           </Link>
         </div>
       ) : view === "gallery" ? (
@@ -555,15 +555,14 @@ export default function WorkspaceClient() {
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-ink-900">
-                한 프롬프트에서 나온 콘셉 시안
+                {t("workspace.galleryHeading")}
               </h2>
               <p className="mt-0.5 text-[11px] text-ink-500">
-                서로 다른 시각 방향이다. 카드를 고른 뒤 확정하거나, 더블클릭으로
-                다듬는다.
+                {t("workspace.galleryHint")}
               </p>
             </div>
             <div className="text-[11px] text-ink-500">
-              {designSystems.length} 콘셉 · {mockups.length}장
+              {t("workspace.galleryMeta", { concepts: designSystems.length, count: mockups.length })}
             </div>
           </div>
           <ConceptGallery
@@ -622,9 +621,9 @@ export default function WorkspaceClient() {
                         className="inline-block h-3 w-3 rounded-sm"
                         style={{ background: d.tokens.color.primary }}
                       />
-                      컨셉 {d.conceptLabel} · {d.conceptName}
+                      {t("workspace.conceptNamed", { label: d.conceptLabel, name: d.conceptName })}
                       {d.isArchived && (
-                        <span title="읽기 전용 보관" aria-hidden>
+                        <span title={t("workspace.readOnlyKeep")} aria-hidden>
                           🔒
                         </span>
                       )}
@@ -636,15 +635,15 @@ export default function WorkspaceClient() {
                 })}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {activeDS?.isModified && <Badge tone="warning">User 수정됨</Badge>}
-                <Badge tone="brand">실시간 반영 · 500ms ≤</Badge>
+                {activeDS?.isModified && <Badge tone="warning">{t("workspace.userModified")}</Badge>}
+                <Badge tone="brand">{t("workspace.realtime")}</Badge>
               </div>
             </div>
 
             {/* Screen tabs */}
             <div className="flex items-center gap-2 border-b border-ink-200 bg-surface px-5 py-2">
               <span className="text-[10px] font-medium uppercase tracking-wider text-ink-500">
-                화면
+                {t("workspace.screen")}
               </span>
               <div className="flex flex-1 items-center gap-1.5 overflow-x-auto scrollbar-thin">
                 {screens.map((s) => (
@@ -660,10 +659,10 @@ export default function WorkspaceClient() {
                   >
                     {s.screenTitle}
                     {s.isPrimary && (
-                      <span className="text-[9px] text-ink-500">대표</span>
+                      <span className="text-[9px] text-ink-500">{t("workspace.hero")}</span>
                     )}
                     <span className="text-[9px] text-ink-500">
-                      {s.variantCount}종
+                      {t("workspace.variantKinds", { n: s.variantCount })}
                     </span>
                   </button>
                 ))}
@@ -674,12 +673,12 @@ export default function WorkspaceClient() {
                 disabled={!isLocked || !!pendingGeneration}
                 title={
                   isLocked
-                    ? "확정 Token 으로 장면의 컨셉 시안을 추가한다"
-                    : "장면 추가는 컨셉 확정 이후에만 가능하다"
+                    ? t("workspace.addScreenHintLocked")
+                    : t("workspace.addScreenHintLockedOut")
                 }
                 onClick={() => setScreenModal(true)}
               >
-                + 장면 추가
+                {t("workspace.addScreen")}
               </Button>
             </div>
 
@@ -703,7 +702,7 @@ export default function WorkspaceClient() {
                         projectName={project.name}
                         viewport={viewport}
                         zoom={Math.min(zoom, 45)}
-                        caption={`컨셉 ${d.conceptLabel} · ${d.conceptName}`}
+                        caption={t("workspace.captionConcept", { label: d.conceptLabel, name: d.conceptName })}
                       />
                     );
                   })}
@@ -712,7 +711,7 @@ export default function WorkspaceClient() {
                 <div className="absolute inset-0 flex flex-col">
                   <div className="z-10 flex items-center justify-between gap-3 px-4 pt-3">
                     <span className="text-[11px] font-medium text-ink-600">
-                      시안 비교 · {variantCompare.length}종
+                      {t("workspace.compareVariants", { n: variantCompare.length })}
                     </span>
                     <div className="flex items-center gap-2">
                       <div className="flex gap-0.5 rounded-lg bg-ink-100 p-0.5">
@@ -727,13 +726,13 @@ export default function WorkspaceClient() {
                                 : "text-ink-500",
                             )}
                           >
-                            {d === "row" ? "가로 분할" : "세로 분할"}
+{d === "row" ? t("workspace.splitRow") : t("workspace.splitCol")}
                           </button>
                         ))}
                       </div>
                       <button
                         onClick={() => setSyncView((v) => !v)}
-                        title="확대·이동을 모든 시안에 함께 적용한다"
+                        title={t("workspace.syncTitle")}
                         className={cn(
                           "rounded-lg border px-2 py-1 text-[11px] font-medium transition",
                           syncView
@@ -741,13 +740,13 @@ export default function WorkspaceClient() {
                             : "border-ink-200 bg-surface text-ink-600 hover:bg-ink-50",
                         )}
                       >
-                        {syncView ? "동기화 켜짐" : "동기화 꺼짐"}
+{syncView ? t("workspace.syncOn") : t("workspace.syncOff")}
                       </button>
                       <button
                         onClick={clearCompareSelection}
                         className="rounded-lg border border-ink-200 bg-surface px-2 py-1 text-[11px] text-ink-600 transition hover:bg-ink-50"
                       >
-                        비교 종료
+                        {t("workspace.endCompare")}
                       </button>
                     </div>
                   </div>
@@ -800,7 +799,7 @@ export default function WorkspaceClient() {
                   <div className="absolute inset-0 flex flex-col">
                     {/* 설명은 화면에 고정한다 — 함께 움직이면 확대했을 때 사라진다. */}
                     <div className="pointer-events-none z-10 pt-4 text-center text-[11px] font-medium uppercase tracking-wider text-ink-500">
-                      {activeMockup.screenTitle} · 변형 {activeMockupIndex + 1} —{" "}
+                      {t("workspace.variantOf", { title: activeMockup.screenTitle, n: activeMockupIndex + 1 })}{" "}
                       {activeMockup.variantLabel}
                     </div>
                     <div className="min-h-0 flex-1">
@@ -832,7 +831,7 @@ export default function WorkspaceClient() {
             {/* Mockup thumbnails */}
             <div className="flex shrink-0 items-center gap-3 border-t border-ink-200 bg-surface px-5 py-3">
               <span className="text-[10px] font-medium uppercase tracking-wider text-ink-500">
-                시안 변형
+                {t("workspace.variants")}
               </span>
               <div className="flex flex-1 items-center gap-2 overflow-x-auto scrollbar-thin">
                 {conceptMockups.map((m, idx) => {
@@ -847,8 +846,8 @@ export default function WorkspaceClient() {
                       }}
                       title={
                         compareSelection.includes(idx)
-                          ? "비교 대상 (Shift+클릭으로 해제)"
-                          : "Shift+클릭으로 비교 대상에 추가"
+                          ? t("workspace.compareSelected")
+                          : t("workspace.compareAdd")
                       }
                       className={cn(
                         "relative flex shrink-0 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition",
@@ -886,7 +885,7 @@ export default function WorkspaceClient() {
                 })}
               </div>
               <div className="text-[10px] text-ink-500">
-                총 {conceptMockups.length}종 · 단축키 1~5
+                {t("workspace.totalHotkeys", { n: conceptMockups.length })}
               </div>
             </div>
           </div>
@@ -895,10 +894,10 @@ export default function WorkspaceClient() {
           <div className="hidden w-72 shrink-0 border-l border-ink-200 bg-surface xl:block">
             <div className="border-b border-ink-200 px-4 py-3">
               <div className="text-[10px] font-medium uppercase tracking-wider text-ink-500">
-                요소 상세
+                {t("workspace.elementDetail")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-ink-900">
-                {selectedElement?.type ?? "선택된 요소 없음"}
+                {selectedElement?.type ?? t("workspace.noSelection")}
               </div>
             </div>
             <div className="px-4 py-3">
@@ -925,7 +924,7 @@ export default function WorkspaceClient() {
                   </div>
                   {selectionDepth < selectionChain.length - 1 && (
                     <div className="mb-3 text-[10px] text-ink-500">
-                      더블클릭하면 안쪽 요소로 들어간다 · Esc 로 상위 복귀
+                      {t("workspace.drillHint")}
                     </div>
                   )}
                   <div className="space-y-2">
@@ -964,14 +963,12 @@ export default function WorkspaceClient() {
                       );
                     }}
                   >
-                    CSS 변수 복사
+                    {t("workspace.copyCss")}
                   </button>
                 </>
               ) : (
                 <p className="text-[11px] leading-relaxed text-ink-500">
-                  캔버스의 버튼·카드·입력 요소를 클릭하면 참조 중인 Design Token 과
-                  실제 값이 여기에 표시된다. 더블클릭으로 안쪽 요소에 들어가고
-                  Esc 로 상위로 돌아온다.
+                  {t("workspace.selectHint")}
                 </p>
               )}
             </div>
@@ -982,8 +979,8 @@ export default function WorkspaceClient() {
       <Modal
         open={screenModal}
         onClose={() => setScreenModal(false)}
-        title="장면 추가 생성"
-        description="확정된 컨셉의 토큰으로 새 장면의 컨셉 시안을 뽑는다. 사이트 전체를 만들지 않으며, 월간 생성 한도 1회를 차감한다."
+        title={t("workspace.addScreenTitle")}
+        description={t("workspace.addScreenDesc")}
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
@@ -992,15 +989,15 @@ export default function WorkspaceClient() {
               size="sm"
               onClick={() => setScreenModal(false)}
             >
-              취소
+              {t("common.cancel")}
             </Button>
             <Button size="sm" loading={busy === "screen"} onClick={handleAddScreen}>
-              생성 시작
+              {t("workspace.start")}
             </Button>
           </div>
         }
       >
-        <div className="text-xs font-medium text-ink-700">장면</div>
+        <div className="text-xs font-medium text-ink-700">{t("workspace.scene")}</div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {SCREEN_PRESETS.map((s) => (
             <button
@@ -1014,7 +1011,7 @@ export default function WorkspaceClient() {
                   : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
               )}
             >
-              {s.label}
+              {t(s.labelKey)}
             </button>
           ))}
           <button
@@ -1027,15 +1024,15 @@ export default function WorkspaceClient() {
                 : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
             )}
           >
-            직접 입력
+            {t("workspace.customInput")}
           </button>
         </div>
 
         {screenPreset === "custom" && (
           <div className="mt-3">
             <Input
-              label="화면명"
-              placeholder="예: 주문 내역"
+              label={t("workspace.screenName")}
+              placeholder={t("workspace.screenPlaceholder")}
               value={customScreen}
               onChange={(e) => setCustomScreen(e.target.value)}
               maxLength={60}
@@ -1045,8 +1042,8 @@ export default function WorkspaceClient() {
 
         <div className="mt-3">
           <Textarea
-            label="간단 설명 (선택)"
-            placeholder="이 화면에 필요한 요소를 한두 문장으로 적는다."
+            label={t("workspace.briefOptional")}
+            placeholder={t("workspace.briefPlaceholder")}
             value={screenDesc}
             onChange={(e) => setScreenDesc(e.target.value)}
             rows={3}
@@ -1059,8 +1056,8 @@ export default function WorkspaceClient() {
       <Modal
         open={shortcutHelp}
         onClose={() => setShortcutHelp(false)}
-        title="단축키"
-        description="입력창 안에서는 숫자·? 단축키가 동작하지 않는다."
+        title={t("workspace.hotkeysTitle")}
+        description={t("workspace.hotkeysDesc")}
         size="sm"
       >
         <div className="overflow-hidden rounded-lg border border-ink-200">
@@ -1072,14 +1069,14 @@ export default function WorkspaceClient() {
                 i % 2 === 1 && "bg-ink-50",
               )}
             >
-              <span className="text-ink-700">{label}</span>
+              <span className="text-ink-700">{t(label)}</span>
               <span className="flex shrink-0 gap-1">
                 {keys.map((k) => (
                   <kbd
                     key={k}
                     className="rounded border border-ink-300 bg-surface px-1.5 py-0.5 font-mono text-[10px] text-ink-700 shadow-sm"
                   >
-                    {k}
+                    {k.includes(".") ? t(k) : k}
                   </kbd>
                 ))}
               </span>
@@ -1093,15 +1090,15 @@ export default function WorkspaceClient() {
 
 /** 기능정의서 v0.2.0 §6 '단축키' 정의와 1:1 로 맞춘다. */
 const SHORTCUTS: Array<[string[], string]> = [
-  [["1", "~", "5"], "시안 전환"],
-  [["휠"], "확대·축소 (커서 기준)"],
-  [["Space", "드래그"], "이동 (휠 버튼 드래그도 가능)"],
-  [["0"], "Zoom 100%"],
-  [["Ctrl/Cmd", "+/−"], "확대·축소"],
-  [["Ctrl/Cmd", "0"], "Fit to Screen"],
-  [["Ctrl/Cmd", "Z"], "Token 수정 되돌리기"],
-  [["Ctrl/Cmd", "S"], "저장 (자동 저장 확인)"],
-  [["Ctrl/Cmd", "E"], "Export 화면 열기"],
-  [["Esc"], "선택 해제 · 창 닫기"],
-  [["?"], "이 도움말 열기"],
+  [["1", "~", "5"], "workspace.hkSwitch"],
+  [["workspace.kbdWheel"], "workspace.hkWheel"],
+  [["Space", "workspace.kbdDrag"], "workspace.hkPan"],
+  [["0"], "workspace.hk100"],
+  [["Ctrl/Cmd", "+/−"], "workspace.hkZoom"],
+  [["Ctrl/Cmd", "0"], "workspace.hkFit"],
+  [["Ctrl/Cmd", "Z"], "workspace.hkUndo"],
+  [["Ctrl/Cmd", "S"], "workspace.hkSave"],
+  [["Ctrl/Cmd", "E"], "workspace.hkExport"],
+  [["Esc"], "workspace.hkEsc"],
+  [["?"], "workspace.hkHelp"],
 ];

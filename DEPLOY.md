@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.1.6 |
+| 문서 버전 | v1.1.7 |
 | 작성일 | 2026-08-14 |
 | 대상 | Firebase Hosting (프론트) + Cloud Run (백엔드 API) |
 | Firebase 프로젝트 | `design-gen-zitify` |
@@ -242,7 +242,7 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | DA 스키마 | ✅ BIGINT PK+public_id · C-코드 30종 · 논리삭제 뷰 · SCD · Alembic `202608161200`·`202608161400` |
 | Public API · MCP | ✅ Tool 4종 동작 · `subscribe_token_changes` 만 미구현 (§3.6) |
 | 공통 기능 | ✅ 도움말·FAQ · 온보딩 투어 · 단축키·Undo · 공지 배너 · 테마(Light·Dark·System) |
-| i18n (ko/en) | ⛔ 출시 전 작업으로 유예 |
+| i18n (ko/en) | ✅ 프론트 t() + ko/en JSON. 헤더 KO/EN 전환. 스토어·API 에러·메타는 잔여 |
 
 라이브 E2E 확인 (2026-08-14): 로그인 → 프로젝트 생성(단일 DS·대시보드) → 생성 완료
 (15 시안, 화면축 단일·구조 변형 5종) → 컨셉 확정 → 화면 추가(로그인 3종) → Export(json).
@@ -253,8 +253,8 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 
 ### 남은 일
 
-1. **커스텀 도메인** — Hosting 에 도메인 연결 시 백엔드 `CORS_ORIGINS` 에도 추가.
-2. **i18n (ko/en)** — 출시 전 작업. 번역은 Codex 전담 규약을 따른다.
+1. **커스텀 도메인** — Hosting 에 도메인 연결 시 백엔드 `CORS_ORIGINS` 에도 추가. 호스트명이 필요하다.
+2. **i18n 잔여** — 스토어·API 에러 메시지, 루트 메타 description, MockupRenderer 캔버스 카피.
 
 ---
 
@@ -385,6 +385,7 @@ py -3 backend/scripts/deploy_cloudrun_pg_sidecar.py
 
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |---|---|---|---|
+| v1.1.7 | 2026-08-19 | 안승준 | 프론트 i18n ko/en 골격·화면 키 연동. 헤더 로케일 전환 |
 | v1.1.6 | 2026-08-19 | 안승준 | 앱 재배포는 sidecar 유지 스크립트만 쓴다. `--source` 는 sidecar 를 지운다. 운영 리비전 `adg-api-00023-jbk` |
 | v1.1.5 | 2026-08-19 | 안승준 | 허브 `designgenerator` `active` 전환·적재 확인. Cloud Run 실 Gemini 파이프라인은 이미 켜져 있음을 문서 반영 |
 | v1.1.4 | 2026-08-19 | 안승준 | Cloud Run `adg-api-00022-zzz` sidecar 로 맥미니 Postgres 연결. 5432 미개방. §6.3·§6.4 반영 |

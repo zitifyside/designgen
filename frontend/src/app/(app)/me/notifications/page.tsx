@@ -5,42 +5,44 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
 import { api, type NotificationPrefs } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 /** 카테고리 표시 정의 — 키는 서버 기본값과 1:1 이다. */
 const CATEGORIES: Array<{ key: string; label: string; description: string }> = [
   {
     key: "generation_done",
-    label: "생성 완료",
-    description: "AI Pipeline 시안 생성이 완료되면 알린다.",
+    label: "me.catDone",
+    description: "me.catDoneDesc",
   },
   {
     key: "generation_failed",
-    label: "생성 실패",
-    description: "Fallback 적용·재시도 결과를 즉시 알린다.",
+    label: "me.catFail",
+    description: "me.catFailDesc",
   },
   {
     key: "billing",
-    label: "결제",
-    description: "구독 갱신·결제 실패·환불 처리.",
+    label: "me.catPay",
+    description: "me.catPayDesc",
   },
   {
     key: "security",
-    label: "계정 보안",
-    description: "신규 기기 로그인·비밀번호 변경 등.",
+    label: "me.catSec",
+    description: "me.catSecDesc",
   },
   {
     key: "announcement",
-    label: "공지사항",
-    description: "신규 기능·점검·업데이트 안내.",
+    label: "me.catAnn",
+    description: "me.catAnnDesc",
   },
   {
     key: "marketing",
-    label: "마케팅",
-    description: "이벤트·할인·뉴스레터.",
+    label: "me.catMkt",
+    description: "me.catMktDesc",
   },
 ];
 
 export default function NotificationSettingsPage() {
+  const { t } = useI18n();
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,7 +54,7 @@ export default function NotificationSettingsPage() {
       const res = await api.users.notificationPrefs();
       setPrefs(res.prefs);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "알림 설정을 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("me.notifLoadFailed"));
     }
   }, []);
 
@@ -76,9 +78,9 @@ export default function NotificationSettingsPage() {
       const res = await api.users.updateNotificationPrefs(prefs);
       setPrefs(res.prefs);
       setDirty(false);
-      setNotice("알림 설정을 저장했다.");
+      setNotice(t("me.notifSaved"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "저장에 실패했다.");
+      setError(e instanceof Error ? e.message : t("me.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -88,15 +90,15 @@ export default function NotificationSettingsPage() {
     <div className="space-y-4">
       <Card>
         <CardHeader
-          title="알림 설정"
-          description="카테고리별로 인앱·이메일 수신을 켜고 끈다. 계정 보안 알림은 끌 수 없다."
+          title={t("me.notifTitle")}
+          description={t("me.notifDesc")}
         />
 
         <div className="overflow-hidden rounded-lg border border-ink-200">
           <div className="grid grid-cols-[1fr_72px_72px] items-center gap-2 border-b border-ink-200 bg-ink-50 px-3 py-2 text-[11px] font-medium text-ink-500">
-            <span>카테고리</span>
-            <span className="text-center">인앱</span>
-            <span className="text-center">이메일</span>
+            <span>{t("me.colCategory")}</span>
+            <span className="text-center">{t("me.inApp")}</span>
+            <span className="text-center">{t("me.emailCh")}</span>
           </div>
 
           {CATEGORIES.map((c) => {
@@ -109,9 +111,9 @@ export default function NotificationSettingsPage() {
                 className="grid grid-cols-[1fr_72px_72px] items-center gap-2 border-b border-ink-100 px-3 py-2.5 last:border-b-0"
               >
                 <div>
-                  <div className="text-xs font-medium text-ink-900">{c.label}</div>
+                  <div className="text-xs font-medium text-ink-900">{t(c.label)}</div>
                   <div className="mt-0.5 text-[11px] text-ink-500">
-                    {c.description}
+                    {t(c.description)}
                   </div>
                 </div>
                 <Toggle
@@ -144,10 +146,10 @@ export default function NotificationSettingsPage() {
 
         <div className="mt-4 flex items-center justify-between">
           <p className="text-[11px] text-ink-500">
-            이메일 알림에는 수신 거부 링크가 포함된다.
+            {t("me.unsubNote")}
           </p>
           <Button size="sm" loading={saving} disabled={!dirty} onClick={save}>
-            저장
+            {t("common.save")}
           </Button>
         </div>
       </Card>

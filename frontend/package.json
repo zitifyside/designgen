@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "i18n:check": "node ../../ContextBuilder/scripts/i18n-check.mjs src/locales --base ko"
   },
   "dependencies": {
     "clsx": "2.1.1",

@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api, type AdminKpi, type AdminStats, type AuditLogRecord } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 export default function AdminDashboardPage() {
+  const { t } = useI18n();
   const [kpi, setKpi] = useState<AdminKpi | null>(null);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);
@@ -27,7 +29,7 @@ export default function AdminDashboardPage() {
         setLogs(l.slice(0, 8));
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "지표를 불러오지 못했다.");
+          setError(e instanceof Error ? e.message : t("admin.kpiFailed"));
         }
       }
     })();
@@ -42,8 +44,8 @@ export default function AdminDashboardPage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <PageHeader
-        title="Admin 대시보드"
-        description="서비스 핵심 지표를 모니터링한다. 모든 수치는 DB 실측이다."
+        title={t("admin.homeTitle")}
+        description={t("admin.homeDesc")}
       />
 
       {error && (
@@ -53,18 +55,18 @@ export default function AdminDashboardPage() {
       )}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="전체 사용자" value={kpi?.totalUsers ?? 0} />
-        <Kpi label="활성 사용자" value={kpi?.activeUsers ?? 0} />
-        <Kpi label="프로젝트" value={kpi?.totalProjects ?? 0} />
-        <Kpi label="누적 생성" value={kpi?.generationsTotal ?? 0} />
+        <Kpi label={t("admin.kpiUsers")} value={kpi?.totalUsers ?? 0} />
+        <Kpi label={t("admin.kpiActive")} value={kpi?.activeUsers ?? 0} />
+        <Kpi label={t("admin.kpiProjects")} value={kpi?.totalProjects ?? 0} />
+        <Kpi label={t("admin.kpiGens")} value={kpi?.generationsTotal ?? 0} />
       </section>
 
       <section className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="정지 계정" value={kpi?.suspendedUsers ?? 0} tone="warning" />
-        <Kpi label="환불 대기" value={kpi?.pendingRefunds ?? 0} tone="warning" />
-        <Kpi label="미처리 피드백" value={kpi?.openFeedback ?? 0} tone="warning" />
+        <Kpi label={t("admin.kpiSuspended")} value={kpi?.suspendedUsers ?? 0} tone="warning" />
+        <Kpi label={t("admin.kpiRefunds")} value={kpi?.pendingRefunds ?? 0} tone="warning" />
+        <Kpi label={t("admin.kpiFeedback")} value={kpi?.openFeedback ?? 0} tone="warning" />
         <Kpi
-          label="에러율 (30일)"
+          label={t("admin.kpiError30")}
           value={`${((stats?.errorRate ?? 0) * 100).toFixed(1)}%`}
           tone={(stats?.errorRate ?? 0) > 0.05 ? "danger" : "default"}
         />
@@ -72,12 +74,12 @@ export default function AdminDashboardPage() {
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="일별 생성 (30일)" />
+          <CardHeader title={t("admin.daily30")} />
           <div className="flex h-32 items-end gap-[2px]">
             {daily.map((d) => (
               <div
                 key={d.date}
-                title={`${d.date} · 생성 ${d.generations} · 실패 ${d.failures}`}
+                title={t("admin.dailyBar", { date: d.date, gens: d.generations, fails: d.failures })}
                 className="flex-1 rounded-t bg-amber-500/80"
                 style={{
                   height: `${(d.generations / max) * 100}%`,
@@ -87,13 +89,15 @@ export default function AdminDashboardPage() {
             ))}
           </div>
           <div className="mt-2 text-[11px] text-ink-500">
-            30일 합계 {daily.reduce((s, d) => s + d.generations, 0)}회 · 실패{" "}
-            {daily.reduce((s, d) => s + d.failures, 0)}회
+            {t("admin.sum30", {
+              gens: daily.reduce((s, d) => s + d.generations, 0),
+              fails: daily.reduce((s, d) => s + d.failures, 0),
+            })}
           </div>
         </Card>
 
         <Card>
-          <CardHeader title="등급 분포" />
+          <CardHeader title={t("admin.planDist")} />
           <div className="space-y-2">
             {Object.entries(stats?.planDistribution ?? {}).map(([plan, n]) => {
               const total = Object.values(stats?.planDistribution ?? {}).reduce(
@@ -106,7 +110,7 @@ export default function AdminDashboardPage() {
                   <div className="flex justify-between text-xs">
                     <span className="text-ink-700">{plan}</span>
                     <span className="text-ink-500">
-                      {n}명 · {pct}%
+                      {t("admin.peoplePct", { n, pct })}
                     </span>
                   </div>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-ink-100">
@@ -124,18 +128,18 @@ export default function AdminDashboardPage() {
 
       <Card className="mt-4">
         <CardHeader
-          title="최근 감사 로그"
+          title={t("admin.recentLogs")}
           action={
             <Link
               href="/admin/audit-logs"
               className="text-xs text-brand-700 hover:underline"
             >
-              전체 보기 →
+              {t("admin.viewAll")}
             </Link>
           }
         />
         {logs.length === 0 ? (
-          <p className="py-3 text-xs text-ink-500">기록이 없다.</p>
+          <p className="py-3 text-xs text-ink-500">{t("admin.noRecords")}</p>
         ) : (
           <table className="w-full text-xs">
             <tbody>

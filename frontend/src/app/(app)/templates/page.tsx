@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { useProjectStore } from "@/store/project-store";
 import type { Template, TemplateCategory, TemplateStatus } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Category = "all" | TemplateCategory;
 type Sort = "popular" | "newest" | "rating" | "price";
@@ -21,18 +22,18 @@ type PriceFilter = "all" | "free" | "paid";
 type RatingFilter = "all" | "3" | "4";
 
 const CATEGORIES: Array<{ value: Category; label: string }> = [
-  { value: "all", label: "전체" },
-  { value: "SaaS Dashboard", label: "SaaS 대시보드" },
-  { value: "Ecommerce", label: "이커머스" },
-  { value: "Mobile App", label: "모바일앱" },
-  { value: "Landing Page", label: "랜딩페이지" },
+  { value: "all", label: "templates.catAll" },
+  { value: "SaaS Dashboard", label: "templates.catSaas" },
+  { value: "Ecommerce", label: "templates.catEcom" },
+  { value: "Mobile App", label: "templates.catMobile" },
+  { value: "Landing Page", label: "templates.catLanding" },
 ];
 
 const STATUS_LABEL: Record<TemplateStatus, string> = {
-  Pending: "심사 대기",
-  Approved: "게시 중",
-  Rejected: "거부됨",
-  RequestChanges: "수정 요청",
+  Pending: "templates.stPending",
+  Approved: "templates.stApproved",
+  Rejected: "templates.stRejected",
+  RequestChanges: "templates.stRequestChanges",
 };
 
 const STATUS_TONE: Record<TemplateStatus, "neutral" | "success" | "danger" | "warning"> =
@@ -44,6 +45,7 @@ const STATUS_TONE: Record<TemplateStatus, "neutral" | "success" | "danger" | "wa
   };
 
 export default function TemplatesPage() {
+  const { t, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const canPublish =
     user?.plan === "Pro" || user?.plan === "Team" || user?.plan === "Admin";
@@ -77,7 +79,7 @@ export default function TemplatesPage() {
     try {
       setTemplates(await api.templates.list());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "템플릿을 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("templates.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -137,7 +139,7 @@ export default function TemplatesPage() {
       setForm({ ...form, name: "", description: "", price: 0 });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "등록에 실패했다.");
+      setError(e instanceof Error ? e.message : t("templates.publishFailed"));
     } finally {
       setBusy(false);
     }
@@ -146,16 +148,16 @@ export default function TemplatesPage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <PageHeader
-        title="템플릿 마켓"
-        description="검증된 디자인 시스템 프리셋을 현재 프로젝트에 즉시 적용한다."
+        title={t("templates.title")}
+        description={t("templates.description")}
         action={
           <Button
             size="sm"
             disabled={!canPublish}
-            title={canPublish ? undefined : "템플릿 등록은 Pro 이상 등급이다."}
+            title={canPublish ? undefined : t("templates.publishLocked")}
             onClick={() => setModal(true)}
           >
-            내 프리셋 등록
+            {t("templates.publishMine")}
           </Button>
         }
       />
@@ -178,7 +180,7 @@ export default function TemplatesPage() {
                   : "bg-surface text-ink-700 hover:bg-ink-100"
               }`}
             >
-              {c.label}
+              {t(c.label)}
             </button>
           ))}
         </div>
@@ -188,9 +190,9 @@ export default function TemplatesPage() {
             value={priceFilter}
             onChange={(v) => setPriceFilter(v as PriceFilter)}
             items={[
-              { value: "all", label: "전체" },
-              { value: "free", label: "무료" },
-              { value: "paid", label: "유료" },
+              { value: "all", label: t("templates.catAll") },
+              { value: "free", label: t("templates.priceFree") },
+              { value: "paid", label: t("templates.pricePaid") },
             ]}
           />
           <Tabs
@@ -198,9 +200,9 @@ export default function TemplatesPage() {
             value={ratingFilter}
             onChange={(v) => setRatingFilter(v as RatingFilter)}
             items={[
-              { value: "all", label: "평점 전체" },
-              { value: "3", label: "3점+" },
-              { value: "4", label: "4점+" },
+              { value: "all", label: t("templates.ratingAll") },
+              { value: "3", label: t("templates.rating3") },
+              { value: "4", label: t("templates.rating4") },
             ]}
           />
           <Tabs
@@ -208,10 +210,10 @@ export default function TemplatesPage() {
             value={sort}
             onChange={(v) => setSort(v as Sort)}
             items={[
-              { value: "popular", label: "인기" },
-              { value: "newest", label: "최신" },
-              { value: "rating", label: "평점" },
-              { value: "price", label: "가격" },
+              { value: "popular", label: t("templates.sortPopular") },
+              { value: "newest", label: t("templates.sortNewest") },
+              { value: "rating", label: t("templates.sortRating") },
+              { value: "price", label: t("templates.sortPrice") },
             ]}
           />
         </div>
@@ -219,20 +221,20 @@ export default function TemplatesPage() {
 
       {loading ? (
         <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-500">
-          템플릿을 불러오는 중…
+          {t("templates.loading")}
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-ink-200 bg-surface px-4 py-10 text-center text-sm text-ink-500">
           {templates.length === 0
-            ? "게시된 템플릿이 없다."
-            : "조건에 맞는 템플릿이 없다. 필터를 넓혀 보라."}
+            ? t("templates.emptyAll")
+            : t("templates.emptyFilter")}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.map((t) => (
+          {filtered.map((tpl) => (
             <Link
-              key={t.id}
-              href={`/templates/${t.id}`}
+              key={tpl.id}
+              href={`/templates/${tpl.id}`}
               className="group block overflow-hidden rounded-xl border border-ink-200 bg-surface transition hover:shadow-md"
             >
               <div className="aspect-[16/10] w-full bg-gradient-to-br from-brand-100 via-white to-brand-50 p-4">
@@ -256,22 +258,22 @@ export default function TemplatesPage() {
               <div className="p-3.5">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="truncate text-sm font-semibold text-ink-900">
-                    {t.name}
+                    {tpl.name}
                   </h3>
-                  {t.price === 0 ? (
-                    <Badge tone="success">무료</Badge>
+                  {tpl.price === 0 ? (
+                    <Badge tone="success">{t("templates.priceFree")}</Badge>
                   ) : (
                     <span className="text-sm font-semibold text-ink-900">
-                      ${t.price}
+                      ${tpl.price}
                     </span>
                   )}
                 </div>
                 <div className="mt-1 text-[10px] text-ink-500">
-                  by {t.authorName} · {t.category}
+                  by {tpl.authorName} · {tpl.category}
                 </div>
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-ink-500">
-                  <span>★ {t.rating.toFixed(1)}</span>
-                  <span>↓ {t.downloads.toLocaleString()}</span>
+                  <span>★ {tpl.rating.toFixed(1)}</span>
+                  <span>↓ {tpl.downloads.toLocaleString()}</span>
                 </div>
               </div>
             </Link>
@@ -282,37 +284,37 @@ export default function TemplatesPage() {
       {canPublish && (
         <Card className="mt-8">
           <CardHeader
-            title="내가 등록한 템플릿"
-            description="등록 후 Admin 심사를 통과하면 마켓에 게시된다. 판매 수익의 70~80% 가 정산된다."
+            title={t("templates.mineTitle")}
+            description={t("templates.mineDesc")}
           />
           {mine.length === 0 ? (
             <p className="py-3 text-xs text-ink-500">
-              아직 등록한 템플릿이 없다.
+              {t("templates.mineEmpty")}
             </p>
           ) : (
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-ink-100 text-left text-ink-500">
-                  <th className="py-2 font-medium">이름</th>
-                  <th className="py-2 font-medium">카테고리</th>
-                  <th className="py-2 font-medium">가격</th>
-                  <th className="py-2 font-medium">상태</th>
-                  <th className="py-2 font-medium">등록일</th>
+                  <th className="py-2 font-medium">{t("templates.colName")}</th>
+                  <th className="py-2 font-medium">{t("templates.colCategory")}</th>
+                  <th className="py-2 font-medium">{t("templates.colPrice")}</th>
+                  <th className="py-2 font-medium">{t("templates.colStatus")}</th>
+                  <th className="py-2 font-medium">{t("templates.colDate")}</th>
                 </tr>
               </thead>
               <tbody>
-                {mine.map((t) => (
-                  <tr key={t.id} className="border-b border-ink-50">
-                    <td className="py-2 font-medium text-ink-800">{t.name}</td>
-                    <td className="py-2 text-ink-500">{t.category}</td>
-                    <td className="py-2">{t.price === 0 ? "무료" : `$${t.price}`}</td>
+                {mine.map((tpl) => (
+                  <tr key={tpl.id} className="border-b border-ink-50">
+                    <td className="py-2 font-medium text-ink-800">{tpl.name}</td>
+                    <td className="py-2 text-ink-500">{tpl.category}</td>
+                    <td className="py-2">{tpl.price === 0 ? t("templates.priceFree") : `$${tpl.price}`}</td>
                     <td className="py-2">
-                      <Badge tone={STATUS_TONE[t.status]}>
-                        {STATUS_LABEL[t.status]}
+                      <Badge tone={STATUS_TONE[tpl.status]}>
+                        {t(STATUS_LABEL[tpl.status])}
                       </Badge>
                     </td>
                     <td className="py-2 text-ink-500">
-                      {new Date(t.createdAt).toLocaleDateString("ko-KR")}
+                      {new Date(tpl.createdAt).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR")}
                     </td>
                   </tr>
                 ))}
@@ -325,28 +327,28 @@ export default function TemplatesPage() {
       <Modal
         open={modal}
         onClose={() => setModal(false)}
-        title="내 프리셋 등록"
-        description="현재 프로젝트의 DS Token 을 추출해 마켓에 등록한다. 등록 직후에는 심사 대기(Pending) 상태다."
+        title={t("templates.publishTitle")}
+        description={t("templates.publishDesc")}
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setModal(false)}>
-              취소
+              {t("common.cancel")}
             </Button>
             <Button size="sm" loading={busy} onClick={handleSubmit}>
-              등록 요청
+              {t("templates.publishSubmit")}
             </Button>
           </div>
         }
       >
         <Input
-          label="템플릿 이름"
+          label={t("templates.tplName")}
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           maxLength={200}
         />
         <div className="mt-3">
-          <div className="mb-1.5 text-xs font-medium text-ink-700">카테고리</div>
+          <div className="mb-1.5 text-xs font-medium text-ink-700">{t("templates.category")}</div>
           <div className="grid grid-cols-2 gap-1.5">
             {CATEGORIES.filter((c) => c.value !== "all").map((c) => (
               <button
@@ -361,26 +363,26 @@ export default function TemplatesPage() {
                     : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                 }`}
               >
-                {c.label}
+                {t(c.label)}
               </button>
             ))}
           </div>
         </div>
         <div className="mt-3">
           <div className="mb-1.5 text-xs font-medium text-ink-700">
-            Token 원본 프로젝트
+            {t("templates.sourceProject")}
           </div>
           <select
             value={form.projectId}
             onChange={(e) => setForm({ ...form, projectId: e.target.value })}
             className="w-full rounded-lg border border-ink-200 bg-surface px-2.5 py-2 text-xs"
           >
-            <option value="">선택 안 함 (Token 미포함)</option>
+            <option value="">{t("templates.noSource")}</option>
             {publishable.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
                 {p.confirmedConceptLabel
-                  ? ` · 컨셉 ${p.confirmedConceptLabel}`
+                  ? t("templates.sourceConcept", { label: p.confirmedConceptLabel })
                   : ""}
               </option>
             ))}
@@ -388,7 +390,7 @@ export default function TemplatesPage() {
         </div>
         <div className="mt-3">
           <Input
-            label="가격 (USD)"
+            label={t("templates.priceUsd")}
             type="number"
             min={0}
             value={String(form.price)}
@@ -397,7 +399,7 @@ export default function TemplatesPage() {
         </div>
         <div className="mt-3">
           <Textarea
-            label="설명"
+            label={t("templates.desc")}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={3}

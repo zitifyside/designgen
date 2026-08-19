@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api, type HealthComponent } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 const TONE: Record<HealthComponent["status"], "success" | "warning" | "danger" | "neutral"> =
   {
@@ -16,13 +17,14 @@ const TONE: Record<HealthComponent["status"], "success" | "warning" | "danger" |
   };
 
 const LABEL: Record<HealthComponent["status"], string> = {
-  operational: "정상",
-  degraded: "주의",
-  down: "장애",
-  not_configured: "미구성",
+  operational: "admin.opOperational",
+  degraded: "admin.opDegraded",
+  down: "admin.opDown",
+  not_configured: "admin.opUnknown",
 };
 
 export default function AdminHealthPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<HealthComponent[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,7 @@ export default function AdminHealthPage() {
       setItems(await api.admin.health());
       setCheckedAt(new Date().toLocaleString("ko-KR"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "상태를 확인하지 못했다.");
+      setError(e instanceof Error ? e.message : t("admin.healthFailed"));
     } finally {
       setBusy(false);
     }
@@ -50,11 +52,11 @@ export default function AdminHealthPage() {
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
       <PageHeader
-        title="헬스 체크"
-        description="30초 주기로 주요 구성요소 상태를 확인한다."
+        title={t("admin.healthTitle")}
+        description={t("admin.healthDesc")}
         action={
           <Button size="sm" variant="outline" loading={busy} onClick={() => void load()}>
-            지금 확인
+            {t("admin.checkNow")}
           </Button>
         }
       />
@@ -82,20 +84,20 @@ export default function AdminHealthPage() {
                     {c.latencyMs}ms
                   </span>
                 )}
-                <Badge tone={TONE[c.status]}>{LABEL[c.status]}</Badge>
+                <Badge tone={TONE[c.status]}>{t(LABEL[c.status])}</Badge>
               </div>
             </li>
           ))}
           {items.length === 0 && (
             <li className="px-5 py-8 text-center text-xs text-ink-500">
-              상태 정보를 불러오는 중…
+              {t("admin.healthLoading")}
             </li>
           )}
         </ul>
       </Card>
 
       {checkedAt && (
-        <p className="mt-3 text-[11px] text-ink-500">최종 확인 {checkedAt}</p>
+        <p className="mt-3 text-[11px] text-ink-500">{t("admin.lastCheck", { when: checkedAt })}</p>
       )}
     </div>
   );

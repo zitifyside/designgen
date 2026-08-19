@@ -5,10 +5,12 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api, type AdminStats } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Range = "7" | "30" | "90";
 
 export default function AdminStatsPage() {
+  const { t } = useI18n();
   const [range, setRange] = useState<Range>("30");
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,7 @@ export default function AdminStatsPage() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "통계를 불러오지 못했다.");
+          setError(e instanceof Error ? e.message : t("admin.statsFailed"));
         }
       });
     return () => {
@@ -38,17 +40,17 @@ export default function AdminStatsPage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <PageHeader
-        title="통계 대시보드"
-        description="매출·AI 비용·에러율 추이. 결제 연동 전에는 매출 계열이 0 으로 표시된다."
+        title={t("admin.statsTitle")}
+        description={t("admin.statsDesc")}
         action={
           <Tabs
             size="sm"
             value={range}
             onChange={(v) => setRange(v as Range)}
             items={[
-              { value: "7", label: "7일" },
-              { value: "30", label: "30일" },
-              { value: "90", label: "90일" },
+              { value: "7", label: t("admin.d7") },
+              { value: "30", label: t("admin.d30") },
+              { value: "90", label: t("admin.d90") },
             ]}
           />
         }
@@ -62,8 +64,7 @@ export default function AdminStatsPage() {
 
       {noPayments && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          기간 내 결제 레코드가 없다. MRR·ARPU 는 활성 구독 × 플랜 단가로만
-          계산되며, Stripe 연동 후 실결제 기준으로 대체된다.
+          {t("admin.noPay")}
         </div>
       )}
 
@@ -71,22 +72,22 @@ export default function AdminStatsPage() {
         <KpiBox
           label="DAU"
           value={(stats?.dau ?? 0).toLocaleString()}
-          sub="최근 24시간 접속"
+          sub={t("admin.last24")}
         />
         <KpiBox
           label="MAU"
           value={(stats?.mau ?? 0).toLocaleString()}
-          sub="최근 30일 접속"
+          sub={t("admin.last30")}
         />
         <KpiBox
-          label="신규 가입"
+          label={t("admin.signups")}
           value={(stats?.daily.reduce((n, d) => n + d.signups, 0) ?? 0).toLocaleString()}
-          sub={`최근 ${stats?.rangeDays ?? 0}일`}
+          sub={t("admin.lastNDays", { n: stats?.rangeDays ?? 0 })}
         />
         <KpiBox
-          label="생성"
+          label={t("admin.gens")}
           value={(stats?.daily.reduce((n, d) => n + d.generations, 0) ?? 0).toLocaleString()}
-          sub={`최근 ${stats?.rangeDays ?? 0}일`}
+          sub={t("admin.lastNDays", { n: stats?.rangeDays ?? 0 })}
         />
       </section>
 
@@ -94,40 +95,40 @@ export default function AdminStatsPage() {
         <KpiBox
           label="MRR"
           value={`$${((stats?.mrrCents ?? 0) / 100).toLocaleString()}`}
-          sub="활성 구독 × 플랜 단가"
+          sub={t("admin.mrrHint")}
         />
         <KpiBox
-          label="유료 비율"
+          label={t("admin.paidRatio")}
           value={`${((stats?.paidRatio ?? 0) * 100).toFixed(1)}%`}
-          sub="Pro·Team / 전체 사용자"
+          sub={t("admin.paidHint")}
         />
         <KpiBox
           label="ARPU"
           value={`$${((stats?.arpuCents ?? 0) / 100).toFixed(2)}`}
-          sub="유료 사용자당 월 평균"
+          sub={t("admin.arpuHint")}
         />
         <KpiBox
-          label="에러율"
+          label={t("admin.errorRate")}
           value={`${((stats?.errorRate ?? 0) * 100).toFixed(1)}%`}
-          sub="실패 생성 / 전체 생성"
+          sub={t("admin.errorHint")}
         />
       </section>
 
       <section className="mt-5 grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="일별 생성" description="전체 생성 + 화면 추가 생성" />
+          <CardHeader title={t("admin.dailyGens")} description={t("admin.dailyGensDesc")} />
           <div className="flex h-36 items-end gap-[2px]">
             {daily.map((d) => (
               <div key={d.date} className="flex flex-1 flex-col justify-end">
                 <div
-                  title={`${d.date} · 실패 ${d.failures}`}
+                  title={t("admin.failTitle", { date: d.date, n: d.failures })}
                   className="w-full rounded-t bg-red-400"
                   style={{
                     height: `${(d.failures / maxGen) * 100}%`,
                   }}
                 />
                 <div
-                  title={`${d.date} · 생성 ${d.generations}`}
+                  title={t("admin.genTitle", { date: d.date, n: d.generations })}
                   className="w-full bg-brand-500"
                   style={{
                     height: `${((d.generations - d.failures) / maxGen) * 100}%`,
@@ -141,8 +142,8 @@ export default function AdminStatsPage() {
 
         <Card>
           <CardHeader
-            title="일별 AI 비용"
-            description="ai_generations 의 실측 비용 합계 (fake 파이프라인은 0)"
+            title={t("admin.dailyAi")}
+            description={t("admin.dailyAiDesc")}
           />
           <div className="flex h-36 items-end gap-[2px]">
             {daily.map((d) => (
@@ -158,12 +159,12 @@ export default function AdminStatsPage() {
             ))}
           </div>
           <div className="mt-2 text-[11px] text-ink-500">
-            기간 합계 ${((stats?.aiCostTotalCents ?? 0) / 100).toFixed(2)}
+            {t("admin.rangeSum", { n: ((stats?.aiCostTotalCents ?? 0) / 100).toFixed(2) })}
           </div>
         </Card>
 
         <Card>
-          <CardHeader title="등급 분포" />
+          <CardHeader title={t("admin.planDist")} />
           <div className="space-y-2">
             {Object.entries(stats?.planDistribution ?? {}).map(([plan, n]) => {
               const total = Object.values(stats?.planDistribution ?? {}).reduce(
@@ -176,7 +177,7 @@ export default function AdminStatsPage() {
                   <div className="flex justify-between text-xs">
                     <span className="text-ink-700">{plan}</span>
                     <span className="text-ink-500">
-                      {n}명 · {pct}%
+                      {t("admin.peoplePct", { n, pct })}
                     </span>
                   </div>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-ink-100">
@@ -192,12 +193,12 @@ export default function AdminStatsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="신규 가입" />
+          <CardHeader title={t("admin.signups")} />
           <div className="flex h-36 items-end gap-[2px]">
             {daily.map((d) => (
               <div
                 key={d.date}
-                title={`${d.date} · ${d.signups}명`}
+                title={t("admin.signupBar", { date: d.date, n: d.signups })}
                 className="flex-1 rounded-t bg-emerald-500/80"
                 style={{
                   height: `${
@@ -210,7 +211,7 @@ export default function AdminStatsPage() {
             ))}
           </div>
           <div className="mt-2 text-[11px] text-ink-500">
-            기간 합계 {daily.reduce((s, d) => s + d.signups, 0)}명
+            {t("admin.rangePeople", { n: daily.reduce((s, d) => s + d.signups, 0) })}
           </div>
         </Card>
       </section>

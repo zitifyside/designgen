@@ -9,14 +9,15 @@ import { Modal } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api, type FeedbackRecord } from "@/lib/api";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type StatusFilter = "all" | "new" | "in_review" | "resolved" | "closed";
 
 const STATUS_LABEL: Record<string, string> = {
-  new: "신규",
-  in_review: "검토 중",
-  resolved: "해결",
-  closed: "종료",
+  new: "admin.fbNew",
+  in_review: "admin.fbReview",
+  resolved: "admin.fbResolved",
+  closed: "admin.fbClosed",
 };
 
 const TONE: Record<string, "warning" | "brand" | "success" | "neutral"> = {
@@ -27,6 +28,7 @@ const TONE: Record<string, "warning" | "brand" | "success" | "neutral"> = {
 };
 
 export default function AdminFeedbackPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<FeedbackRecord[]>([]);
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [target, setTarget] = useState<FeedbackRecord | null>(null);
@@ -44,7 +46,7 @@ export default function AdminFeedbackPage() {
         }),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "피드백을 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("admin.fbLoadFailed"));
     }
   }, [filter]);
 
@@ -61,7 +63,7 @@ export default function AdminFeedbackPage() {
       setResponse("");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "처리에 실패했다.");
+      setError(e instanceof Error ? e.message : t("admin.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -70,18 +72,18 @@ export default function AdminFeedbackPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <PageHeader
-        title="피드백 관리"
-        description="사용자 피드백·버그 리포트에 응답한다."
+        title={t("admin.fbTitle")}
+        description={t("admin.fbDesc")}
         action={
           <Tabs
             size="sm"
             value={filter}
             onChange={(v) => setFilter(v as StatusFilter)}
             items={[
-              { value: "all", label: "전체" },
-              { value: "new", label: "신규" },
-              { value: "in_review", label: "검토 중" },
-              { value: "resolved", label: "해결" },
+              { value: "all", label: t("admin.statusAll") },
+              { value: "new", label: t("admin.fbNew") },
+              { value: "in_review", label: t("admin.fbReview") },
+              { value: "resolved", label: t("admin.fbResolved") },
             ]}
           />
         }
@@ -103,7 +105,7 @@ export default function AdminFeedbackPage() {
                     {f.title}
                   </span>
                   <Badge tone={TONE[f.status] ?? "neutral"}>
-                    {STATUS_LABEL[f.status] ?? f.status}
+                    {STATUS_LABEL[f.status] ? t(STATUS_LABEL[f.status]) : f.status}
                   </Badge>
                   <span className="text-[10px] text-ink-500">{f.category}</span>
                 </div>
@@ -116,7 +118,7 @@ export default function AdminFeedbackPage() {
                 </p>
                 {f.adminResponse && (
                   <div className="mt-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-600">
-                    <b>답변</b> · {f.adminResponse}
+                    <b>{t("admin.replyPrefix")}</b> · {f.adminResponse}
                   </div>
                 )}
               </div>
@@ -128,7 +130,7 @@ export default function AdminFeedbackPage() {
                   setResponse(f.adminResponse ?? "");
                 }}
               >
-                응답
+                {t("admin.reply")}
               </Button>
             </div>
           </Card>
@@ -136,7 +138,7 @@ export default function AdminFeedbackPage() {
         {items.length === 0 && (
           <Card>
             <p className="py-6 text-center text-xs text-ink-500">
-              피드백이 없다.
+              {t("admin.noFeedback")}
             </p>
           </Card>
         )}
@@ -145,22 +147,22 @@ export default function AdminFeedbackPage() {
       <Modal
         open={!!target}
         onClose={() => setTarget(null)}
-        title="피드백 응답"
-        description="응답 내용은 사용자에게 전달된다."
+        title={t("admin.fbReplyTitle")}
+        description={t("admin.fbReplyDesc")}
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>
-              취소
+              {t("common.cancel")}
             </Button>
             <Button size="sm" loading={busy} onClick={() => void submit()}>
-              저장
+              {t("common.save")}
             </Button>
           </div>
         }
       >
         <div className="mb-3">
-          <div className="mb-1.5 text-xs font-medium text-ink-700">상태</div>
+          <div className="mb-1.5 text-xs font-medium text-ink-700">{t("admin.fbStatus")}</div>
           <div className="grid grid-cols-4 gap-1.5">
             {["new", "in_review", "resolved", "closed"].map((s) => (
               <button
@@ -173,13 +175,13 @@ export default function AdminFeedbackPage() {
                     : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50"
                 }`}
               >
-                {STATUS_LABEL[s]}
+                {t(STATUS_LABEL[s])}
               </button>
             ))}
           </div>
         </div>
         <Textarea
-          label="응답 내용"
+          label={t("admin.fbBody")}
           value={response}
           onChange={(e) => setResponse(e.target.value)}
           rows={4}

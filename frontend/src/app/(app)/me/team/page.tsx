@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import type { Team, TeamRole } from "@/lib/types";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 const ROLE_TONE: Record<TeamRole, "brand" | "neutral"> = {
   Owner: "brand",
@@ -17,6 +18,7 @@ const ROLE_TONE: Record<TeamRole, "brand" | "neutral"> = {
 
 /** 팀 워크스페이스 — 역할은 Owner·Admin·Member 3종 (서비스정책서 §18.2). */
 export default function TeamPage() {
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const allowed = user?.plan === "Team" || user?.plan === "Admin";
 
@@ -35,7 +37,7 @@ export default function TeamPage() {
       const teams = await api.teams.list();
       setTeam(teams[0] ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "팀 정보를 불러오지 못했다.");
+      setError(e instanceof Error ? e.message : t("me.teamLoadFailed"));
     }
   }, [allowed]);
 
@@ -47,13 +49,12 @@ export default function TeamPage() {
     return (
       <Card>
         <CardHeader
-          title="팀 워크스페이스"
-          description="팀 단위로 프로젝트와 DS 를 공유한다."
+          title={t("me.teamTitle")}
+          description={t("me.teamDesc")}
           action={<Badge tone="brand">Team+</Badge>}
         />
         <p className="text-xs text-ink-600">
-          팀 기능은 Team 등급에서 제공된다. 기본 정원은 5명이며, 추가 시드는 1인당
-          월 $9 이다.
+          {t("me.teamGate")}
         </p>
       </Card>
     );
@@ -69,7 +70,7 @@ export default function TeamPage() {
       setNotice(await fn());
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "요청에 실패했다.");
+      setError(e instanceof Error ? e.message : t("me.requestFailed"));
     } finally {
       setBusy(null);
     }
@@ -92,13 +93,13 @@ export default function TeamPage() {
       {!team ? (
         <Card>
           <CardHeader
-            title="팀 만들기"
-            description="팀을 만들면 프로젝트·공유 DS 라이브러리를 팀원과 함께 쓸 수 있다."
+            title={t("me.teamCreateTitle")}
+            description={t("me.teamCreateDesc")}
           />
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <Input
-                label="팀 이름"
+                label={t("me.teamName")}
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 maxLength={120}
@@ -111,11 +112,11 @@ export default function TeamPage() {
                 run("create", async () => {
                   await api.teams.create(teamName.trim());
                   setTeamName("");
-                  return "팀을 만들었다.";
+                  return t("me.teamCreated");
                 })
               }
             >
-              팀 생성
+              {t("me.teamCreate")}
             </Button>
           </div>
         </Card>
@@ -124,34 +125,32 @@ export default function TeamPage() {
           <Card>
             <CardHeader
               title={team.name}
-              description={`정원 ${team.seatsUsed} / ${team.seatLimit}명 · 내 역할 ${team.myRole}`}
+              description={t("me.teamSeats", { used: team.seatsUsed, limit: team.seatLimit, role: team.myRole })}
               action={<Badge tone={ROLE_TONE[team.myRole]}>{team.myRole}</Badge>}
             />
             <p className="text-[11px] text-ink-500">
-              Owner 는 팀 해체·이양·결제·역할 변경 전체, Admin 은 팀원 초대와 Member
-              역할 변경, Member 는 팀 프로젝트 읽기·쓰기와 시안 생성을 할 수 있다.
-              정원을 넘는 시드는 1인당 월 $9 이다.
+              {t("me.teamRoles")}
             </p>
           </Card>
 
           {canManage && (
             <Card>
-              <CardHeader title="팀원 초대" description="이메일로 초대한다." />
+              <CardHeader title={t("me.inviteTitle")} description={t("me.inviteDesc")} />
               <div className="grid gap-3 sm:grid-cols-3">
                 <Input
-                  label="이메일"
+                  label={t("common.email")}
                   type="email"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                 />
                 <Input
-                  label="이름 (선택)"
+                  label={t("me.nameOptional")}
                   value={inviteName}
                   onChange={(e) => setInviteName(e.target.value)}
                 />
                 <div>
                   <div className="mb-1.5 text-xs font-medium text-ink-700">
-                    역할
+                    {t("me.role")}
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {(["Member", "Admin"] as TeamRole[]).map((r) => (
@@ -186,25 +185,25 @@ export default function TeamPage() {
                       );
                       setInviteEmail("");
                       setInviteName("");
-                      return "팀원을 초대했다.";
+                      return t("me.invited");
                     })
                   }
                 >
-                  초대
+                  {t("me.invite")}
                 </Button>
               </div>
             </Card>
           )}
 
           <Card>
-            <CardHeader title="팀원" description={`${team.members.length}명`} />
+            <CardHeader title={t("me.members")} description={t("me.membersCount", { n: team.members.length })} />
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-ink-100 text-left text-ink-500">
-                  <th className="py-2 font-medium">이메일</th>
-                  <th className="py-2 font-medium">이름</th>
-                  <th className="py-2 font-medium">역할</th>
-                  <th className="py-2 font-medium">상태</th>
+                  <th className="py-2 font-medium">{t("common.email")}</th>
+                  <th className="py-2 font-medium">{t("common.name")}</th>
+                  <th className="py-2 font-medium">{t("me.role")}</th>
+                  <th className="py-2 font-medium">{t("common.status")}</th>
                   <th />
                 </tr>
               </thead>
@@ -217,7 +216,7 @@ export default function TeamPage() {
                       <Badge tone={ROLE_TONE[m.role]}>{m.role}</Badge>
                     </td>
                     <td className="py-2 text-ink-500">
-                      {m.status === "Active" ? "활성" : "초대됨"}
+                      {m.status === "Active" ? t("me.memberActive") : t("me.memberInvited")}
                     </td>
                     <td className="py-2 text-right">
                       {canManage && m.role !== "Owner" && (
@@ -231,22 +230,22 @@ export default function TeamPage() {
                                   m.id,
                                   m.role === "Admin" ? "Member" : "Admin",
                                 );
-                                return "역할을 변경했다.";
+                                return t("me.roleChanged");
                               })
                             }
                           >
-                            {m.role === "Admin" ? "Member 로" : "Admin 으로"}
+                            {m.role === "Admin" ? t("me.toMember") : t("me.toAdmin")}
                           </button>
                           <button
                             className="text-red-700 hover:underline"
                             onClick={() =>
                               run(`remove-${m.id}`, async () => {
                                 await api.teams.removeMember(team.id, m.id);
-                                return "팀원을 제외했다.";
+                                return t("me.removed");
                               })
                             }
                           >
-                            제외
+                            {t("me.remove")}
                           </button>
                         </div>
                       )}

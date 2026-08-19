@@ -3,45 +3,46 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useAuthStore } from "@/store/auth-store";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import { LocaleSwitch } from "@/components/i18n/LocaleSwitch";
 import { cn } from "@/lib/cn";
 
 const NAV = [
   {
-    section: "개요",
+    sectionKey: "admin.sectionOverview",
     items: [
-      { href: "/admin", label: "대시보드", icon: "📊", exact: true },
+      { href: "/admin", labelKey: "admin.dashboard", icon: "📊", exact: true },
     ],
   },
   {
-    section: "사용자",
+    sectionKey: "admin.sectionUsers",
     items: [
-      { href: "/admin/users", label: "사용자 관리", icon: "👥" },
+      { href: "/admin/users", labelKey: "admin.users", icon: "👥" },
     ],
   },
   {
-    section: "통계",
+    sectionKey: "admin.sectionStats",
     items: [
-      { href: "/admin/stats", label: "매출·AI·에러", icon: "📈" },
+      { href: "/admin/stats", labelKey: "admin.stats", icon: "📈" },
     ],
   },
   {
-    section: "운영",
+    sectionKey: "admin.sectionOps",
     items: [
-      { href: "/admin/refunds", label: "환불 처리", icon: "💳" },
-      { href: "/admin/announcements", label: "공지사항", icon: "📢" },
-      { href: "/admin/feedback", label: "피드백", icon: "💬" },
-      { href: "/admin/templates", label: "템플릿 심사", icon: "🧩" },
-      { href: "/admin/audit-logs", label: "감사 로그", icon: "🔍" },
+      { href: "/admin/refunds", labelKey: "admin.refunds", icon: "💳" },
+      { href: "/admin/announcements", labelKey: "admin.announcements", icon: "📢" },
+      { href: "/admin/feedback", labelKey: "admin.feedback", icon: "💬" },
+      { href: "/admin/templates", labelKey: "admin.templates", icon: "🧩" },
+      { href: "/admin/audit-logs", labelKey: "admin.auditLogs", icon: "🔍" },
     ],
   },
   {
-    section: "시스템",
+    sectionKey: "admin.sectionSystem",
     items: [
-      { href: "/admin/logs", label: "로그", icon: "🧾" },
-      { href: "/admin/health", label: "헬스 체크", icon: "❤️" },
+      { href: "/admin/logs", labelKey: "admin.logs", icon: "🧾" },
+      { href: "/admin/health", labelKey: "admin.health", icon: "❤️" },
     ],
   },
 ] as const;
@@ -53,6 +54,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const hydrated = useAuthStore((s) => s.hydrated);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const { t } = useI18n();
 
   useEffect(() => {
     hydrate();
@@ -65,7 +67,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   if (!hydrated || !user) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-ink-500">
-        세션 확인 중…
+        {t("common.loadingSession")}
       </div>
     );
   }
@@ -78,19 +80,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 text-2xl">
             🛡
           </div>
-          <h1 className="mt-4 text-base font-semibold">관리자 전용 영역</h1>
+          <h1 className="mt-4 text-base font-semibold">{t("admin.restrictedTitle")}</h1>
           <p className="mt-2 text-xs text-ink-500">
-            본 영역은 <Badge tone="ink">Admin</Badge> 등급에서만 접근 가능하다.
-            현재 등급은 <Badge tone="warning">{user.plan}</Badge>.
+            {t("admin.restrictedBody", { plan: user.plan })}
           </p>
           <p className="mt-2 text-[11px] text-ink-500">
-            등급 변경은 서버에서만 가능하다 — Admin 계정으로 로그인하거나 관리자에게
-            권한 부여를 요청한다.
+            {t("admin.restrictedHint")}
           </p>
           <div className="mt-5 flex justify-center gap-2">
             <Link href="/dashboard">
               <Button variant="outline" size="sm">
-                대시보드로 돌아가기
+                {t("admin.backDashboard")}
               </Button>
             </Link>
           </div>
@@ -109,10 +109,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
             <div>
               <div className="text-sm font-semibold leading-none">
-                Admin Console
+                {t("admin.console")}
               </div>
               <div className="mt-0.5 text-[10px] text-ink-500">
-                Design Generator
+                {t("brand.name")}
               </div>
             </div>
           </div>
@@ -120,9 +120,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
         <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin">
           {NAV.map((sec) => (
-            <div key={sec.section} className="mb-4">
+            <div key={sec.sectionKey} className="mb-4">
               <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
-                {sec.section}
+                {t(sec.sectionKey)}
               </div>
               <ul className="space-y-0.5">
                 {sec.items.map((it) => {
@@ -142,7 +142,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                         )}
                       >
                         <span className="text-base">{it.icon}</span>
-                        <span>{it.label}</span>
+                        <span>{t(it.labelKey)}</span>
                       </Link>
                     </li>
                   );
@@ -153,7 +153,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="border-t border-ink-800 p-3">
-          <div className="mb-2 text-[10px] text-ink-500">로그인:</div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-[10px] text-ink-500">{t("admin.signedIn")}</div>
+            <LocaleSwitch />
+          </div>
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="truncate text-xs font-medium text-ink-100">
@@ -170,14 +173,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               }}
               className="rounded-lg border border-ink-700 px-2 py-1 text-[10px] text-ink-300 hover:bg-ink-800"
             >
-              로그아웃
+              {t("admin.logout")}
             </button>
           </div>
           <Link
             href="/dashboard"
             className="mt-2 block rounded-lg border border-ink-700 px-2.5 py-1.5 text-center text-[10px] text-ink-300 hover:bg-ink-800"
           >
-            ← 사용자 화면으로
+            {t("admin.backToApp")}
           </Link>
         </div>
       </aside>

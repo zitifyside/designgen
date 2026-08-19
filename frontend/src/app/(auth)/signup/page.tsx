@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuthStore } from "@/store/auth-store";
 
 export default function SignupPage() {
   const router = useRouter();
   const signup = useAuthStore((s) => s.signup);
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -22,11 +24,11 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
     if (!agree) {
-      setError("이용약관·개인정보처리방침 동의가 필요하다.");
+      setError(t("auth.agreeRequired"));
       return;
     }
     if (password.length < 8) {
-      setError("비밀번호는 최소 8자 이상이어야 한다.");
+      setError(t("auth.passwordMin"));
       return;
     }
     setLoading(true);
@@ -35,7 +37,7 @@ export default function SignupPage() {
       router.push("/dashboard");
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "회원가입에 실패했다.",
+        err instanceof Error ? err.message : t("auth.signupFailed"),
       );
     } finally {
       setLoading(false);
@@ -44,14 +46,12 @@ export default function SignupPage() {
 
   return (
     <div className="rounded-2xl border border-ink-200 bg-surface p-6 shadow-sm">
-      <h1 className="text-base font-semibold text-ink-900">회원가입</h1>
-      <p className="mt-1 text-xs text-ink-500">
-        Free 등급으로 시작한다 · 월 3회 생성, Color Token 만 수정 가능.
-      </p>
+      <h1 className="text-base font-semibold text-ink-900">{t("auth.signupTitle")}</h1>
+      <p className="mt-1 text-xs text-ink-500">{t("auth.signupLead")}</p>
 
       <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
         <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden>
-          <label htmlFor="website">웹사이트</label>
+          <label htmlFor="website">{t("auth.website")}</label>
           <input
             id="website"
             name="website"
@@ -64,16 +64,16 @@ export default function SignupPage() {
         </div>
         <Input
           id="name"
-          label="이름"
+          label={t("auth.name")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
-          placeholder="홍길동"
+          placeholder={t("auth.namePlaceholder")}
         />
         <Input
           id="email"
           type="email"
-          label="이메일"
+          label={t("auth.email")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -82,8 +82,8 @@ export default function SignupPage() {
         <Input
           id="password"
           type="password"
-          label="비밀번호"
-          hint="최소 8자, 영문·숫자·특수문자 1개 이상 권장"
+          label={t("auth.password")}
+          hint={t("auth.passwordHint")}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -97,9 +97,10 @@ export default function SignupPage() {
             className="mt-0.5"
           />
           <span>
-            <span className="font-medium text-ink-900">이용약관</span> 및{" "}
-            <span className="font-medium text-ink-900">개인정보처리방침</span> 에
-            동의한다.
+            <span className="font-medium text-ink-900">{t("auth.terms")}</span>{" "}
+            {t("auth.and")}{" "}
+            <span className="font-medium text-ink-900">{t("auth.privacy")}</span>
+            {t("auth.agreeSuffix")}
           </span>
         </label>
 
@@ -109,14 +110,14 @@ export default function SignupPage() {
           </div>
         )}
         <Button type="submit" loading={loading} fullWidth>
-          가입하고 시작
+          {t("auth.signupSubmit")}
         </Button>
       </form>
 
       <p className="mt-5 text-center text-xs text-ink-500">
-        이미 계정이 있는가?{" "}
+        {t("auth.hasAccount")}{" "}
         <Link href="/login" className="font-medium text-brand-700 hover:underline">
-          로그인
+          {t("auth.loginTitle")}
         </Link>
       </p>
     </div>

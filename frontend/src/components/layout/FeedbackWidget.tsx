@@ -6,14 +6,15 @@ import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { api } from "@/lib/api";
 
 type Category = "feedback" | "bug" | "feature";
 
-const CATEGORIES: Array<{ value: Category; label: string }> = [
-  { value: "feedback", label: "의견" },
-  { value: "bug", label: "버그" },
-  { value: "feature", label: "기능 요청" },
+const CATEGORIES: Array<{ value: Category; labelKey: string }> = [
+  { value: "feedback", labelKey: "feedback.opinion" },
+  { value: "bug", labelKey: "feedback.bug" },
+  { value: "feature", labelKey: "feedback.feature" },
 ];
 
 /**
@@ -23,6 +24,7 @@ const CATEGORIES: Array<{ value: Category; label: string }> = [
  * 재현 조건 없이 올라온 버그 리포트는 대응할 수 없기 때문이다.
  */
 export function FeedbackWidget() {
+  const { t } = useI18n();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>("feedback");
@@ -42,9 +44,9 @@ export function FeedbackWidget() {
         ? [
             "",
             "---",
-            `경로: ${pathname ?? "-"}`,
-            `브라우저: ${navigator.userAgent}`,
-            `화면: ${window.innerWidth}x${window.innerHeight}`,
+            t("feedback.ctxPath", { path: pathname ?? "-" }),
+            t("feedback.ctxBrowser", { ua: navigator.userAgent }),
+            t("feedback.ctxScreen", { w: window.innerWidth, h: window.innerHeight }),
           ].join("\n")
         : "";
       await api.system.feedback({
@@ -56,7 +58,7 @@ export function FeedbackWidget() {
       setTitle("");
       setBody("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "전송에 실패했다.");
+      setError(e instanceof Error ? e.message : t("feedback.sendFailed"));
     } finally {
       setBusy(false);
     }
@@ -77,33 +79,33 @@ export function FeedbackWidget() {
           "bg-surface px-3.5 py-2 text-xs font-medium text-ink-700 shadow-lg",
           "transition hover:border-ink-300 hover:bg-ink-50",
         )}
-        aria-label="피드백 보내기"
+        aria-label={t("feedback.aria")}
       >
         <span aria-hidden>💬</span>
-        피드백
+        {t("feedback.button")}
       </button>
 
       <Modal
         open={open}
         onClose={close}
-        title={done ? "보내주셔서 감사하다" : "피드백 보내기"}
+        title={done ? t("feedback.thanks") : t("feedback.title")}
         description={
           done
-            ? "확인 후 필요한 경우 가입 이메일로 답변한다."
-            : "버그·불편·바라는 기능을 알려주면 운영에 반영한다."
+            ? t("feedback.thanksBody")
+            : t("feedback.lead")
         }
         size="sm"
         footer={
           done ? (
             <div className="flex justify-end">
               <Button size="sm" onClick={close}>
-                닫기
+                {t("common.close")}
               </Button>
             </div>
           ) : (
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={close}>
-                취소
+                {t("common.cancel")}
               </Button>
               <Button
                 size="sm"
@@ -111,7 +113,7 @@ export function FeedbackWidget() {
                 disabled={!title.trim()}
                 onClick={submit}
               >
-                보내기
+                {t("common.submit")}
               </Button>
             </div>
           )
@@ -119,7 +121,7 @@ export function FeedbackWidget() {
       >
         {done ? (
           <p className="text-xs text-ink-600">
-            접수됐다. 같은 내용을 다시 보낼 필요는 없다.
+            {t("feedback.received")}
           </p>
         ) : (
           <>
@@ -136,21 +138,21 @@ export function FeedbackWidget() {
                       : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
                   )}
                 >
-                  {c.label}
+                  {t(c.labelKey)}
                 </button>
               ))}
             </div>
 
             <Input
-              label="제목"
+              label={t("feedback.titleLabel")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={200}
-              placeholder="한 줄로 요약"
+              placeholder={t("feedback.titlePh")}
             />
             <div className="mt-3">
               <Textarea
-                label="내용"
+                label={t("feedback.bodyLabel")}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={4}
@@ -158,8 +160,8 @@ export function FeedbackWidget() {
                 maxLength={2000}
                 placeholder={
                   category === "bug"
-                    ? "무엇을 하다가, 무엇을 기대했고, 실제로는 무엇이 일어났는지"
-                    : "자유롭게 적는다"
+                    ? t("feedback.bugPh")
+                    : t("feedback.freePh")
                 }
               />
             </div>
@@ -172,7 +174,7 @@ export function FeedbackWidget() {
                 className="mt-0.5"
               />
               <span>
-                현재 화면 경로·브라우저·화면 크기를 함께 보낸다 (재현에 도움이 된다)
+                {t("feedback.includeContext")}
               </span>
             </label>
 
