@@ -90,6 +90,11 @@ export function ConceptGallery({
                 <div className="truncate text-[11px] text-ink-500">
                   {mockup.variantLabel || mockup.title}
                 </div>
+                {mockup.nodeTree?.creativeDirection && (
+                  <div className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-ink-400">
+                    {mockup.nodeTree.creativeDirection}
+                  </div>
+                )}
               </div>
               <span
                 className="mt-0.5 shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white"

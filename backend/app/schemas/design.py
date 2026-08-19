@@ -45,5 +45,6 @@ class MockupOut(CamelModel):
     title: str
     variant_label: str
     image_url: str | None = None
+    node_tree: dict[str, Any] | None = None
     is_fallback: bool
     is_favorite: bool

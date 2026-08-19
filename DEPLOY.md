@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.1.3 |
+| 문서 버전 | v1.1.5 |
 | 작성일 | 2026-08-14 |
 | 대상 | Firebase Hosting (프론트) + Cloud Run (백엔드 API) |
 | Firebase 프로젝트 | `design-gen-zitify` |
@@ -156,17 +156,13 @@ Admin → **로그** 화면에서 레벨·종류·기간·검색·추적 ID 로 
 ⚠ **허브 앞단 Cloudflare 가 기본 User-Agent 를 1010 으로 차단한다.** 전송기는 UA 를
 반드시 붙인다 — UA 없이 보내면 인증 단계에 닿기도 전에 403 이 떨어진다.
 
-⛔ **현재 허브가 `project_inactive`(403) 로 거절한다.** 등록부(`mst_project`)에서
-`designgenerator` 상태가 `suspended` 이기 때문이다 — 서버가 없던 시절에 배선 대상이
-아니라고 분류된 상태다. 이제 Cloud Run 백엔드가 있으므로 **마에 쪽에서 `active` 로
-전환**해야 로그가 실제로 쌓인다 (허브 관리 API 는 마에 전용이라 이 프로젝트에서
-호출하지 않는다).
+✅ **허브 등록부에서 `designgenerator` 는 `active` 다** (2026-08-19 전환, 이전 값은
+`suspended`). Cloud Run 프로브 이후 허브에 `http.request` 가 적재된 것을 확인했다.
+재전환이 필요하면 마에 로컬 관리 API 만 쓴다.
 
 ```
 PATCH /admin/projects/designgenerator   { "status": "active" }
 ```
-
-전환 후 확인: Admin → 로그 상단 배너의 `유실` 이 더 늘지 않으면 전송이 붙은 것이다.
 
 ### 적용된 보안 조치
 
@@ -232,10 +228,10 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | Firebase Hosting | ✅ https://design-gen-zitify.web.app |
 | 백엔드 Cloud Run | ✅ `adg-api` (asia-northeast3) — Hosting `/api/**` rewrite 연결 |
 | 결제 | ✅ Blaze — `zitifycorp` 결제 계정 |
-| DB | ⚠ 컨테이너 `/tmp` SQLite — **콜드 스타트·재배포 시 초기화**. **맥미니 PostgreSQL 로 이식 예정** — 코드·검증 완료, 맥미니 준비만 남았다 (§6) |
-| AI 생성 | 로컬 마에 CLI 사다리(antigravity→codex→claude). Cloud Run 은 CLI 부재 시 Gemini API 폴백 |
+| DB | ✅ Cloud Run `adg-api-00022-zzz` → cloudflared sidecar → 맥미니 PostgreSQL `designgenerator`. 5432 미개방. 왕복 약 350ms (§6) |
+| AI 생성 | ✅ Cloud Run `FAKE_AI_PIPELINE=false` · `AI_PROVIDER=gemini`. 로컬은 마에 CLI 사다리 |
 | 로그 적재 | ✅ 로컬 DB + Admin 로그 화면 |
-| 중앙 로그 허브 | ⛔ 전송 시도 중이나 허브가 `project_inactive` 로 거절 (§3.5) |
+| 중앙 로그 허브 | ✅ `designgenerator` `active`. 프로브 후 `http.request` 적재 확인 (§3.5) |
 | 보안 하드닝 | ✅ 인증·쿠키/CSRF·레이트리밋·헤더·CSP·봇 UA·크롤 함정 (§3.5·SECURITY.md) |
 | DA 스키마 | ✅ BIGINT PK+public_id · C-코드 30종 · 논리삭제 뷰 · SCD · Alembic `202608161200`·`202608161400` |
 | Public API · MCP | ✅ Tool 4종 동작 · `subscribe_token_changes` 만 미구현 (§3.6) |
@@ -251,15 +247,8 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 
 ### 남은 일
 
-1. **허브 활성화** — `designgenerator` 를 `active` 로 전환해야 중앙 로그가 쌓인다 (§3.5).
-   지금은 로컬 DB 사본만 남고, 그 사본도 컨테이너가 내려가면 사라진다.
-2. **DB 를 맥미니 PostgreSQL 로** — 지금은 사용자가 만든 프로젝트가 콜드 스타트 후
-   사라진다. **코드 쪽 준비는 끝났다** (§6). 남은 것은 맥미니에 Postgres 를 올리고
-   Cloud Run 에서 닿는 경로(터널 권장)를 만드는 일이며, 그 뒤로는 `check_db.py` 로
-   확인 → `DATABASE_URL` 교체 + 재배포 한 번이다.
-3. **실제 AI 생성** — `FAKE_AI_PIPELINE=false` + 프로바이더 키.
-4. **커스텀 도메인** — Hosting 에 도메인 연결 시 백엔드 `CORS_ORIGINS` 에도 추가.
-5. **i18n (ko/en)** — 출시 전 작업. 번역은 Codex 전담 규약을 따른다.
+1. **커스텀 도메인** — Hosting 에 도메인 연결 시 백엔드 `CORS_ORIGINS` 에도 추가.
+2. **i18n (ko/en)** — 출시 전 작업. 번역은 Codex 전담 규약을 따른다.
 
 ---
 
@@ -267,7 +256,8 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 
 `/tmp` SQLite 는 콜드 스타트·재배포 때마다 사라진다. 데모로는 돌아가지만 사용자가
 만든 프로젝트가 없어지므로 운영에서는 반드시 바꿔야 한다. **운영 DB 는 맥미니에
-직접 올린다** (운영자 결정 2026-08-16).
+직접 올린다** (운영자 결정 2026-08-16). Cloud Run 리비전 `adg-api-00022-zzz` 부터
+앱은 sidecar 로 이 Postgres 에 붙는다. 5432 는 인터넷에 열지 않는다.
 
 ### 6.1 준비 상태
 
@@ -278,26 +268,27 @@ curl -H "X-API-Key: adg_xxxx.xxxx" \
 | 유휴 연결 대응 | ✅ `pool_pre_ping` · `pool_recycle` |
 | 전체 스모크 | ✅ **PostgreSQL 16 실측 통과** (SQLite 와 동일 결과) |
 | 사전 점검 도구 | ✅ `scripts/check_db.py` |
-| 남은 일 | ⛔ 맥미니 Postgres 기동 + 외부에서 닿는 경로 + 자격증명 |
+| 맥미니 DB·앱 역할 | ✅ `designgenerator` / `designgenerator_app` (postgresql@18, LAN `192.168.0.5`) |
+| 스키마·시드 | ✅ Alembic head + 플랜·데모 시드 (public 테이블 31) |
+| 백업 목록 | ✅ `MACDB_BACKUP_DATABASES` 에 `designgenerator` 편입 |
+| Cloud Run 경로 | ✅ 리비전 `adg-api-00022-zzz`. sidecar `cloudflared access tcp`, 앱은 `127.0.0.1:5432`. 5432 미개방 |
 
 ### 6.2 맥미니에서 준비할 것
 
-```bash
-# 1) Postgres 설치·기동 (Homebrew 기준)
-brew install postgresql@16
-brew services start postgresql@16
+Postgres 설치·기동은 이미 끝났다. Homebrew `postgresql@18` 이 `brew services` 로 떠 있고
+`listen_addresses=localhost,192.168.0.5`, `pg_hba` 는 `192.168.0.0/24` + `scram-sha-256`
+만 허용한다. 2026-08-19 에 아래를 만들었다.
 
-# 2) DB·계정 생성 — 앱 전용 계정을 따로 둔다 (superuser 를 그대로 쓰지 않는다)
-createdb adg
-psql adg -c "CREATE ROLE adg_app LOGIN PASSWORD '<강한-비밀번호>';"
-psql adg -c "GRANT ALL ON DATABASE adg TO adg_app;"
-psql adg -c "GRANT ALL ON SCHEMA public TO adg_app;"
-
-# 3) 외부 접속 허용 (기본값은 localhost 만 듣는다)
-#    postgresql.conf : listen_addresses = '*'
-#    pg_hba.conf     : hostssl adg adg_app <허용대역> scram-sha-256
-brew services restart postgresql@16
+```text
+DB     designgenerator
+역할   designgenerator_app   (LOGIN, 앱 전용. superuser 아님)
+백업   mae_backup            (CONNECT + public SELECT)
+LAN    192.168.0.5:5432      sslmode=disable (집 안 평문, 터널 안에서는 disable)
+시크릿 Secrets/env/mae/macdb/designgenerator.env
 ```
+
+다시 만들 때는 `backend/scripts/provision_macmini_postgres.py` 를 맥미니에서 돌린다
+(멱등: 이미 있으면 `EXISTS` 로 끝). 비밀번호는 stdout 에 내지 않고 시크릿 파일로만 옮긴다.
 
 ### 6.3 Cloud Run 에서 맥미니에 닿는 경로
 
@@ -312,12 +303,19 @@ brew services restart postgresql@16
 ⚠ 어떤 방식이든 **Postgres 포트를 그대로 인터넷에 여는 선택은 피한다.** 인증 실패
 시도가 곧바로 들어온다. 터널을 쓰면 포트를 열지 않고도 같은 결과를 얻는다.
 
+운영은 **Cloudflare Tunnel + Cloud Run sidecar** 를 쓴다. 맥미니 origin 은
+`cloudflared` 가 localhost:5432 만 받고, Cloud Run 앱은 `DATABASE_URL` 호스트를
+`127.0.0.1` 로 둔다. LAN 주소는 Cloud Run 에 넣지 않는다. sidecar 의
+`access tcp --url` 은 `0.0.0.0:5432` 로 연다. `127.0.0.1` 만 열면 Cloud Run
+startupProbe 가 컨테이너 IP 로 붙어 실패한다. 재적용은
+`backend/scripts/deploy_cloudrun_pg_sidecar.py` 다.
+
 ### 6.4 전환 절차
 
 ```powershell
 # 1) 먼저 연결만 확인한다 (스키마를 건드리지 않는다)
 cd backend
-$env:CHECK_DATABASE_URL = "postgresql://adg_app:<pw>@<호스트>:5432/adg?sslmode=require"
+$env:CHECK_DATABASE_URL = "postgresql://designgenerator_app:<pw>@192.168.0.5:5432/designgenerator?sslmode=disable"
 .venv\Scripts\python.exe scripts\check_db.py
 ```
 
@@ -328,12 +326,14 @@ $env:CHECK_DATABASE_URL = "postgresql://adg_app:<pw>@<호스트>:5432/adg?sslmod
 # 2) 같은 문자열로 전체 스모크를 돌려 본다
 #    ⚠ 대상 DB 의 스키마를 지우고 다시 만든다. 반드시 빈 DB 에만 쓴다.
 $env:SMOKE_DATABASE_URL = $env:CHECK_DATABASE_URL
+# 대상이 빈 DB 일 때만. 이미 시드된 designgenerator 에는 돌리지 않는다.
 .venv\Scripts\python.exe scripts\smoke_e2e.py
 ```
 
 ```bash
-# 3) 통과하면 Cloud Run 환경변수를 바꾼다
-gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com   --project design-gen-zitify --region asia-northeast3   --update-env-vars "^@^DATABASE_URL=postgresql://adg_app:<pw>@<호스트>:5432/adg?sslmode=require"   --quiet
+# 3) 통과하면 Cloud Run 에 sidecar 를 붙인다. LAN 주소는 넣지 않는다.
+#    앱 DATABASE_URL 호스트는 127.0.0.1 이다. 터널 호스트는 sidecar args 에만 둔다.
+py -3 backend/scripts/deploy_cloudrun_pg_sidecar.py
 ```
 
 스키마·플랜·템플릿은 `SEED_ON_STARTUP=true` 가 기동 시 채운다 (멱등).
@@ -379,6 +379,8 @@ gcloud run deploy adg-api --source ./backend --account=zitifycorp@gmail.com   --
 
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |---|---|---|---|
+| v1.1.5 | 2026-08-19 | 안승준 | 허브 `designgenerator` `active` 전환·적재 확인. Cloud Run 실 Gemini 파이프라인은 이미 켜져 있음을 문서 반영 |
+| v1.1.4 | 2026-08-19 | 안승준 | Cloud Run `adg-api-00022-zzz` sidecar 로 맥미니 Postgres 연결. 5432 미개방. §6.3·§6.4 반영 |
 | v1.1.3 | 2026-08-19 | 안승준 | 운영 데모 계정 시드·로그인 허용. 공개 관리자만 잠금 |
 | v1.1.2 | 2026-08-18 | 안승준 | §5 DA 스키마 행 — 코드 그룹 30종·Alembic `202608161400` 반영 (3~5차 누적) |
 | v1.1.1 | 2026-08-16 | 안승준 | Postgres 기동 시 스키마 wipe 금지. Cloudflare IP 헤더는 신뢰하지 않는다 |

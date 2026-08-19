@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
-from app.core.database import Base
+from app.core.database import Base, normalize_database_url
 from app import models  # noqa: F401  — register all tables on Base.metadata
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+_db_url, _connect_args = normalize_database_url(settings.database_url)
+# ConfigParser interpolates '%'. Percent-encode before set_main_option.
+config.set_main_option("sqlalchemy.url", _db_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -23,7 +25,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.database_url,
+        url=_db_url,
         target_metadata=target_metadata,
         literal_binds=True,
         render_as_batch=True,  # needed for SQLite ALTER support
@@ -44,9 +46,10 @@ def _do_run_migrations(connection) -> None:
 
 async def run_migrations_online() -> None:
     connectable = async_engine_from_config(
-        {"sqlalchemy.url": settings.database_url},
+        {"sqlalchemy.url": _db_url},
         prefix="sqlalchemy.",
         poolclass=NullPool,
+        connect_args=_connect_args,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(_do_run_migrations)

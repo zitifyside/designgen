@@ -109,6 +109,8 @@ class GeminiProvider(AIProvider):
                 "targetScreenTitle": concept.get("targetScreenTitle", ""),
                 "userPrompt": concept.get("userPrompt", ""),
                 "projectName": concept.get("projectName", ""),
+                "visualBrief": concept.get("visualBrief") or {},
+                "creativeDirections": concept.get("creativeDirections") or [],
             },
             schema=LAYOUTS_SCHEMA,
         )

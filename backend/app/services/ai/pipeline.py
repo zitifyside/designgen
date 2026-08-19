@@ -47,6 +47,11 @@ from app.services.ai.placeholder import (
     placeholder_concepts,
     placeholder_layouts,
 )
+from app.services.ai.visual_prompt import (
+    apply_visual_brief,
+    creative_directions_for,
+    normalize_visual_brief,
+)
 from app.services.quota import refund_generation
 from app.services.upload import merge_requirements
 
@@ -206,6 +211,16 @@ async def run_generation(
 
             base_ds_id: str | None = None
             for c in concept_sets:
+                extra = dict(c.get("overriddenFields") or {})
+                visual_pack = {
+                    k: c[k]
+                    for k in ("imagePrompt", "stylePrompt")
+                    if c.get(k)
+                }
+                if c.get("visualBrief"):
+                    visual_pack["brief"] = c["visualBrief"]
+                if visual_pack:
+                    extra["visual"] = visual_pack
                 ds = DesignSystem(
                     project_id=project.id,
                     concept_label=c["conceptLabel"],
@@ -213,7 +228,7 @@ async def run_generation(
                     description=c.get("description", ""),
                     tokens=c["tokens"],
                     ds_mode=ds_mode,
-                    overridden_fields=c.get("overriddenFields"),
+                    overridden_fields=extra or None,
                 )
                 db.add(ds)
                 await db.flush()
@@ -528,6 +543,15 @@ async def _run_real(
     analysis.setdefault("targetScreenTitle", screen_title)
     analysis["userPrompt"] = project.requirements_text or ""
     analysis["projectName"] = project.name or ""
+    brief = normalize_visual_brief(analysis)
+    analysis = apply_visual_brief(analysis, brief)
+    seed = f"{project.name}\n{project.requirements_text or ''}"
+    directions = creative_directions_for(seed, variants)
+    analysis["creativeDirections"] = directions
+    snap = dict(gen.input_snapshot or {})
+    snap["visualBrief"] = brief
+    snap["creativeDirections"] = directions
+    gen.input_snapshot = snap
     if concept_briefs:
         # 사용자가 컨셉 방향성을 직접 지정한 경우 Concept Engine 에 그대로 전달한다.
         analysis["conceptBriefs"] = concept_briefs
@@ -543,8 +567,13 @@ async def _run_real(
         c.setdefault("targetScreenTitle", screen_title)
         c.setdefault("userPrompt", project.requirements_text or "")
         c.setdefault("projectName", project.name or "")
+        c["visualBrief"] = brief
+        c["creativeDirections"] = directions
         layouts = await provider.generate_layouts(c, variants)
-        layouts = _normalize_layouts(layouts, variants, screen, screen_title)
+        layouts = _normalize_layouts(
+            layouts, variants, screen, screen_title,
+            directions=directions, brief=brief,
+        )
         if await _render_layouts(provider, layouts, c["tokens"]):
             fallback = True
         layouts_by_concept[c["conceptLabel"]] = layouts
@@ -552,12 +581,19 @@ async def _run_real(
 
 
 def _normalize_layouts(
-    layouts: list[dict], variants: int, screen: str, screen_title: str
+    layouts: list[dict],
+    variants: int,
+    screen: str,
+    screen_title: str,
+    *,
+    directions: list[str] | None = None,
+    brief: dict | None = None,
 ) -> list[dict]:
-    """Provider 출력에 화면 축·변형 라벨을 보강한다.
+    """Provider 출력에 화면 축·변형 라벨·추출 프롬프트를 보강한다.
 
     Provider 가 화면 축을 빠뜨려도 시안이 '동일 화면의 구조 변형'이라는 정의를
-    깨지 않도록 서버가 강제한다.
+    깨지 않도록 서버가 강제한다. 코덱스 이미지 생성기처럼 장별 연출 방향과
+    imagePrompt 를 nodeTree 에 남긴다.
     """
     reference = placeholder_layouts(variants, screen, screen_title)
     normalized: list[dict] = []
@@ -569,6 +605,18 @@ def _normalize_layouts(
         merged["kind"] = archetype_for(screen, screen_title)
         merged.setdefault("title", ref["title"])
         merged.setdefault("variantLabel", ref["variantLabel"])
+        tree = dict(merged.get("nodeTree") or {})
+        if merged.get("imagePrompt"):
+            tree["imagePrompt"] = merged["imagePrompt"]
+        if brief:
+            if brief.get("stylePrompt"):
+                tree.setdefault("stylePrompt", brief["stylePrompt"])
+            if brief.get("recreatePrompt"):
+                tree.setdefault("recreatePrompt", brief["recreatePrompt"])
+        if directions and idx < len(directions):
+            tree["creativeDirection"] = directions[idx]
+        if tree:
+            merged["nodeTree"] = tree
         normalized.append(merged)
     return normalized
 

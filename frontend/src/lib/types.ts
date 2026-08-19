@@ -140,6 +140,12 @@ export interface Mockup {
   title: string;
   variantLabel: string;
   imageUrl?: string | null;
+  nodeTree?: {
+    imagePrompt?: string;
+    stylePrompt?: string;
+    recreatePrompt?: string;
+    creativeDirection?: string;
+  } | null;
   isFallback: boolean;
   isFavorite: boolean;
 }

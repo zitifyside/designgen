@@ -47,9 +47,50 @@ ANALYSIS_SCHEMA: dict[str, Any] = {
             "items": {"type": "string"},
             "description": "화면에서 강조해야 할 핵심 기능/섹션.",
         },
+        "recreatePrompt": {
+            "type": "string",
+            "description": (
+                "이미지 생성기에 넣을 한 문단 프롬프트. 피사체·구도·스타일·조명·색·무드. "
+                "줄바꿈·마크다운·번호 금지."
+            ),
+        },
+        "stylePrompt": {
+            "type": "string",
+            "description": (
+                "룩앤필만 담은 한 문단. 팔레트·조명·무드·매체. 구체 피사체 이름 금지."
+            ),
+        },
+        "summary": {"type": "string", "description": "이 시안이 무엇인지 한 문장."},
+        "visual": {
+            "type": "object",
+            "properties": {
+                "subject": {"type": "string"},
+                "composition": {"type": "string"},
+                "style": {"type": "string"},
+                "lighting": {"type": "string"},
+                "mood": {"type": "string"},
+            },
+            "required": ["subject", "composition", "style", "lighting", "mood"],
+            "additionalProperties": False,
+        },
+        "tags": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "시각 요소·스타일 키워드 5~12개.",
+        },
     },
     "required": [
-        "goal", "targetAudience", "tone", "colorDirection", "layoutHints", "keyFeatures",
+        "goal",
+        "targetAudience",
+        "tone",
+        "colorDirection",
+        "layoutHints",
+        "keyFeatures",
+        "recreatePrompt",
+        "stylePrompt",
+        "summary",
+        "visual",
+        "tags",
     ],
     "additionalProperties": False,
 }
@@ -158,9 +199,24 @@ CONCEPTS_SCHEMA: dict[str, Any] = {
                     "conceptLabel": {"type": "string", "enum": ["A", "B", "C"]},
                     "conceptName": {"type": "string", "description": "짧은 컨셉 이름(영문, 2~3단어)."},
                     "description": {"type": "string", "description": "컨셉을 설명하는 한국어 한 문장."},
+                    "imagePrompt": {
+                        "type": "string",
+                        "description": "이 컨셉을 이미지 생성기에 넣을 한 문단 프롬프트.",
+                    },
+                    "stylePrompt": {
+                        "type": "string",
+                        "description": "이 컨셉의 룩앤필만 담은 한 문단.",
+                    },
                     "tokens": DESIGN_TOKENS_SCHEMA,
                 },
-                "required": ["conceptLabel", "conceptName", "description", "tokens"],
+                "required": [
+                    "conceptLabel",
+                    "conceptName",
+                    "description",
+                    "imagePrompt",
+                    "stylePrompt",
+                    "tokens",
+                ],
                 "additionalProperties": False,
             },
         },
@@ -188,8 +244,15 @@ LAYOUTS_SCHEMA: dict[str, Any] = {
                         "description": "이 변형의 레이아웃 구조를 설명하는 한국어 한 구절. "
                         "예: '히어로 좌우 분할 + 우측 제품 프리뷰'.",
                     },
+                    "imagePrompt": {
+                        "type": "string",
+                        "description": (
+                            "이 변형을 이미지 생성기에 넣을 한 문단. "
+                            "creativeDirections[i] 의 구도·카메라·조명·무드·배경을 반영한다."
+                        ),
+                    },
                 },
-                "required": ["kind", "title", "variantLabel"],
+                "required": ["kind", "title", "variantLabel", "imagePrompt"],
                 "additionalProperties": False,
             },
         },
