@@ -136,7 +136,9 @@ export default function NewProjectPage() {
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [drafting, setDrafting] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // 시안 수·컨셉별 입력이 이 안에 있다. 접어 두면 대부분은 프롬프트 하나만 쓰고
+  // 넘어가므로, 이 서비스의 핵심 조종간이 발견되지 않는다. 기본은 펼침이다.
+  const [showAdvanced, setShowAdvanced] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draftRestored, setDraftRestored] = useState<Date | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
