@@ -2,11 +2,18 @@
 
 참고 (설치본 app.asar):
   - extractPromptFromImage : recreatePrompt + stylePrompt + analysis + tags
-  - promptBuilders.creativeDirectionForTake : 구도·카메라·조명·무드·배경을
-    시안마다 결정론적으로 갈라 같은 프롬프트에서 시각적으로 다른 장을 뽑는다.
+  - promptBuilders.creativeDirectionForTake : 시안마다 연출 축을 결정론적으로
+    갈라 같은 프롬프트에서 서로 다른 장을 뽑는다.
 
 이미지가 없어도 사용자 원문 프롬프트에서 같은 구조의 비주얼 브리프를 뽑고,
-레이아웃 단계에 장별 연출 방향을 주입한다.
+레이아웃 단계에 시안별 연출 방향을 주입한다.
+
+연출 축은 원본의 구도·카메라·조명·무드·배경을 그대로 쓰지 않는다. designgen 의
+산출물은 래스터 이미지가 아니라 토큰 기반 화면이라 카메라·조명 축이 결과에
+대응하지 않고, 무드 축은 컨셉(A·B·C)이 이미 소유한 정체성과 충돌한다. 그래서
+한 컨셉 안에서 시안을 가르는 축을 구조 축 5종 — 레이아웃·밀도·내비게이션·
+컴포넌트·강조 — 으로 재정의했다. 축 개수(5)와 축당 값 개수(8)는 원본과 같으므로
+순환 길이 32,768 과 비반복 보장은 그대로 유지된다.
 """
 from __future__ import annotations
 
@@ -14,59 +21,59 @@ from typing import Any
 
 VISUAL_FIELDS = ("subject", "composition", "style", "lighting", "mood")
 
-COMPOSITION_DIRECTIONS = (
-    "삼분할 비대칭 + 의도적 여백",
-    "중앙 아이코닉 실루엣",
-    "대각선 전경-후경 흐름",
-    "디테일 크롭, 주제는 온전히 읽히게",
-    "넓은 구도로 공간 맥락을 세움",
-    "전경·중경·후경이 분명한 레이어",
-    "굵은 덩어리의 포스터형 구성",
-    "한쪽 무게 + 의미 있는 보조 요소",
+LAYOUT_DIRECTIONS = (
+    "단일 컬럼 중심, 위에서 아래로 읽히는 흐름",
+    "좌측 고정 사이드 + 우측 본문 2단",
+    "상단 히어로 + 하단 카드 그리드",
+    "12칼럼을 크게 나눈 비대칭 분할",
+    "동일 비중 카드가 반복되는 균질 그리드",
+    "좁은 본문 폭 + 넓은 여백의 중앙 정렬",
+    "가로 스크롤 섹션이 섞인 혼합 배치",
+    "상단 요약 + 접이식 상세의 계층 배치",
 )
 
-CAMERA_DIRECTIONS = (
-    "아이레벨 자연 시점",
-    "살짝 낮은 시점으로 존재감",
-    "살짝 높은 시점으로 형태가 읽히게",
-    "3/4 시점으로 깊이",
-    "정면·직교에 가까운 시점",
-    "망원 압축 원근",
-    "약간 넓은 화각, 왜곡은 절제",
-    "피사체에 가까운 친밀 시점",
+DENSITY_DIRECTIONS = (
+    "핵심만 남긴 최소 밀도",
+    "한 화면 한 과업의 낮은 밀도",
+    "요약과 상세를 함께 보이는 중간 밀도",
+    "표 중심의 높은 밀도",
+    "지표를 촘촘히 모은 대시보드 밀도",
+    "여백을 크게 둔 편집형 밀도",
+    "목록은 조밀하게, 상세는 여유롭게",
+    "단계별로 나눠 노출하는 점진 밀도",
 )
 
-LIGHTING_DIRECTIONS = (
-    "부드러운 하이키 확산광",
-    "절제된 대비의 측면광",
-    "약한 역광과 깨끗한 림라이트",
-    "흐린 날 같은 넓은 조명",
-    "초점 있는 키라이트 + 낮은 필",
-    "따뜻한 키 + 차가운 앰비언트",
-    "차가운 키 + 절제된 웜 액센트",
-    "하이라이트가 통제된 스튜디오광",
+NAVIGATION_DIRECTIONS = (
+    "상단 가로 내비게이션",
+    "좌측 세로 내비게이션",
+    "하단 탭 바 중심 동선",
+    "브레드크럼 + 계층 이동",
+    "검색을 진입점으로 삼는 동선",
+    "사이드 시트·드로어로 보조 이동",
+    "단계 표시가 있는 순차 진행 동선",
+    "카드 진입 후 되돌아오는 허브-스포크 동선",
 )
 
-MOOD_DIRECTIONS = (
-    "차분하고 정밀한",
-    "자신감 있고 에너지 있는",
-    "따뜻하고 다가가기 쉬운",
-    "고급스럽고 절제된",
-    "장난스럽되 정돈된",
-    "시네마틱하지만 읽히는",
-    "신선하고 낙관적인",
-    "기술적이고 다듬어진",
+COMPONENT_DIRECTIONS = (
+    "테두리 없는 평면 카드",
+    "그림자로 층을 나눈 입체 카드",
+    "구분선 중심의 목록형",
+    "둥근 모서리의 부드러운 컨테이너",
+    "각진 모서리의 절제된 컨테이너",
+    "칩·뱃지를 적극 쓰는 태그형",
+    "아이콘 + 라벨 조합의 시각 단서형",
+    "테이블·필드가 도드라지는 폼형",
 )
 
-BACKGROUND_DIRECTIONS = (
-    "숨 쉴 공간이 큰 미니멀 배경",
-    "주제를 해치지 않는 부드러운 환경",
-    "큰 도형 몇 개의 그래픽 배경",
-    "깊이 힌트 하나인 톤 배경",
-    "맥락은 남기되 덩어리로 단순화",
-    "의도적 네거티브 스페이스",
-    "절제된 질감의 대기 배경",
-    "보조 리듬 하나인 에디토리얼 배경",
+EMPHASIS_DIRECTIONS = (
+    "단일 주요 동작 버튼에 시선 집중",
+    "숫자·지표를 가장 크게",
+    "키비주얼을 앵커로 삼는 강조",
+    "제목 타이포그래피로 위계 생성",
+    "색 대비로 핵심 영역 구분",
+    "여백 크기로 위계 생성",
+    "상태 색(성공·경고)으로 주의 유도",
+    "순서 번호로 시선 흐름 고정",
 )
 
 PROMPT_EXTRACT_VISUAL = (
@@ -123,14 +130,14 @@ def _mixed_radix(index: int, lengths: list[int]) -> list[int]:
 
 
 def creative_direction_for(seed: str, take_index: int) -> str:
-    """시안 번호마다 구도·카메라·조명·무드·배경을 갈라 준다."""
+    """시안 번호마다 레이아웃·밀도·내비게이션·컴포넌트·강조를 갈라 준다."""
     take = max(1, int(take_index))
     sets = [
-        COMPOSITION_DIRECTIONS,
-        CAMERA_DIRECTIONS,
-        LIGHTING_DIRECTIONS,
-        MOOD_DIRECTIONS,
-        BACKGROUND_DIRECTIONS,
+        LAYOUT_DIRECTIONS,
+        DENSITY_DIRECTIONS,
+        NAVIGATION_DIRECTIONS,
+        COMPONENT_DIRECTIONS,
+        EMPHASIS_DIRECTIONS,
     ]
     cycle = 1
     for group in sets:
@@ -140,11 +147,11 @@ def creative_direction_for(seed: str, take_index: int) -> str:
     combo = (offset + (take - 1) * stride) % cycle
     indexes = _mixed_radix(combo, [len(group) for group in sets])
     return (
-        f"구도: {COMPOSITION_DIRECTIONS[indexes[0]]}; "
-        f"카메라: {CAMERA_DIRECTIONS[indexes[1]]}; "
-        f"조명: {LIGHTING_DIRECTIONS[indexes[2]]}; "
-        f"무드: {MOOD_DIRECTIONS[indexes[3]]}; "
-        f"배경: {BACKGROUND_DIRECTIONS[indexes[4]]}"
+        f"레이아웃: {LAYOUT_DIRECTIONS[indexes[0]]}; "
+        f"밀도: {DENSITY_DIRECTIONS[indexes[1]]}; "
+        f"내비게이션: {NAVIGATION_DIRECTIONS[indexes[2]]}; "
+        f"컴포넌트: {COMPONENT_DIRECTIONS[indexes[3]]}; "
+        f"강조: {EMPHASIS_DIRECTIONS[indexes[4]]}"
     )
 
 

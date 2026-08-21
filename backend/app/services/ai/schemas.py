@@ -248,7 +248,7 @@ LAYOUTS_SCHEMA: dict[str, Any] = {
                         "type": "string",
                         "description": (
                             "이 변형을 이미지 생성기에 넣을 한 문단. "
-                            "creativeDirections[i] 의 구도·카메라·조명·무드·배경을 반영한다."
+                            "creativeDirections[i] 의 레이아웃·밀도·내비게이션·컴포넌트·강조를 반영한다."
                         ),
                     },
                 },

@@ -528,6 +528,25 @@ async def _run_fake(
     return concept_sets, layouts_by_concept, False
 
 
+def _direction_seed(gen: Generation, project: Project) -> str:
+    """시안 연출 방향을 가르는 시드.
+
+    프로젝트명·요건만으로 시드를 만들면 같은 프로젝트를 몇 번을 다시 생성해도
+    연출 조합이 동일해 "다시 뽑기"가 동작하지 않는다. generation.id 를 섞어
+    실행마다 시작점을 옮긴다(원본 코덱스 이미지 생성기도 job.id 를 섞는다).
+
+    단, 무차감 재시도는 원본의 input_snapshot 을 그대로 물려받으므로 여기서
+    복원된 시드가 쓰이고 원본과 같은 연출이 재현된다 — 재시도는 같은 시안을
+    다시 만들어 보는 것이지 다른 시안을 뽑는 것이 아니다.
+    """
+    stored = (gen.input_snapshot or {}).get("directionSeed")
+    if isinstance(stored, str) and stored:
+        return stored
+    return "\n".join(
+        [project.name or "", project.requirements_text or "", gen.id]
+    )
+
+
 async def _run_real(
     gen, project, concepts, variants, ds_mode, screen, screen_title,
     concept_briefs, provider_name, db, requirements: str | None = None,
@@ -545,11 +564,12 @@ async def _run_real(
     analysis["projectName"] = project.name or ""
     brief = normalize_visual_brief(analysis)
     analysis = apply_visual_brief(analysis, brief)
-    seed = f"{project.name}\n{project.requirements_text or ''}"
+    seed = _direction_seed(gen, project)
     directions = creative_directions_for(seed, variants)
     analysis["creativeDirections"] = directions
     snap = dict(gen.input_snapshot or {})
     snap["visualBrief"] = brief
+    snap["directionSeed"] = seed
     snap["creativeDirections"] = directions
     gen.input_snapshot = snap
     if concept_briefs:
