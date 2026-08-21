@@ -243,6 +243,19 @@ export async function request<T>(
   }
 
   if (!res.ok) {
+    if (res.status === 429) {
+      let detail = tStored("errors.tooManyRequests");
+      const contentType = res.headers.get("content-type") ?? "";
+      if (contentType.includes("json")) {
+        try {
+          const data = await res.json();
+          if (typeof data?.detail === "string") detail = data.detail;
+        } catch {
+          /* 본문이 JSON 이 아니면 기본 문구를 쓴다. */
+        }
+      }
+      throw new ApiError(429, detail);
+    }
     // 응답이 JSON 이 아니면 API 서버가 아니라 정적 호스팅·프록시가 답한 것이다
     // (예: 백엔드 미배포 상태에서 /api/** 가 404 HTML 로 떨어지는 경우).
     // 이때 상태 코드만 보여주면 원인을 알 수 없으므로 무엇이 문제인지 밝힌다.

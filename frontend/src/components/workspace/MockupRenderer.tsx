@@ -1,6 +1,8 @@
 "use client";
 
 import { CSSProperties } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import type { TranslateVars } from "@/lib/i18n";
 import type { DesignTokens, Mockup } from "@/lib/types";
 
 /**
@@ -62,6 +64,7 @@ export function MockupRenderer({
   onEnterChild,
   fallback,
 }: Props) {
+  const { t } = useI18n();
   const ctx: RenderContext = {
     variant: mockup.index,
     projectName,
@@ -69,6 +72,7 @@ export function MockupRenderer({
     onSelect,
     onEnterChild,
     fallback: fallback ?? mockup.isFallback,
+    t,
   };
 
   switch (mockup.kind) {
@@ -95,6 +99,7 @@ interface RenderContext {
   onSelect?: (chain: SelectionChain) => void;
   onEnterChild?: () => void;
   fallback: boolean;
+  t: (key: string, vars?: TranslateVars) => string;
 }
 
 // ── 공통 스타일 ────────────────────────────────────────────────
@@ -314,7 +319,7 @@ function ContentSlot({
         fontWeight: "var(--ds-font-weight-medium)" as unknown as number,
       }}
     >
-      {ctx.fallback ? `${label} (Placeholder)` : label}
+      {ctx.fallback ? `${label}${ctx.t("canvas.placeholderSuffix")}` : label}
     </div>
   );
 }
@@ -350,12 +355,16 @@ function TopBar({ ctx, title }: { ctx: RenderContext; title: string }) {
           alignItems: "center",
         }}
       >
-        {["Product", "Pricing", "Docs"].map((n) => (
+        {[
+          ctx.t("canvas.navProduct"),
+          ctx.t("canvas.navPricing"),
+          ctx.t("canvas.navDocs"),
+        ].map((n) => (
           <span key={n} style={muted}>
             {n}
           </span>
         ))}
-        <button style={btnPrimary}>Get started</button>
+        <button style={btnPrimary}>{ctx.t("canvas.getStarted")}</button>
       </nav>
     </Sel>
   );
@@ -450,7 +459,7 @@ function CtaRow({
       }}
     >
       <Sel ctx={ctx} type="Button · Primary" path={["Page", "CTA"]} refs={buttonRefs}>
-        <button style={btnPrimary}>Start free →</button>
+        <button style={btnPrimary}>{ctx.t("canvas.ctaStartFree")}</button>
       </Sel>
       <Sel
         ctx={ctx}
@@ -458,7 +467,7 @@ function CtaRow({
         path={["Page", "CTA"]}
         refs={buttonRefs}
       >
-        <button style={btnSecondary}>Watch demo</button>
+        <button style={btnSecondary}>{ctx.t("canvas.ctaWatchDemo")}</button>
       </Sel>
     </div>
   );
@@ -474,10 +483,10 @@ function FeatureCards({
   withIcon?: boolean;
 }) {
   const features = [
-    { t: "Tokens", d: "W3C DTCG 표준 JSON 으로 즉시 Export" },
-    { t: "Realtime", d: "500ms 이내 모든 시안에 반영" },
-    { t: "MCP", d: "Cursor·Claude Code 에서 직접 참조" },
-    { t: "Figma", d: "Frame + Variables 자동 매핑" },
+    { t: ctx.t("canvas.featTokensTitle"), d: ctx.t("canvas.featTokensDesc") },
+    { t: ctx.t("canvas.featRealtimeTitle"), d: ctx.t("canvas.featRealtimeDesc") },
+    { t: ctx.t("canvas.featMcpTitle"), d: ctx.t("canvas.featMcpDesc") },
+    { t: ctx.t("canvas.featFigmaTitle"), d: ctx.t("canvas.featFigmaDesc") },
   ].slice(0, Math.max(2, columns));
 
   return (
@@ -522,10 +531,10 @@ function FeatureCards({
 
 function MetricCards({ ctx, columns }: { ctx: RenderContext; columns: number }) {
   const metrics = [
-    { l: "Active Users", v: "12,438", d: "+8.2%" },
-    { l: "Revenue", v: "$94,210", d: "+12.4%" },
-    { l: "Conversion", v: "3.42%", d: "-0.4%" },
-    { l: "Retention", v: "78.1%", d: "+1.1%" },
+    { l: ctx.t("canvas.metricActiveUsers"), v: "12,438", d: "+8.2%" },
+    { l: ctx.t("canvas.metricRevenue"), v: "$94,210", d: "+12.4%" },
+    { l: ctx.t("canvas.metricConversion"), v: "3.42%", d: "-0.4%" },
+    { l: ctx.t("canvas.metricRetention"), v: "78.1%", d: "+1.1%" },
   ];
   return (
     <div
@@ -583,7 +592,7 @@ function TrendChart({ ctx, height = 120 }: { ctx: RenderContext; height?: number
             marginBottom: "var(--ds-space-4)",
           }}
         >
-          Revenue trend
+          {ctx.t("canvas.revenueTrend")}
         </div>
         <Sel ctx={ctx} type="Chart · Area" path={["Page", "Chart", "Area"]} refs={chartRefs}>
         <svg viewBox="0 0 400 120" style={{ width: "100%", height }}>
@@ -609,10 +618,10 @@ function TrendChart({ ctx, height = 120 }: { ctx: RenderContext; height?: number
 
 function SourceBreakdown({ ctx }: { ctx: RenderContext }) {
   const rows = [
-    { l: "Organic", v: 58 },
-    { l: "Direct", v: 22 },
-    { l: "Referral", v: 12 },
-    { l: "Social", v: 8 },
+    { l: ctx.t("canvas.sourceOrganic"), v: 58 },
+    { l: ctx.t("canvas.sourceDirect"), v: 22 },
+    { l: ctx.t("canvas.sourceReferral"), v: 12 },
+    { l: ctx.t("canvas.sourceSocial"), v: 8 },
   ];
   return (
     <Sel ctx={ctx} type="Card · Breakdown" path={["Page", "Sources"]} refs={cardRefs}>
@@ -623,7 +632,7 @@ function SourceBreakdown({ ctx }: { ctx: RenderContext }) {
             marginBottom: "var(--ds-space-4)",
           }}
         >
-          Top sources
+          {ctx.t("canvas.topSources")}
         </div>
         {rows.map((row) => (
           <div key={row.l} style={{ marginBottom: "var(--ds-space-3)" }}>
@@ -667,7 +676,7 @@ function DataTable({ ctx, rows = 6 }: { ctx: RenderContext; rows?: number }) {
     name: ["Acme Corp", "Globex", "Initech", "Umbrella", "Stark", "Wayne"][i % 6],
     plan: ["Pro", "Team", "Free"][i % 3],
     amount: `$${(1200 + i * 317).toLocaleString()}`,
-    status: i % 4 === 0 ? "Pending" : "Active",
+    active: i % 4 !== 0,
   }));
   return (
     <Sel ctx={ctx} type="Table" path={["Page", "Table"]} refs={cardRefs}>
@@ -683,10 +692,10 @@ function DataTable({ ctx, rows = 6 }: { ctx: RenderContext; rows?: number }) {
             color: "var(--ds-color-text-muted)",
           }}
         >
-          <span>Account</span>
-          <span>Plan</span>
-          <span>Amount</span>
-          <span>Status</span>
+          <span>{ctx.t("canvas.colAccount")}</span>
+          <span>{ctx.t("canvas.colPlan")}</span>
+          <span>{ctx.t("canvas.colAmount")}</span>
+          <span>{ctx.t("canvas.colStatus")}</span>
         </div>
         {data.map((r, i) => (
           <div
@@ -712,13 +721,13 @@ function DataTable({ ctx, rows = 6 }: { ctx: RenderContext; rows?: number }) {
                 borderRadius: "999px",
                 fontSize: "var(--ds-font-size-sm)",
                 background:
-                  r.status === "Active"
+                  r.active
                     ? "var(--ds-color-success)"
                     : "var(--ds-color-warning)",
                 color: "white",
               }}
             >
-              {r.status}
+              {ctx.t(r.active ? "canvas.statusActive" : "canvas.statusPending")}
             </span>
           </div>
         ))}
@@ -749,9 +758,9 @@ function FilterBar({ ctx }: { ctx: RenderContext }) {
             fontSize: "var(--ds-font-size-sm)",
           }}
         >
-          검색어를 입력하세요
+          {ctx.t("canvas.searchPlaceholder")}
         </div>
-        {["전체", "활성", "대기"].map((f, i) => (
+        {[ctx.t("canvas.all"), ctx.t("canvas.active"), ctx.t("canvas.pending")].map((f, i) => (
           <div
             key={f}
             style={{
@@ -771,6 +780,15 @@ function FilterBar({ ctx }: { ctx: RenderContext }) {
         ))}
       </div>
     </Sel>
+  );
+}
+
+function isEmailFieldLabel(label: string, t: RenderContext["t"]): boolean {
+  const lower = label.toLowerCase();
+  return (
+    label.includes("메일") ||
+    lower.includes("email") ||
+    label === t("canvas.email")
   );
 }
 
@@ -805,9 +823,7 @@ function FormFields({ ctx, fields }: { ctx: RenderContext; fields: string[] }) {
               color: "var(--ds-color-text-muted)",
             }}
           >
-            {l.includes("메일") || l.toLowerCase().includes("email")
-              ? "you@company.com"
-              : "••••••••"}
+            {isEmailFieldLabel(l, ctx.t) ? "you@company.com" : "••••••••"}
           </div>
         </Sel>
       ))}
@@ -860,26 +876,26 @@ function MainScreen({ ctx }: { ctx: RenderContext }) {
         }}
       >
         <div style={{ ...pad, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div style={{ ...muted, letterSpacing: "0.18em" }}>TYPE / COLOR</div>
+          <div style={{ ...muted, letterSpacing: "0.18em" }}>{ctx.t("canvas.labelTypeColor")}</div>
           <div>
             <Heading ctx={ctx} size="72px">
               {title}
             </Heading>
             <p style={{ ...muted, marginTop: "var(--ds-space-4)", maxWidth: 360 }}>
-              타이포와 여백으로 방향을 잡는다.
+              {ctx.t("canvas.typeDirection")}
             </p>
           </div>
           <div>
             <Heading ctx={ctx} size="var(--ds-font-size-lg)">
-              Aa 가나다
+              {ctx.t("canvas.typeSample")}
             </Heading>
             <p style={{ marginTop: "var(--ds-space-2)", color: "var(--ds-color-text-muted)" }}>
-              Regular · Medium · Bold
+              {ctx.t("canvas.typeWeights")}
             </p>
           </div>
         </div>
         <div style={{ background: "var(--ds-color-primary)", padding: "var(--ds-space-6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-          <ContentSlot ctx={ctx} label="컬러 필드" height={220} />
+          <ContentSlot ctx={ctx} label={ctx.t("canvas.slotColorField")} height={220} />
           <div style={{ marginTop: "var(--ds-space-4)" }}>
             <PaletteRow ctx={ctx} />
           </div>
@@ -903,14 +919,14 @@ function MainScreen({ ctx }: { ctx: RenderContext }) {
             "radial-gradient(circle at 50% 40%, var(--ds-color-surface), var(--ds-color-bg))",
         }}
       >
-        <div style={{ ...muted, letterSpacing: "0.28em" }}>CONCEPT</div>
+        <div style={{ ...muted, letterSpacing: "0.28em" }}>{ctx.t("canvas.labelConcept")}</div>
         <div style={{ marginTop: "var(--ds-space-6)" }}>
           <Heading ctx={ctx} size="80px" align="center">
             {title}
           </Heading>
         </div>
         <p style={{ ...muted, marginTop: "var(--ds-space-4)", letterSpacing: "0.12em" }}>
-          무드 · 톤 · 방향
+          {ctx.t("canvas.moodTone")}
         </p>
         <div style={{ margin: "var(--ds-space-8) auto 0", maxWidth: 360 }}>
           <PaletteRow ctx={ctx} />
@@ -922,14 +938,14 @@ function MainScreen({ ctx }: { ctx: RenderContext }) {
   if (v === 3) {
     return (
       <div style={{ ...page, minHeight: "100%" }}>
-        <ContentSlot ctx={ctx} label="키비주얼" height={420} radius="0" />
+        <ContentSlot ctx={ctx} label={ctx.t("canvas.slotKeyVisual")} height={420} radius="0" />
         <div style={{ ...pad, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "var(--ds-space-6)" }}>
           <div>
             <Heading ctx={ctx} size="56px">
               {title}
             </Heading>
             <p style={{ ...muted, marginTop: "var(--ds-space-2)" }}>
-              에디토리얼 키비주얼
+              {ctx.t("canvas.editorialKeyVisual")}
             </p>
           </div>
           <div style={{ width: 220 }}>
@@ -954,14 +970,14 @@ function MainScreen({ ctx }: { ctx: RenderContext }) {
             justifyContent: "space-between",
           }}
         >
-          <div style={{ letterSpacing: "0.2em", fontSize: 12, opacity: 0.8 }}>FIELD</div>
+          <div style={{ letterSpacing: "0.2em", fontSize: 12, opacity: 0.8 }}>{ctx.t("canvas.labelField")}</div>
           <Heading ctx={ctx} size="48px">
             {title}
           </Heading>
         </div>
         <div style={{ ...pad, flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <PaletteRow ctx={ctx} />
-          <ContentSlot ctx={ctx} label="대표 비주얼" height={280} />
+          <ContentSlot ctx={ctx} label={ctx.t("canvas.slotHeroVisual")} height={280} />
         </div>
       </div>
     );
@@ -969,7 +985,7 @@ function MainScreen({ ctx }: { ctx: RenderContext }) {
 
   return (
     <div style={{ ...page, position: "relative", minHeight: "100%" }}>
-      <ContentSlot ctx={ctx} label="키비주얼" height="100%" radius="0" />
+      <ContentSlot ctx={ctx} label={ctx.t("canvas.slotKeyVisual")} height="100%" radius="0" />
       <div
         style={{
           position: "absolute",
@@ -982,7 +998,7 @@ function MainScreen({ ctx }: { ctx: RenderContext }) {
             "linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--ds-color-bg) 88%, transparent))",
         }}
       >
-        <div style={{ ...muted, letterSpacing: "0.2em" }}>CONCEPT POSTER</div>
+        <div style={{ ...muted, letterSpacing: "0.2em" }}>{ctx.t("canvas.labelPoster")}</div>
         <Heading ctx={ctx} size="72px">
           {title}
         </Heading>
@@ -1002,17 +1018,23 @@ function LandingScreen({ ctx }: { ctx: RenderContext }) {
   if (v === 3) {
     return (
       <div style={{ ...page, ...pad, display: "flex", gap: "var(--ds-space-6)" }}>
-        <SideNav ctx={ctx} items={["홈", "기능", "가격", "문서", "블로그"]} />
+        <SideNav ctx={ctx} items={[
+            ctx.t("canvas.navHome"),
+            ctx.t("canvas.navFeatures"),
+            ctx.t("canvas.navPricing"),
+            ctx.t("canvas.navDocs"),
+            ctx.t("canvas.navBlog"),
+          ]} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <Heading ctx={ctx} size="var(--ds-font-size-2xl)">
-            Design Systems, generated by AI.
+            {ctx.t("canvas.landingHeadline")}
           </Heading>
           <p style={{ ...muted, marginTop: "var(--ds-space-3)" }}>
-            DS 3종 + 시안 15종을 3분 안에. Token 수정은 모든 시안에 실시간 반영된다.
+            {ctx.t("canvas.landingSub")}
           </p>
           <CtaRow ctx={ctx} />
           <div style={{ marginTop: "var(--ds-space-5)" }}>
-            <ContentSlot ctx={ctx} label="제품 스크린샷" height={200} />
+            <ContentSlot ctx={ctx} label={ctx.t("canvas.slotProductScreenshot")} height={200} />
           </div>
           <FeatureCards ctx={ctx} columns={2} />
         </div>
@@ -1027,7 +1049,7 @@ function LandingScreen({ ctx }: { ctx: RenderContext }) {
         <div style={{ padding: "var(--ds-space-4) var(--ds-space-6) 0" }}>
           <TopBar ctx={ctx} title={ctx.projectName} />
         </div>
-        <ContentSlot ctx={ctx} label="히어로 배너" height={220} radius="0" />
+        <ContentSlot ctx={ctx} label={ctx.t("canvas.slotHeroBanner")} height={220} radius="0" />
         <div style={{ ...pad }}>
           <div
             style={{
@@ -1039,14 +1061,14 @@ function LandingScreen({ ctx }: { ctx: RenderContext }) {
           >
             <div>
               <Heading ctx={ctx} size="var(--ds-font-size-2xl)">
-                모든 시안을 하나의 Token 으로.
+                {ctx.t("canvas.landingTokenHeadline")}
               </Heading>
               <p style={{ ...muted, marginTop: "var(--ds-space-3)" }}>
-                Figma·코드·MCP 까지 단일 Token 체계로 관통한다.
+                {ctx.t("canvas.landingTokenSub")}
               </p>
               <CtaRow ctx={ctx} />
             </div>
-            <ContentSlot ctx={ctx} label="Token 패널 미리보기" height={180} />
+            <ContentSlot ctx={ctx} label={ctx.t("canvas.slotTokenPreview")} height={180} />
           </div>
           <FeatureCards ctx={ctx} columns={3} withIcon={false} />
         </div>
@@ -1072,17 +1094,17 @@ function LandingScreen({ ctx }: { ctx: RenderContext }) {
             <Badge ctx={ctx} />
             <div style={{ marginTop: "var(--ds-space-4)" }}>
               <Heading ctx={ctx}>
-                Design Systems,
+                {ctx.t("canvas.landingHeadlineLine1")}
                 <br />
-                generated by AI.
+                {ctx.t("canvas.landingHeadlineLine2")}
               </Heading>
             </div>
             <p style={{ ...muted, marginTop: "var(--ds-space-3)", maxWidth: 460 }}>
-              컨셉별 DS 와 같은 장면의 컨셉 시안을 한 번에 뽑는다.
+              {ctx.t("canvas.landingConceptSub")}
             </p>
             <CtaRow ctx={ctx} />
           </div>
-          <ContentSlot ctx={ctx} label="제품 프리뷰" height={280} />
+          <ContentSlot ctx={ctx} label={ctx.t("canvas.slotProductPreview")} height={280} />
         </section>
         <FeatureCards ctx={ctx} columns={3} />
       </div>
@@ -1104,13 +1126,13 @@ function LandingScreen({ ctx }: { ctx: RenderContext }) {
           }}
         >
           <Heading ctx={ctx} size="var(--ds-font-size-2xl)">
-            AI 가 만든 디자인 시스템
+            {ctx.t("canvas.landingAiDs")}
           </Heading>
           <CtaRow ctx={ctx} />
         </section>
         <FeatureCards ctx={ctx} columns={4} withIcon={false} />
         <div style={{ marginTop: "var(--ds-space-5)" }}>
-          <ContentSlot ctx={ctx} label="갤러리 배너" height={160} />
+          <ContentSlot ctx={ctx} label={ctx.t("canvas.slotGalleryBanner")} height={160} />
         </div>
       </div>
     );
@@ -1124,9 +1146,9 @@ function LandingScreen({ ctx }: { ctx: RenderContext }) {
         <Badge ctx={ctx} />
         <div style={{ marginTop: "var(--ds-space-4)" }}>
           <Heading ctx={ctx} align="center">
-            Design Systems,
+            {ctx.t("canvas.landingHeadlineLine1")}
             <br />
-            generated by AI.
+            {ctx.t("canvas.landingHeadlineLine2")}
           </Heading>
         </div>
         <p
@@ -1137,7 +1159,7 @@ function LandingScreen({ ctx }: { ctx: RenderContext }) {
             margin: "var(--ds-space-3) auto 0",
           }}
         >
-          DS 3종 + 시안 15종을 3분 안에. Token 수정은 모든 시안에 실시간 반영된다.
+          {ctx.t("canvas.landingSub")}
         </p>
         <CtaRow ctx={ctx} align="center" />
       </section>
@@ -1168,7 +1190,7 @@ function Badge({ ctx }: { ctx: RenderContext }) {
           fontSize: "var(--ds-font-size-sm)",
         }}
       >
-        NEW · v1.0 OUT NOW
+        {ctx.t("canvas.badgeNew")}
       </span>
     </Sel>
   );
@@ -1194,14 +1216,14 @@ function DashboardScreen({ ctx }: { ctx: RenderContext }) {
             fontWeight: "var(--ds-font-weight-bold)" as unknown as number,
           }}
         >
-          Overview
+          {ctx.t("canvas.overview")}
         </div>
         <div style={{ ...muted, marginTop: "var(--ds-space-1)" }}>
-          Last updated 2 minutes ago
+          {ctx.t("canvas.lastUpdated")}
         </div>
       </div>
       <Sel ctx={ctx} type="Button · Primary" path={["Page", "Action"]} refs={buttonRefs}>
-        <button style={btnPrimary}>+ New report</button>
+        <button style={btnPrimary}>{ctx.t("canvas.newReport")}</button>
       </Sel>
     </header>
   );
@@ -1212,7 +1234,13 @@ function DashboardScreen({ ctx }: { ctx: RenderContext }) {
       <div style={{ ...page, ...pad, display: "flex", gap: "var(--ds-space-5)" }}>
         <SideNav
           ctx={ctx}
-          items={["Overview", "Reports", "Customers", "Billing", "Settings"]}
+          items={[
+            ctx.t("canvas.navOverview"),
+            ctx.t("canvas.navReports"),
+            ctx.t("canvas.navCustomers"),
+            ctx.t("canvas.navBilling"),
+            ctx.t("canvas.navSettings"),
+          ]}
           width={170}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1317,10 +1345,10 @@ function LoginScreen({ ctx }: { ctx: RenderContext }) {
             fontSize: "var(--ds-font-size-2xl)",
           }}
         >
-          {ctx.projectName.slice(0, 22)} 시작하기
+          {ctx.t("canvas.getStartedWith", { project: ctx.projectName.slice(0, 22) })}
         </div>
         <div style={{ ...muted, marginTop: "var(--ds-space-2)" }}>
-          신용카드 없이 30초만에 가입.
+          {ctx.t("canvas.signupNoCard")}
         </div>
 
         {withSocial && (
@@ -1337,14 +1365,14 @@ function LoginScreen({ ctx }: { ctx: RenderContext }) {
                 key={p}
                 style={{ ...btnSecondary, width: "100%", justifyContent: "center" }}
               >
-                Continue with {p}
+                {ctx.t("canvas.continueWith", { provider: p })}
               </button>
             ))}
           </div>
         )}
 
         <div style={{ marginTop: "var(--ds-space-5)" }}>
-          <FormFields ctx={ctx} fields={["이메일", "비밀번호"]} />
+          <FormFields ctx={ctx} fields={[ctx.t("canvas.email"), ctx.t("canvas.password")]} />
         </div>
 
         <Sel ctx={ctx} type="Button · Primary" path={["Page", "Submit"]} refs={buttonRefs}>
@@ -1356,7 +1384,7 @@ function LoginScreen({ ctx }: { ctx: RenderContext }) {
               marginTop: "var(--ds-space-4)",
             }}
           >
-            로그인
+            {ctx.t("canvas.login")}
           </button>
         </Sel>
       </div>
@@ -1386,7 +1414,7 @@ function LoginScreen({ ctx }: { ctx: RenderContext }) {
             {ctx.projectName.slice(0, 20)}
           </div>
           <p style={{ marginTop: "var(--ds-space-3)", opacity: 0.85 }}>
-            디자인 시스템부터 시안까지, 하나의 Token 으로.
+            {ctx.t("canvas.loginBrand")}
           </p>
         </div>
         <div
@@ -1440,16 +1468,16 @@ function LoginScreen({ ctx }: { ctx: RenderContext }) {
         }}
       >
         <Heading ctx={ctx} size="var(--ds-font-size-2xl)">
-          다시 오신 걸 환영합니다
+          {ctx.t("canvas.welcomeBack")}
         </Heading>
         <div style={{ marginTop: "var(--ds-space-5)" }}>
-          <FormFields ctx={ctx} fields={["이메일", "비밀번호"]} />
+          <FormFields ctx={ctx} fields={[ctx.t("canvas.email"), ctx.t("canvas.password")]} />
         </div>
         <Sel ctx={ctx} type="Button · Primary" path={["Page", "Submit"]} refs={buttonRefs}>
           <button
             style={{ ...btnPrimary, width: "100%", justifyContent: "center" }}
           >
-            로그인
+            {ctx.t("canvas.login")}
           </button>
         </Sel>
         <div
@@ -1460,8 +1488,8 @@ function LoginScreen({ ctx }: { ctx: RenderContext }) {
             justifyContent: "space-between",
           }}
         >
-          <span>비밀번호 찾기</span>
-          <span>회원가입</span>
+          <span>{ctx.t("canvas.forgotPassword")}</span>
+          <span>{ctx.t("canvas.signup")}</span>
         </div>
       </div>
     );
@@ -1472,7 +1500,7 @@ function LoginScreen({ ctx }: { ctx: RenderContext }) {
     return (
       <div style={{ ...page, display: "grid", gridTemplateColumns: "1.2fr 0.8fr" }}>
         <div style={{ padding: "var(--ds-space-5)" }}>
-          <ContentSlot ctx={ctx} label="브랜드 이미지" height="100%" />
+          <ContentSlot ctx={ctx} label={ctx.t("canvas.slotBrandImage")} height="100%" />
         </div>
         <div
           style={{
@@ -1522,10 +1550,10 @@ function ListScreen({ ctx }: { ctx: RenderContext }) {
           fontWeight: "var(--ds-font-weight-bold)" as unknown as number,
         }}
       >
-        고객 목록
+        {ctx.t("canvas.customerList")}
       </div>
       <Sel ctx={ctx} type="Button · Primary" path={["Page", "Action"]} refs={buttonRefs}>
-        <button style={btnPrimary}>+ 새로 추가</button>
+        <button style={btnPrimary}>{ctx.t("canvas.addNew")}</button>
       </Sel>
     </div>
   );
@@ -1546,17 +1574,17 @@ function ListScreen({ ctx }: { ctx: RenderContext }) {
           {Array.from({ length: 6 }, (_, i) => (
             <Sel key={i} ctx={ctx} type="Card · Item" path={["Page", "Grid", String(i)]} refs={cardRefs}>
               <div style={card}>
-                <ContentSlot ctx={ctx} label="썸네일" height={90} />
+                <ContentSlot ctx={ctx} label={ctx.t("canvas.slotThumbnail")} height={90} />
                 <div
                   style={{
                     marginTop: "var(--ds-space-3)",
                     fontWeight: "var(--ds-font-weight-bold)" as unknown as number,
                   }}
                 >
-                  항목 {i + 1}
+                  {ctx.t("canvas.itemN", { n: i + 1 })}
                 </div>
                 <div style={{ ...muted, marginTop: "var(--ds-space-1)" }}>
-                  카테고리 · 업데이트 2일 전
+                  {ctx.t("canvas.itemCategoryUpdated")}
                 </div>
               </div>
             </Sel>
@@ -1578,9 +1606,9 @@ function ListScreen({ ctx }: { ctx: RenderContext }) {
                 marginBottom: "var(--ds-space-3)",
               }}
             >
-              필터
+              {ctx.t("canvas.filter")}
             </div>
-            {["플랜", "상태", "가입일", "지역"].map((f) => (
+            {[ctx.t("canvas.plan"), ctx.t("canvas.status"), ctx.t("canvas.joinedAt"), ctx.t("canvas.region")].map((f) => (
               <div key={f} style={{ marginBottom: "var(--ds-space-3)" }}>
                 <div style={muted}>{f}</div>
                 <div
@@ -1631,25 +1659,25 @@ function ListScreen({ ctx }: { ctx: RenderContext }) {
                     fontSize: "var(--ds-font-size-sm)",
                   }}
                 >
-                  <span>항목 {i + 1}</span>
-                  <span style={{ color: "var(--ds-color-text-muted)" }}>2일 전</span>
+                  <span>{ctx.t("canvas.itemN", { n: i + 1 })}</span>
+                  <span style={{ color: "var(--ds-color-text-muted)" }}>{ctx.t("canvas.twoDaysAgo")}</span>
                 </div>
               ))}
             </div>
           </Sel>
           <Sel ctx={ctx} type="Card · Preview" path={["Page", "Preview"]} refs={cardRefs}>
             <div style={card}>
-              <ContentSlot ctx={ctx} label="미리보기" height={120} />
+              <ContentSlot ctx={ctx} label={ctx.t("canvas.slotPreview")} height={120} />
               <div
                 style={{
                   marginTop: "var(--ds-space-3)",
                   fontWeight: "var(--ds-font-weight-bold)" as unknown as number,
                 }}
               >
-                항목 1
+                {ctx.t("canvas.itemN", { n: 1 })}
               </div>
               <div style={{ ...muted, marginTop: "var(--ds-space-2)" }}>
-                선택한 항목의 요약 정보를 표시한다.
+                {ctx.t("canvas.itemSummary")}
               </div>
             </div>
           </Sel>
@@ -1671,9 +1699,9 @@ function ListScreen({ ctx }: { ctx: RenderContext }) {
             marginBottom: "var(--ds-space-4)",
           }}
         >
-          {["전체", "활성", "대기", "보관"].map((t, i) => (
+          {[ctx.t("canvas.all"), ctx.t("canvas.active"), ctx.t("canvas.pending"), ctx.t("canvas.archived")].map((tab, i) => (
             <div
-              key={t}
+              key={tab}
               style={{
                 paddingBottom: "var(--ds-space-2)",
                 borderBottom:
@@ -1683,11 +1711,11 @@ function ListScreen({ ctx }: { ctx: RenderContext }) {
                 fontSize: "var(--ds-font-size-sm)",
               }}
             >
-              {t}
+              {tab}
             </div>
           ))}
         </div>
-        {["최근 7일", "이전"].map((group) => (
+        {[ctx.t("canvas.last7Days"), ctx.t("canvas.earlier")].map((group) => (
           <div key={group} style={{ marginBottom: "var(--ds-space-5)" }}>
             <div style={{ ...muted, marginBottom: "var(--ds-space-2)" }}>{group}</div>
             <DataTable ctx={ctx} rows={3} />
@@ -1712,9 +1740,9 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
   const pad = { padding: "var(--ds-space-6)" };
 
   const fields = [
-    { l: "이름", v: "안승준" },
-    { l: "이메일", v: "demo@designgenerator.io" },
-    { l: "역할", v: "Designer · Pro" },
+    { l: ctx.t("canvas.name"), v: ctx.t("canvas.demoName") },
+    { l: ctx.t("canvas.email"), v: "demo@designgenerator.io" },
+    { l: ctx.t("canvas.role"), v: ctx.t("canvas.demoRole") },
   ];
 
   const detailCard = (
@@ -1726,10 +1754,10 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
             fontSize: "var(--ds-font-size-lg)",
           }}
         >
-          프로필
+          {ctx.t("canvas.profile")}
         </div>
         <div style={{ ...muted, marginTop: "var(--ds-space-2)", marginBottom: "var(--ds-space-5)" }}>
-          팀원에게 노출되는 정보이다.
+          {ctx.t("canvas.profileHint")}
         </div>
         {fields.map((f) => (
           <div
@@ -1750,9 +1778,9 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
         ))}
         <div style={{ marginTop: "var(--ds-space-5)", display: "flex", gap: "var(--ds-space-3)" }}>
           <Sel ctx={ctx} type="Button · Primary" path={["Page", "Save"]} refs={buttonRefs}>
-            <button style={btnPrimary}>저장</button>
+            <button style={btnPrimary}>{ctx.t("canvas.save")}</button>
           </Sel>
-          <button style={btnSecondary}>취소</button>
+          <button style={btnSecondary}>{ctx.t("canvas.cancel")}</button>
         </div>
       </div>
     </Sel>
@@ -1774,9 +1802,9 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
             />
             <div>
               <div style={{ fontWeight: "var(--ds-font-weight-bold)" as unknown as number }}>
-                안승준
+                {ctx.t("canvas.demoName")}
               </div>
-              <div style={muted}>Designer · Pro · 2026-03 가입</div>
+              <div style={muted}>{ctx.t("canvas.joinedMonth")}</div>
             </div>
           </div>
         </Sel>
@@ -1788,9 +1816,9 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
             margin: "var(--ds-space-5) 0 var(--ds-space-4)",
           }}
         >
-          {["프로필", "보안", "알림", "결제"].map((t, i) => (
+          {[ctx.t("canvas.profile"), ctx.t("canvas.security"), ctx.t("canvas.notifications"), ctx.t("canvas.billing")].map((tab, i) => (
             <div
-              key={t}
+              key={tab}
               style={{
                 paddingBottom: "var(--ds-space-2)",
                 borderBottom:
@@ -1799,7 +1827,7 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
                 fontSize: "var(--ds-font-size-sm)",
               }}
             >
-              {t}
+              {tab}
             </div>
           ))}
         </div>
@@ -1813,7 +1841,7 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
     return (
       <div style={{ ...page, ...pad }}>
         <Heading ctx={ctx} size="var(--ds-font-size-2xl)">
-          계정 설정
+          {ctx.t("canvas.accountSettings")}
         </Heading>
         <div
           style={{
@@ -1827,9 +1855,9 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
           <Sel ctx={ctx} type="Card · Meta" path={["Page", "Meta"]} refs={cardRefs}>
             <div style={card}>
               <div style={{ fontWeight: "var(--ds-font-weight-bold)" as unknown as number }}>
-                활동 요약
+                {ctx.t("canvas.activitySummary")}
               </div>
-              {["최근 로그인", "생성 횟수", "Export"].map((m) => (
+              {[ctx.t("canvas.lastLogin"), ctx.t("canvas.generationCount"), ctx.t("canvas.export")].map((m) => (
                 <div
                   key={m}
                   style={{
@@ -1855,10 +1883,10 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
     return (
       <div style={{ ...page, ...pad, maxWidth: 640, margin: "0 auto" }}>
         <Heading ctx={ctx} size="var(--ds-font-size-2xl)">
-          프로필 편집
+          {ctx.t("canvas.editProfile")}
         </Heading>
         <div style={{ marginTop: "var(--ds-space-5)" }}>
-          <FormFields ctx={ctx} fields={["이름", "이메일", "비밀번호"]} />
+          <FormFields ctx={ctx} fields={[ctx.t("canvas.name"), ctx.t("canvas.email"), ctx.t("canvas.password")]} />
         </div>
         <div
           style={{
@@ -1873,9 +1901,9 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
             justifyContent: "flex-end",
           }}
         >
-          <button style={btnSecondary}>취소</button>
+          <button style={btnSecondary}>{ctx.t("canvas.cancel")}</button>
           <Sel ctx={ctx} type="Button · Primary" path={["Page", "Save"]} refs={buttonRefs}>
-            <button style={btnPrimary}>저장</button>
+            <button style={btnPrimary}>{ctx.t("canvas.save")}</button>
           </Sel>
         </div>
       </div>
@@ -1886,18 +1914,18 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
   if (v === 4) {
     return (
       <div style={{ ...page, ...pad }}>
-        <ContentSlot ctx={ctx} label="커버 이미지" height={140} />
+        <ContentSlot ctx={ctx} label={ctx.t("canvas.slotCover")} height={140} />
         <div style={{ marginTop: "var(--ds-space-5)" }}>
           <Heading ctx={ctx} size="var(--ds-font-size-2xl)">
-            안승준
+            {ctx.t("canvas.demoName")}
           </Heading>
           <div style={{ ...muted, marginTop: "var(--ds-space-2)" }}>
-            Designer · Pro · 2026-03 가입
+            {ctx.t("canvas.joinedMonth")}
           </div>
         </div>
         <div style={{ marginTop: "var(--ds-space-5)" }}>
-          {["기본 정보", "보안", "알림 설정"].map((s, i) => (
-            <Sel key={s} ctx={ctx} type="Card · Accordion" path={["Page", s]} refs={cardRefs} style={{ marginBottom: "var(--ds-space-3)" }}>
+          {[ctx.t("canvas.basicInfo"), ctx.t("canvas.security"), ctx.t("canvas.notificationSettings")].map((section, i) => (
+            <Sel key={section} ctx={ctx} type="Card · Accordion" path={["Page", section]} refs={cardRefs} style={{ marginBottom: "var(--ds-space-3)" }}>
               <div style={{ ...card, padding: "var(--ds-space-4) var(--ds-space-5)" }}>
                 <div
                   style={{
@@ -1906,14 +1934,14 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
                     fontWeight: "var(--ds-font-weight-medium)" as unknown as number,
                   }}
                 >
-                  <span>{s}</span>
+                  <span>{section}</span>
                   <span style={{ color: "var(--ds-color-text-muted)" }}>
                     {i === 0 ? "−" : "+"}
                   </span>
                 </div>
                 {i === 0 && (
                   <div style={{ marginTop: "var(--ds-space-4)" }}>
-                    <FormFields ctx={ctx} fields={["이름", "이메일"]} />
+                    <FormFields ctx={ctx} fields={[ctx.t("canvas.name"), ctx.t("canvas.email")]} />
                   </div>
                 )}
               </div>
@@ -1928,7 +1956,7 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
   return (
     <div style={{ ...page, ...pad }}>
       <Heading ctx={ctx} size="var(--ds-font-size-2xl)">
-        계정 설정
+        {ctx.t("canvas.accountSettings")}
       </Heading>
       <div
         style={{
@@ -1940,7 +1968,13 @@ function DetailScreen({ ctx }: { ctx: RenderContext }) {
       >
         <SideNav
           ctx={ctx}
-          items={["프로필", "알림", "결제", "API Keys", "보안"]}
+          items={[
+            ctx.t("canvas.profile"),
+            ctx.t("canvas.notifications"),
+            ctx.t("canvas.billing"),
+            ctx.t("canvas.apiKeys"),
+            ctx.t("canvas.security"),
+          ]}
           width={200}
         />
         {detailCard}
