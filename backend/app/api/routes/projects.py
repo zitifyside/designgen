@@ -4,11 +4,14 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 
+from app.core.config import settings
 from app.core.deps import CurrentUser, DbDep
 from app.core.identity import get_pub
 from app.core.observability import log_event
+from app.core.security_middleware import hit_rate_limit
 from app.models.design import DesignSystem, Mockup
 from app.models.generation import GEN_KIND_SCREEN, Generation
 from app.models.project import Project
@@ -22,6 +25,7 @@ from app.schemas.project import (
     ScreenAddIn,
     ScreenOut,
 )
+from app.services.ai.autofill import suggest as autofill_suggest
 from app.services.ai.pipeline import run_screen_generation
 from app.services.ai.placeholder import SCREEN_PRESETS
 from app.services.quota import (
@@ -102,6 +106,44 @@ UNTITLED_PROJECT = "제목 없음"
 
 def _display_name(name: str | None) -> str:
     return (name or "").strip() or UNTITLED_PROJECT
+
+
+class AutofillIn(BaseModel):
+    """⚠ 개발 편의용 한시 기능 — 아래 autofill 라우트 참고."""
+
+    name: str = Field(min_length=1, max_length=120)
+
+
+@router.post("/autofill")
+async def autofill_form(body: AutofillIn, user: CurrentUser) -> dict:
+    """프로젝트명만으로 생성 폼 값을 만들어 준다.
+
+    ⚠ **한시 기능이다.** 시안 품질을 손보는 동안 매번 프롬프트·플랫폼·컨셉
+    방향성을 손으로 적는 게 번거로워 붙였다. `ENABLE_DEV_AUTOFILL=false` 로
+    끄고, 걷어낼 때는 services/ai/autofill.py 와 프론트 버튼을 함께 지운다.
+
+    프로젝트를 만들지 않고 값만 돌려준다 — 사용자가 보고 고칠 여지를 남긴다.
+    """
+    if not settings.enable_dev_autofill:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Not found"
+        )
+    # LLM 한 번을 태우는 경로다. 폼에서 연타할 수 있으므로 사람 손 속도보다는
+    # 넉넉하되 자동 반복은 막을 만큼으로 건다.
+    retry = hit_rate_limit(f"autofill|{user.id}", 3600, 60)
+    if retry is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="자동 입력이 너무 잦습니다. 잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(retry)},
+        )
+    try:
+        return await autofill_suggest(body.name.strip())
+    except Exception as exc:  # noqa: BLE001 — 편의 기능이라 원인을 그대로 알린다.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"자동 입력에 실패했습니다. {str(exc)[:200]}",
+        ) from exc
 
 
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)

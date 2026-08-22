@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     # 이미지를 어느 채널로 만들지. relay|gemini, 비우면 ai_provider 를 따라간다.
     # 한쪽만 다른 곳을 보면 "생성은 되는데 그림만 안 나오는" 상태가 된다.
     image_channel: str = ""
+    # ⚠ 개발 편의용 한시 기능 — 프로젝트명만으로 생성 폼을 채운다.
+    # 걷어낼 때는 이 값과 services/ai/autofill.py, projects 라우트의 autofill,
+    # 프론트의 자동 입력 버튼을 함께 지운다. 파이프라인 4단계와는 무관하다.
+    enable_dev_autofill: bool = True
     # Stage 4 는 완성 페이지 HTML 한 벌을 한 응답에 담는다. 출력 상한이 작은
     # 모델(예: gemini-2.0-flash = 8,192)에서는 마크업이 중간에 잘려 JSON 이
     # 깨지고, 그 실패가 "렌더 3회 실패 → 컨셉 보드" 로만 보여 원인을 못 찾는다.

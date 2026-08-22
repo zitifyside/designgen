@@ -119,3 +119,10 @@ class RelayProvider(AIProvider):
         self, layout: dict[str, Any], tokens: dict[str, Any]
     ) -> dict[str, Any]:
         return await self._call("render", layout, tokens)
+
+    # ── 파이프라인 밖 ──────────────────────────────────────────────
+    async def complete_json(
+        self, system_prompt: str, payload: dict[str, Any], schema: dict[str, Any]
+    ) -> dict[str, Any]:
+        """일회성 JSON 요청(자동 입력 등)을 사다리에 태운다."""
+        return await self._call("complete_json", system_prompt, payload, schema)

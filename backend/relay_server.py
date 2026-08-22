@@ -55,7 +55,15 @@ logger = logging.getLogger("adg.relay")
 
 #: 릴레이가 대신 불러 주는 연산. 파이프라인 4단계 그대로이며 이 밖은 거절한다.
 ALLOWED_OPS = frozenset(
-    {"analyze_input", "generate_concepts", "generate_layouts", "render"}
+    {
+        "analyze_input",
+        "generate_concepts",
+        "generate_layouts",
+        "render",
+        # 파이프라인 밖의 일회성 JSON 요청(개발용 자동 입력). 프롬프트·스키마를
+        # 호출 쪽이 들고 오지만, 부를 수 있는 이름은 여전히 이 목록에 갇힌다.
+        "complete_json",
+    }
 )
 
 TOKEN_ENV = "ADG_RELAY_TOKEN"

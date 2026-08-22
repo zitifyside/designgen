@@ -498,6 +498,15 @@ export const api = {
   },
 
   projects: {
+    /** ⚠ 개발 편의용 한시 기능 — 프로젝트명만으로 생성 폼 값을 받아 온다.
+     *  걷어낼 때 백엔드 /projects/autofill 라우트와 함께 지운다. */
+    autofill: (name: string) =>
+      request<{
+        requirements: string;
+        platform: Platform;
+        targetScreen: string;
+        concepts: ConceptBrief[];
+      }>("/projects/autofill", { method: "POST", body: JSON.stringify({ name }) }),
     list: (query?: { favorite?: boolean; status?: string; q?: string }) =>
       request<Project[]>("/projects", { query }),
     get: (id: string) => request<Project>(`/projects/${id}`),

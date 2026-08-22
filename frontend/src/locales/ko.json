@@ -236,7 +236,12 @@
     "linkInvalid": "http·https 주소만 넣을 수 있다.",
     "linkDuplicate": "이미 추가한 주소다.",
     "linkMax": "URL 은 최대 {n}개까지 넣을 수 있다.",
-    "linkNote": "※ 최대 {n}개. 서버가 주소를 직접 열어 본문 텍스트만 가져온다. 사설·내부 주소는 넣을 수 없고, 열리지 않는 주소는 건너뛴 채 생성이 계속된다."
+    "linkNote": "※ 최대 {n}개. 서버가 주소를 직접 열어 본문 텍스트만 가져온다. 사설·내부 주소는 넣을 수 없고, 열리지 않는 주소는 건너뛴 채 생성이 계속된다.",
+    "autofill": "자동 입력",
+    "autofillBusy": "채우는 중…",
+    "autofillTitle": "프로젝트명으로 아래 폼을 채운다 (개발용)",
+    "autofillNote": "※ 개발용 한시 기능. 프로젝트명만 적고 누르면 프롬프트·플랫폼·대표 장면·컨셉 3종을 Gemini 3.7 Flash 가 채운다.",
+    "autofillFailed": "자동 입력에 실패했다."
   },
   "generating": {
     "inputAnalyzerDesc": "입력 텍스트를 분석하여 컨텍스트와 대표 장면을 추출한다",

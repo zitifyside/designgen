@@ -135,6 +135,9 @@ export default function NewProjectPage() {
   const [links, setLinks] = useState<string[]>([]);
   const [linkDraft, setLinkDraft] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  // ⚠ 개발 편의용 한시 기능 — 프로젝트명만으로 아래 폼을 채운다.
+  // 걷어낼 때 이 상태·handleAutofill·버튼·api.projects.autofill 을 함께 지운다.
+  const [autofilling, setAutofilling] = useState(false);
   const [conceptMode, setConceptMode] = useState<ConceptMode>("auto");
   const [concepts, setConcepts] = useState<ConceptBrief[]>([
     { ...EMPTY_CONCEPT },
@@ -351,6 +354,36 @@ export default function NewProjectPage() {
   const removeLink = (index: number) =>
     setLinks((prev) => prev.filter((_, i) => i !== index));
 
+  /** ⚠ 개발 편의용 한시 기능 — 프로젝트명으로 나머지 폼을 채운다. */
+  const handleAutofill = async () => {
+    const seed = name.trim();
+    if (!seed || autofilling) return;
+    setAutofilling(true);
+    setError(null);
+    try {
+      const filled = await api.projects.autofill(seed);
+      setRequirements(filled.requirements);
+      setPlatform(filled.platform);
+      // 빈 문자열은 'AI 자동 선택' 이라 그대로 넣는다.
+      setScreenPreset(filled.targetScreen);
+      setCustomScreen("");
+      if (filled.concepts.length > 0) {
+        // 컨셉을 받았으면 직접 입력 모드로 옮긴다 — 채워 놓고 자동 모드로
+        // 두면 화면에는 보이는데 생성에는 안 쓰이는 값이 된다.
+        setConceptMode("manual");
+        setConcepts([
+          filled.concepts[0] ?? { ...EMPTY_CONCEPT },
+          filled.concepts[1] ?? { ...EMPTY_CONCEPT },
+          filled.concepts[2] ?? { ...EMPTY_CONCEPT },
+        ]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("projectNew.autofillFailed"));
+    } finally {
+      setAutofilling(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -470,15 +503,32 @@ export default function NewProjectPage() {
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <Card>
-          <Input
-            id="name"
-            label={t("projectNew.projectName")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("projectNew.namePlaceholder")}
-            required
-            maxLength={200}
-          />
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                id="name"
+                label={t("projectNew.projectName")}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("projectNew.namePlaceholder")}
+                required
+                maxLength={200}
+              />
+            </div>
+            {/* ⚠ 개발 편의용 한시 버튼 — 프로젝트명만으로 아래 폼을 채운다. */}
+            <button
+              type="button"
+              onClick={handleAutofill}
+              disabled={!name.trim() || autofilling}
+              title={t("projectNew.autofillTitle")}
+              className="shrink-0 rounded-lg border border-dashed border-brand-400 bg-brand-50/60 px-3 py-2 text-xs font-medium text-brand-700 transition hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {autofilling ? t("projectNew.autofillBusy") : t("projectNew.autofill")}
+            </button>
+          </div>
+          <p className="mt-1.5 text-[10px] text-ink-500">
+            {t("projectNew.autofillNote")}
+          </p>
         </Card>
 
         <Card>

@@ -236,7 +236,12 @@
     "linkInvalid": "Only http and https addresses are allowed.",
     "linkDuplicate": "That address is already added.",
     "linkMax": "You can add up to {n} URLs.",
-    "linkNote": "Up to {n}. The server opens each address and keeps only the page text. Private and internal addresses are rejected, and any address that fails to load is skipped without stopping generation."
+    "linkNote": "Up to {n}. The server opens each address and keeps only the page text. Private and internal addresses are rejected, and any address that fails to load is skipped without stopping generation.",
+    "autofill": "Auto-fill",
+    "autofillBusy": "Filling…",
+    "autofillTitle": "Fill the form below from the project name (dev only)",
+    "autofillNote": "Temporary dev helper. Type only a project name and Gemini 3.7 Flash fills the prompt, platform, target screen, and three concepts.",
+    "autofillFailed": "Auto-fill failed."
   },
   "generating": {
     "inputAnalyzerDesc": "Analyze the input text to extract context and the hero scene",
