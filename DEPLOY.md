@@ -148,6 +148,14 @@ done
   . handler 포트 레지스트리에 `designgen-relay`(19330) 로 등재돼 watchdog 이 본다.
   . ⚠ PC 가 꺼지면 생성이 멈춘다. 다만 운영 DB 도 이미 같은 PC 의 터널을 타므로
     새로 생기는 종속이 아니라 기존 종속의 연장이다.
+  . ⚠ **긴 호출은 비동기 잡으로만 오간다.** Cloudflare 는 터널 뒤 origin 이 100초
+    안에 응답하지 않으면 524 로 끊는데 Stage 3·4 는 분 단위다. 그래서 릴레이는
+    `POST /v1/stage` 로 잡을 만들고 `GET /v1/job/{id}` 로 결과를 준다. 동기
+    응답으로 되돌리면 운영에서 긴 생성이 전부 524 로 죽는다.
+  . env 변경은 `backend/scripts/set_cloudrun_env.py` 로 한다 — spec 을 통째로
+    받아 app 컨테이너 env 만 고치고 되돌려 넣는다. `gcloud run services update`
+    계열은 멀티 컨테이너에서 어느 쪽을 고칠지 애매하고 sidecar 를 떨어뜨릴 수
+    있다. 값은 인자로 적지 않고 `@secret` 로 표기해 Secrets 에서 읽는다.
 . `--max-instances 1` — SQLite 를 쓰는 동안은 인스턴스가 늘면 DB 가 갈라진다.
   Postgres 로 옮긴 뒤에 상한을 올린다.
 
