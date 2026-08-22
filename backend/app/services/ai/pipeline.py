@@ -47,6 +47,7 @@ from app.services.ai.imagegen import (
     images_enabled,
 )
 from app.services.ai.mae_ladder import MaeLadderProvider
+from app.services.ai.relay import RelayProvider
 from app.services.ai.placeholder import (
     archetype_for,
     infer_target_screen,
@@ -111,6 +112,15 @@ def resolve_provider_name(name: str | None = None) -> str:
         if claude_cli_available():
             return "claude"
         raise RuntimeError("Claude CLI 를 찾지 못했습니다.")
+    if requested == "relay":
+        # 운영 컨테이너에는 구독 CLI 가 없다. 릴레이가 CLI 가 있는 곳까지
+        # 요청을 옮긴다. 주소·토큰이 없으면 조용히 내려가지 않고 멈춘다 —
+        # 여기서 Gemini 로 새면 구독 대신 API 과금이 조용히 발생한다.
+        if not (settings.relay_url or "").strip():
+            raise RuntimeError("RELAY_URL 이 없습니다.")
+        if not (settings.relay_token or "").strip():
+            raise RuntimeError("RELAY_TOKEN 이 없습니다.")
+        return "relay"
     if requested == "gemini":
         if not has_gemini:
             raise RuntimeError("GEMINI_API_KEY 가 없습니다.")
@@ -135,6 +145,7 @@ def get_provider(name: str | None = None) -> AIProvider:
         "codex": CodexProvider,
         "antigravity": AntigravityProvider,
         "claude": ClaudeCliProvider,
+        "relay": RelayProvider,
         "mae": MaeLadderProvider,
     }
     return mapping[key]()
@@ -364,7 +375,7 @@ async def run_screen_generation(
                 layouts = await provider.generate_layouts(concept, variants)
                 layouts = _normalize_layouts(layouts, variants, screen, screen_title)
                 fallback = await _render_layouts(provider, layouts, confirmed.tokens)
-                await _fill_image_slots(db, project.id, layouts)
+                await _fill_image_slots(db, project.id, layouts, confirmed.tokens)
 
             gen.stage = "Renderer"
             gen.progress = SCREEN_STAGE_PROGRESS["Renderer"]
@@ -603,7 +614,7 @@ async def _run_real(
         )
         if await _render_layouts(provider, layouts, c["tokens"]):
             fallback = True
-        await _fill_image_slots(db, project.id, layouts)
+        await _fill_image_slots(db, project.id, layouts, c["tokens"])
         layouts_by_concept[c["conceptLabel"]] = layouts
     return concept_sets, layouts_by_concept, fallback
 
@@ -683,7 +694,9 @@ async def _render_layouts(provider: AIProvider, layouts: list[dict], tokens: dic
     return fallback_used
 
 
-async def _fill_image_slots(db, project_id: str, layouts: list[dict]) -> None:
+async def _fill_image_slots(
+    db, project_id: str, layouts: list[dict], tokens: dict | None = None
+) -> None:
     """시안 마크업의 `{{img:...}}` 자리를 실제 이미지로 바꾼다.
 
     이미지가 꺼져 있거나 생성에 실패해도 시안은 그대로 살린다 — 채우지 못한
@@ -709,7 +722,7 @@ async def _fill_image_slots(db, project_id: str, layouts: list[dict]) -> None:
             slot_id = slot.get("id", "")
             made = generated.get(slot_id)
             if not made:
-                urls[slot_id] = fallback_gradient(slot)
+                urls[slot_id] = fallback_gradient(slot, tokens)
                 continue
             data, mime = made
             asset = MockupAsset(

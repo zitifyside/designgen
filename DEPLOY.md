@@ -130,6 +130,24 @@ done
   그대로 나온다 — 이미지는 시안의 장식이지 본체가 아니다. 생성 바이트는
   `trx_mockup_asset` 에 들어가므로 **DB 용량이 늘어난다**(장당 대략 0.3~1MB).
 . 시안 이미지 테이블은 마이그레이션 `202608221000` 이 만든다 — 배포 전 `alembic upgrade head`.
+. 마에 CLI 릴레이 — `AI_PROVIDER=relay` + `RELAY_URL` + `RELAY_TOKEN`.
+  운영 컨테이너는 리눅스라 구독 CLI(`agy`·`codex`·`claude`)를 띄울 수 없다. 그래서
+  CLI 가 있는 운영자 PC 에 얇은 HTTP 문을 내고 컨테이너가 그 문을 두드린다.
+  값은 `Secrets/env/designgenerator/relay.env` 에 있다.
+
+```
+  Cloud Run(adg-api) ──HTTPS──▶ adg-llm-9f4c2a71.archiwork.io ──터널──▶ 127.0.0.1:19330
+                                                                          └─▶ agy → codex → claude
+```
+
+  . PC 기동: `powershell -NoProfile -ExecutionPolicy Bypass -File backend/scripts/start_relay.ps1`
+    (릴레이 + 터널을 함께 올리고 **공개 주소까지** 확인한다. 로컬 health 만 보면
+    터널이 죽은 채로 "정상" 이 된다.)
+  . 릴레이는 루프백에만 바인딩한다. 인터넷 노출은 터널을 통해서만 일어나고,
+    `ADG_RELAY_TOKEN` 이 없거나 32자 미만이면 **기동을 거부**한다.
+  . handler 포트 레지스트리에 `designgen-relay`(19330) 로 등재돼 watchdog 이 본다.
+  . ⚠ PC 가 꺼지면 생성이 멈춘다. 다만 운영 DB 도 이미 같은 PC 의 터널을 타므로
+    새로 생기는 종속이 아니라 기존 종속의 연장이다.
 . `--max-instances 1` — SQLite 를 쓰는 동안은 인스턴스가 늘면 DB 가 갈라진다.
   Postgres 로 옮긴 뒤에 상한을 올린다.
 

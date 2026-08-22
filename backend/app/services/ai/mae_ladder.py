@@ -60,4 +60,6 @@ class MaeLadderProvider(AIProvider):
         return await self._across("generate_layouts", concept, variants)
 
     async def render(self, layout: dict[str, Any], tokens: dict[str, Any]) -> dict[str, Any]:
-        return {}
+        # 사다리를 그대로 탄다. 여기만 no-op 으로 두면 로컬 기본 provider 에서
+        # Stage 4 가 통째로 빠져 시안이 컨셉 보드로 되돌아간다.
+        return await self._across("render", layout, tokens)

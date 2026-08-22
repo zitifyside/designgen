@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.config import settings
 from app.services.ai.base import AIProvider
 from app.services.ai.codex_cli import run_codex_json
 from app.services.ai.placeholder import archetype_for
@@ -113,11 +114,12 @@ class CodexProvider(AIProvider):
         *,
         schema: dict[str, Any],
         schema_name: str,
+        timeout: int | None = None,
     ) -> dict[str, Any]:
         """구조화된 JSON을 반환하는 단일 Codex CLI 호출."""
         del schema_name  # CLI 는 스키마 파일로 전달한다.
         return await run_codex_json(
-            system_prompt=prompt, payload=payload, schema=schema
+            system_prompt=prompt, payload=payload, schema=schema, timeout=timeout
         )
 
     # ── 파이프라인 단계 ────────────────────────────────────────────
@@ -174,5 +176,8 @@ class CodexProvider(AIProvider):
             build_render_payload(layout, tokens),
             schema=RENDER_SCHEMA,
             schema_name="mockup_render",
+            # Stage 4 만 길게 준다 — 앞 단계와 같은 상한이면 페이지를 다 쓰기
+            # 전에 끊긴다.
+            timeout=settings.codex_render_timeout_seconds,
         )
         return finalize_render(result)

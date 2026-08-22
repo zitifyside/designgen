@@ -71,10 +71,20 @@ class Settings(BaseSettings):
     codex_cli: str = ""
     codex_model: str = "gpt-5.6-terra"
     codex_timeout_seconds: int = 180
+    codex_render_timeout_seconds: int = 900
     mae_ladder: str = "antigravity,codex,claude"
     antigravity_model: str = "gemini-3.7-flash-medium"
     claude_cli_model: str = "sonnet"
     mae_cli_timeout_seconds: int = 180
+    # Stage 4 는 페이지 한 벌을 쓰느라 앞 단계보다 한 자릿수 오래 걸린다.
+    # 같은 180초를 쓰면 매번 끊겨 사다리 3채널을 다 태우고도 실패한다.
+    mae_cli_render_timeout_seconds: int = 900
+    # 릴레이 — 운영 컨테이너가 운영자 PC 의 구독 CLI 사다리를 부르는 경로.
+    # relay_timeout_seconds 는 Stage 4 한 장을 기다리는 시간이다. 짧게 잡으면
+    # 진행 중인 렌더를 끊고 Fallback 으로 떨어뜨린다.
+    relay_url: str = ""
+    relay_token: str = ""
+    relay_timeout_seconds: int = 600
 
     # 결제 (Stripe) — 스텁 처리됨
     stripe_secret_key: str = ""

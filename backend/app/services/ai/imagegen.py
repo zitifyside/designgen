@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
 from typing import Any
 
 from app.core.config import settings
@@ -48,18 +49,28 @@ PROMPT_SUFFIX = (
 )
 
 
-def fallback_gradient(slot: dict[str, Any]) -> str:
-    """생성 실패한 자리를 메울 CSS 그라디언트 data URI.
+_HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def fallback_gradient(slot: dict[str, Any], tokens: dict[str, Any] | None = None) -> str:
+    """생성 실패한 자리를 메울 그라디언트 data URI.
 
     회색 상자를 두지 않는 이유는 그것이 정확히 "목업처럼 보이는" 신호이기
-    때문이다. 컨셉 색을 쓴 부드러운 면은 사진만 못해도 시안을 깨지 않는다.
+    때문이다. 다만 아무 색이나 쓰면 더 나쁘다 — 갈색 팔레트의 시안에 보라
+    그라디언트가 박히면 사진이 없는 것보다 눈에 거슬린다. 그래서 **그 컨셉의
+    토큰 색**에서 두 색을 가져오고, 슬롯마다 방향만 바꿔 단조로움을 던다.
     """
-    seed = sum(ord(c) for c in slot.get("id", "")) % 360
+    color = (tokens or {}).get("color") or {}
+    start = color.get("primary") if _HEX.match(str(color.get("primary", ""))) else "#6B5B4E"
+    end = color.get("secondary") if _HEX.match(str(color.get("secondary", ""))) else "#3E332B"
+    # 슬롯 이름으로 각도만 가른다. 색은 컨셉이 정하고 배치는 슬롯이 정한다.
+    angle = sum(ord(c) for c in slot.get("id", "")) % 4
+    x2, y2 = ((1, 1), (1, 0), (0, 1), (1, 0.4))[angle]
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9">'
-        f'<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
-        f'<stop offset="0" stop-color="hsl({seed} 45% 62%)"/>'
-        f'<stop offset="1" stop-color="hsl({(seed + 40) % 360} 55% 38%)"/>'
+        f'<defs><linearGradient id="g" x1="0" y1="0" x2="{x2}" y2="{y2}">'
+        f'<stop offset="0" stop-color="{start}"/>'
+        f'<stop offset="1" stop-color="{end}"/>'
         f"</linearGradient></defs>"
         f'<rect width="16" height="9" fill="url(#g)"/></svg>'
     )

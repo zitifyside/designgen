@@ -92,6 +92,23 @@ def record_mae_channel(channel: str, ok: bool, reason: str = "") -> None:
         return
 
 
+def _kill_tree(pid: int) -> None:
+    """프로세스 트리를 통째로 정리한다. 실패해도 조용히 넘어간다."""
+    if sys.platform != "win32":
+        return
+    try:
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW,
+            timeout=15,
+            check=False,
+        )
+    except Exception:  # noqa: BLE001 — 정리 실패가 원래 오류를 덮으면 안 된다.
+        pass
+
+
 async def _run_hidden(argv: list[str], *, timeout: int, cwd: str | None = None) -> tuple[int, str, str]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
@@ -104,8 +121,15 @@ async def _run_hidden(argv: list[str], *, timeout: int, cwd: str | None = None) 
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
+        # proc.kill() 은 직접 자식(powershell)만 죽인다. 실제 작업은 그 아래
+        # agy·codex·claude 손자가 하고 있어서, 트리째 정리하지 않으면 죽은
+        # 요청의 CLI 가 계속 살아 구독 쿼터와 CPU 를 먹는다.
+        _kill_tree(proc.pid)
         proc.kill()
-        await proc.communicate()
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=10)
+        except (asyncio.TimeoutError, ProcessLookupError):
+            pass
         raise RuntimeError(f"CLI 가 {timeout}초 안에 끝나지 않았습니다.") from None
     out = (stdout or b"").decode("utf-8", errors="replace")
     err = (stderr or b"").decode("utf-8", errors="replace")

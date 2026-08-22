@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.config import settings
 from app.services.ai.base import AIProvider
 from app.services.ai.codex import (
     PROMPT_CONCEPT_ENGINE,
@@ -27,10 +28,15 @@ class ClaudeCliProvider(AIProvider):
     name = "claude"
 
     async def _complete(
-        self, prompt: str, payload: dict[str, Any], *, schema: dict[str, Any]
+        self,
+        prompt: str,
+        payload: dict[str, Any],
+        *,
+        schema: dict[str, Any],
+        timeout: int | None = None,
     ) -> dict[str, Any]:
         return await run_claude_json(
-            system_prompt=prompt, payload=payload, schema=schema
+            system_prompt=prompt, payload=payload, schema=schema, timeout=timeout
         )
 
     async def analyze_input(self, requirements: str, platform: str) -> dict[str, Any]:
@@ -81,5 +87,8 @@ class ClaudeCliProvider(AIProvider):
             PROMPT_RENDERER,
             build_render_payload(layout, tokens),
             schema=RENDER_SCHEMA,
+            # Stage 4 만 길게 준다. 앞 단계와 같은 상한을 쓰면 페이지를 다 쓰기
+            # 전에 끊겨 사다리 세 채널을 모두 태우고도 빈손이 된다.
+            timeout=settings.mae_cli_render_timeout_seconds,
         )
         return finalize_render(result)
