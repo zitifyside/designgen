@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
 import { DSController } from "@/components/workspace/DSController";
 import { CanvasStage } from "@/components/workspace/CanvasStage";
+import { DesignGuidePanel } from "@/components/workspace/DesignGuidePanel";
 import {
   CANVAS_HEIGHT,
   MockupCanvas,
@@ -97,6 +98,9 @@ export default function WorkspaceClient() {
     null,
   );
   const [shortcutHelp, setShortcutHelp] = useState(false);
+  // 시안 대신 디자인 시스템 가이드를 본다. 화면 축과 나란한 별개 보기라
+  // 화면 탭을 건드리지 않고 위에 얹는다.
+  const [guideOpen, setGuideOpen] = useState(false);
   // 값을 올려 CanvasStage 에 "화면에 맞춰라" 를 알린다 (맞춤 배율은 컨테이너
   // 크기를 아는 쪽에서만 계산할 수 있다).
   const [fitSignal, setFitSignal] = useState(0);
@@ -667,6 +671,20 @@ export default function WorkspaceClient() {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => setGuideOpen((v) => !v)}
+                title={t("workspace.guideHint")}
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition",
+                  guideOpen
+                    ? "border-brand-500 bg-brand-50 text-brand-700"
+                    : "border-ink-200 bg-surface text-ink-600 hover:bg-ink-50",
+                )}
+              >
+                <span aria-hidden>◧</span>
+                {t("workspace.guide")}
+              </button>
               <Button
                 size="sm"
                 variant="outline"
@@ -684,7 +702,13 @@ export default function WorkspaceClient() {
 
             {/* Canvas */}
             <div className="relative flex-1 overflow-auto p-6 scrollbar-thin">
-              {compareMode ? (
+              {guideOpen && activeDS ? (
+                <DesignGuidePanel
+                  projectId={projectId}
+                  conceptLabel={activeDS.conceptLabel}
+                  tokens={activeDS.tokens}
+                />
+              ) : compareMode ? (
                 <div className="grid gap-6 lg:grid-cols-3">
                   {designSystems.map((d) => {
                     const cm = mockups.find(

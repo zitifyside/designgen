@@ -358,7 +358,9 @@
     "hk100": "Zoom 100%",
     "hkFit": "Fit to screen",
     "kbdWheel": "Wheel",
-    "kbdDrag": "Drag"
+    "kbdDrag": "Drag",
+    "guide": "Design system",
+    "guideHint": "View the design system and component guide built from this concept's tokens"
   },
   "onboarding": {
     "s1Title": "Several concept mockups in about 3 minutes",
@@ -1282,5 +1284,11 @@
     "colStatus": "Status",
     "statusActive": "Active",
     "statusPending": "Pending"
+  },
+  "guide": {
+    "loading": "Building the guide…",
+    "loadFailed": "Could not load the guide.",
+    "contrastWarnTitle": "{n} colour(s) below body-text contrast",
+    "contrastWarnHint": "Contrast against the background is under 4.5:1. Use these on large areas or large text only, never for body copy."
   }
 }

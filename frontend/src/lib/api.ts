@@ -595,6 +595,14 @@ export const api = {
   designSystems: {
     list: (projectId: string) =>
       request<DesignSystem[]>(`/projects/${projectId}/design-systems`),
+    /** 컨셉 토큰에서 계산한 디자인 시스템·컴포넌트 가이드. 저장물이 아니라
+     *  요청할 때마다 만들어지므로 토큰을 고치면 곧바로 반영된다. */
+    guide: (projectId: string, conceptLabel: string) =>
+      request<{
+        html: string;
+        sections: string[];
+        contrast: { token: string; value: string; ratio: number; grade: string }[];
+      }>(`/projects/${projectId}/design-systems/${conceptLabel}/guide`),
     patch: (
       projectId: string,
       conceptLabel: ConceptLabel,

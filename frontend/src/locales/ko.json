@@ -358,7 +358,9 @@
     "hk100": "배율 100%",
     "hkFit": "화면에 맞춤",
     "kbdWheel": "휠",
-    "kbdDrag": "드래그"
+    "kbdDrag": "드래그",
+    "guide": "디자인 시스템",
+    "guideHint": "이 컨셉 토큰에서 만든 디자인 시스템·컴포넌트 가이드를 본다"
   },
   "onboarding": {
     "s1Title": "3분이면 여러 콘셉 시안이 나온다",
@@ -1282,5 +1284,11 @@
     "colStatus": "상태",
     "statusActive": "활성",
     "statusPending": "대기"
+  },
+  "guide": {
+    "loading": "가이드를 만드는 중…",
+    "loadFailed": "가이드를 불러오지 못했다.",
+    "contrastWarnTitle": "본문 대비가 모자란 색 {n}개",
+    "contrastWarnHint": "배경 위 대비가 4.5:1 미만이다. 넓은 면이나 큰 글자에만 쓰고 본문색으로는 쓰지 않는다."
   }
 }
