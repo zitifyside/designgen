@@ -12,7 +12,10 @@ from pathlib import Path
 import yaml
 
 GCLOUD = Path(r"C:\Users\Joon\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd")
-RELAY_WAIT_MINUTES = 25
+# 진행 중인 생성이 끝나기를 기다리는 시간. 길게 잡으면 배포가 그만큼 매달리므로,
+# 한 생성이 대개 끝나는 시간(실측 26분)보다 짧게 두고 못 기다리면 사유를 남긴 뒤
+# 사람이 다시 올리게 한다 — 배포가 30분 멈춰 있는 것보다 낫다.
+RELAY_WAIT_MINUTES = 10
 RELAY_SCRIPT = Path(__file__).resolve().parent / "start_relay.ps1"
 BACKEND = Path(__file__).resolve().parents[1]
 SERVICE = "adg-api"
@@ -23,6 +26,16 @@ IMAGE_REPO = (
     "asia-northeast3-docker.pkg.dev/design-gen-zitify/"
     "cloud-run-source-deploy/adg-api"
 )
+
+
+def say(*parts: object) -> None:
+    """진행 로그. 반드시 흘려보낸다.
+
+    맨 print 는 파일·파이프로 리다이렉트되면 블록 버퍼링이라 배포가 끝날
+    때까지 0바이트다. 그러면 지켜보는 쪽에서 "도는 중" 과 "멈춤" 이 구분되지
+    않는다 — 실제로 18분을 멈춘 줄 알고 들여다봤다.
+    """
+    print(*parts, flush=True)
 
 
 def gcloud(args: list[str], *, capture: bool = True) -> subprocess.CompletedProcess[str]:
@@ -115,33 +128,60 @@ def restart_relay() -> None:
     채로 "배포 성공" 이 되고, 그게 unknown op 으로 돌아온다.
     """
     if not RELAY_SCRIPT.is_file():
-        print("relay-restart skipped (script missing)")
+        say("relay-restart skipped (script missing)")
         return
-    print("relay-restart")
+    say("relay-restart")
+    # ⚠ 파이프로 받지 않는다. start_relay.ps1 은 uvicorn·cloudflared 를 백그라운드로
+    # 띄우는데, 그 자식들이 파이프 핸들을 물고 있으면 PowerShell 이 끝난 뒤에도
+    # `subprocess.run` 이 타임아웃까지 매달린다 — 실제로 배포가 18분을 더 걸렸고,
+    # 그동안 아무 출력도 없어 멈춘 것처럼 보였다. 파일로 받으면 핸들 상속과
+    # 무관하게 프로세스 종료만 기다린다.
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".log", delete=False, encoding="utf-8"
+    ) as handle:
+        log_path = Path(handle.name)
     try:
-        completed = subprocess.run(
-            [
-                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                "-File", str(RELAY_SCRIPT), "-Restart",
-                "-WaitMinutes", str(RELAY_WAIT_MINUTES),
-            ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            # 대기 시간 + 기동 시간. 스크립트가 먼저 포기하도록 여유를 준다.
-            timeout=RELAY_WAIT_MINUTES * 60 + 120,
-            check=False,
-        )
-    except Exception as exc:  # noqa: BLE001
-        print(f"relay-restart failed: {type(exc).__name__}")
+        with log_path.open("w", encoding="utf-8") as sink:
+            completed = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(RELAY_SCRIPT), "-Restart",
+                    "-WaitMinutes", str(RELAY_WAIT_MINUTES),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=sink,
+                stderr=subprocess.STDOUT,
+                # 대기 시간 + 기동 시간. 스크립트가 먼저 포기하도록 여유를 준다.
+                timeout=RELAY_WAIT_MINUTES * 60 + 120,
+                check=False,
+            )
+        lines = [
+            line.strip()
+            for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+            if line.strip()
+        ]
+    except subprocess.TimeoutExpired:
+        say(f"relay-restart TIMEOUT ({RELAY_WAIT_MINUTES}분 초과) — 옛 코드가 남아 있다.")
+        say("  잡이 끝난 뒤 start_relay.ps1 -Restart 를 직접 돌려라.")
         return
-    lines = (completed.stdout or "").strip().splitlines()
-    print("relay:", " | ".join(lines[-2:]) if lines else f"exit {completed.returncode}")
+    except Exception as exc:  # noqa: BLE001
+        say(f"relay-restart failed: {type(exc).__name__}")
+        return
+    finally:
+        # 백그라운드로 뜬 uvicorn·cloudflared 가 이 파일 핸들을 물려받아 아직
+        # 쥐고 있을 수 있다(Windows 는 사용 중인 파일을 못 지운다). 임시 로그
+        # 하나 못 지웠다고 배포를 실패로 만들지 않는다 — OS 가 알아서 치운다.
+        try:
+            log_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    say("relay:", " | ".join(lines[-2:]) if lines else f"exit {completed.returncode}")
     if completed.returncode != 0:
-        why = (completed.stderr or "").strip().splitlines()
-        print("relay-restart FAILED — 옛 코드가 남아 있다. 잡이 끝난 뒤 다시 올려라:")
-        print("  ", " | ".join((why or lines)[-3:]) or f"exit {completed.returncode}")
+        # 조용히 넘어가면 옛 코드가 남은 채 "배포 성공" 이 되고, 그게 나중에
+        # unknown op 으로 돌아온다.
+        say("relay-restart FAILED — 옛 코드가 남아 있다. 잡이 끝난 뒤 다시 올려라:")
+        say("  ", " | ".join(lines[-3:]) or f"exit {completed.returncode}")
 
 
 def main() -> int:
@@ -167,9 +207,9 @@ def main() -> int:
             "value(status.latestReadyRevisionName)",
         ]
     ).stdout.strip()
-    print("prev", previous)
+    say("prev", previous)
     if not skip_build:
-        print("build-start")
+        say("build-start")
         gcloud(
             [
                 "builds",
@@ -182,7 +222,7 @@ def main() -> int:
             ],
             capture=False,
         )
-    print("replace-app-image")
+    say("replace-app-image")
     spec = set_app_image(export_spec(), image)
     replace(spec)
     for _ in range(60):
@@ -212,7 +252,7 @@ def main() -> int:
             item.get("name")
             for item in data["spec"]["template"]["spec"]["containers"]
         ]
-        print("wait", "ncont", len(names), "ready", ready, "Ready", conds.get("Ready"))
+        say("wait", "ncont", len(names), "ready", ready, "Ready", conds.get("Ready"))
         if (
             conds.get("Ready") == "True"
             and len(names) == 2
@@ -220,11 +260,11 @@ def main() -> int:
             and ready
             and ready != previous
         ):
-            print("ready", ready)
+            say("ready", ready)
             restart_relay()
             return 0
         time.sleep(5)
-    print("revision-not-ready", file=sys.stderr)
+    print("revision-not-ready", file=sys.stderr, flush=True)
     return 1
 
 
