@@ -35,6 +35,7 @@ PowerShell 도 `D:\\` 드라이브도 그 로그인 세션도 없다. 그래서 
 from __future__ import annotations
 
 import asyncio
+import base64
 import hmac
 import logging
 import os
@@ -45,6 +46,8 @@ from typing import Any
 from fastapi import Body, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.services.ai.image_cli import available_channels as image_channels
+from app.services.ai.image_cli import generate_image
 from app.services.ai.mae_cli import mae_channels_available
 from app.services.ai.mae_ladder import MaeLadderProvider
 
@@ -81,6 +84,11 @@ class StageRequest(BaseModel):
     args: list[Any] = Field(default_factory=list, description="그 연산의 위치 인자")
 
 
+class ImageRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4000)
+    aspect: str = Field(default="16:9", max_length=10)
+
+
 app = FastAPI(
     title="ADG mae relay",
     docs_url=None,          # 문서 페이지를 열어 둘 이유가 없다.
@@ -95,7 +103,12 @@ async def _check_startup() -> None:
     channels = mae_channels_available()
     if not channels:
         logger.warning("사용 가능한 마에 채널이 없다 — 요청은 전부 503 이 된다.")
-    logger.info("relay ready. channels=%s", ",".join(channels) or "(none)")
+    images = image_channels()
+    logger.info(
+        "relay ready. text=%s image=%s",
+        ",".join(channels) or "(none)",
+        ",".join(images) or "(none)",
+    )
 
 
 def _authorize(authorization: str | None) -> None:
@@ -113,13 +126,21 @@ def _authorize(authorization: str | None) -> None:
 @app.get("/health")
 async def health() -> dict[str, Any]:
     """터널·기동 확인용. 토큰 없이 열어 두되 아무것도 흘리지 않는다."""
-    return {"status": "ok", "channels": len(mae_channels_available())}
+    return {
+        "status": "ok",
+        "channels": len(mae_channels_available()),
+        "imageChannels": len(image_channels()),
+    }
 
 
 @app.get("/v1/status")
 async def relay_status(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     _authorize(authorization)
-    return {"status": "ok", "channels": mae_channels_available()}
+    return {
+        "status": "ok",
+        "channels": mae_channels_available(),
+        "imageChannels": image_channels(),
+    }
 
 
 def _sweep_jobs() -> None:
@@ -190,6 +211,80 @@ async def run_stage(
     # 넘지 않는다. 태스크 참조를 잡에 남겨 GC 가 중간에 걷어가지 않게 한다.
     _jobs[job_id]["task"] = asyncio.create_task(_run_job(job_id, body.op, body.args))
     logger.info("job %s (%s) started", job_id, body.op)
+    return {"jobId": job_id, "status": "running"}
+
+
+async def _run_image_job(job_id: str, prompt: str, aspect: str) -> None:
+    job = _jobs[job_id]
+    started = time.monotonic()
+    try:
+        made = await asyncio.wait_for(
+            generate_image(prompt, aspect), timeout=JOB_MAX_SECONDS
+        )
+    except Exception as exc:  # noqa: BLE001 — 실패도 잡의 정상적인 끝이다.
+        job.update(
+            status="failed",
+            error=str(exc)[:2000],
+            finishedAt=time.monotonic(),
+            elapsedSeconds=round(time.monotonic() - started, 2),
+        )
+        logger.warning("image job %s failed: %s", job_id, str(exc)[:300])
+        return
+
+    elapsed = round(time.monotonic() - started, 2)
+    if made is None:
+        # 채널을 다 돌았는데 그림이 없다. 호출 쪽이 그라디언트로 대신하도록
+        # 실패로 알린다 — 여기서 조용히 빈 결과를 주면 원인이 사라진다.
+        job.update(
+            status="failed",
+            error="모든 이미지 채널이 실패했습니다.",
+            finishedAt=time.monotonic(),
+            elapsedSeconds=elapsed,
+        )
+        logger.warning("image job %s produced nothing in %ss", job_id, elapsed)
+        return
+
+    data, mime = made
+    job.update(
+        status="done",
+        # JSON 으로 오가야 하므로 base64 로 싣는다. 장당 1MB 안팎이라
+        # 인코딩 부담보다 별도 전송 경로를 만드는 복잡도가 크다.
+        result={"mime": mime, "base64": base64.b64encode(data).decode("ascii")},
+        finishedAt=time.monotonic(),
+        elapsedSeconds=elapsed,
+    )
+    logger.info("image job %s ok in %ss (%d bytes)", job_id, elapsed, len(data))
+
+
+@app.post("/v1/image", status_code=status.HTTP_202_ACCEPTED)
+async def run_image(
+    body: ImageRequest = Body(...),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """이미지 한 장을 굽는 잡을 시작한다. 결과는 `/v1/job/{id}` 로 가져간다.
+
+    한 장이 30~60초라 100초 벽 안쪽이지만, 채널 폴백까지 겹치면 넘어간다.
+    LLM 단계와 같은 잡 구조를 쓰는 편이 안전하고 코드도 하나로 끝난다.
+    """
+    _authorize(authorization)
+    if not image_channels():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="사용 가능한 이미지 채널이 없습니다(grok·codex).",
+        )
+
+    _sweep_jobs()
+    job_id = uuid.uuid4().hex
+    _jobs[job_id] = {
+        "status": "running",
+        "op": "image",
+        "startedAt": time.monotonic(),
+        "finishedAt": 0.0,
+    }
+    _jobs[job_id]["task"] = asyncio.create_task(
+        _run_image_job(job_id, body.prompt, body.aspect)
+    )
+    logger.info("image job %s started (%s)", job_id, body.aspect)
     return {"jobId": job_id, "status": "running"}
 
 

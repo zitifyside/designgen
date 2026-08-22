@@ -10,8 +10,17 @@ Stage 4 가 돌려준 마크업에는 `{{img:hero}}` 같은 자리표시자가 �
 전체를 Fallback 으로 떨어뜨리면 멀쩡한 페이지를 컨셉 보드로 되돌리는
 꼴이 된다.
 
-채널은 Cloud Run 에서도 부를 수 있는 API 경로만 쓴다. Grok·Codex CLI 는
-운영 컨테이너에 없으므로 사다리에 넣지 않는다.
+채널은 둘이다.
+
+  · **relay** — 운영자 PC 의 구독 CLI(Grok Imagine → Codex image_gen)를
+    릴레이 너머로 부른다. 구독이라 장당 과금이 없다. LLM 단계를 릴레이로
+    넘긴 것과 같은 이유이고 같은 잡 구조를 쓴다.
+  · **gemini** — Gemini 이미지 API. 키가 필요하고 장당 과금이 붙지만
+    PC 상태와 무관하게 돈다.
+
+기본은 텍스트 provider 를 따라간다 — `AI_PROVIDER=relay` 면 이미지도 릴레이다.
+한쪽만 다른 곳을 보면 "생성은 되는데 그림만 안 나오는" 상태가 되고, 그 원인은
+로그를 뒤지기 전엔 보이지 않는다.
 """
 from __future__ import annotations
 
@@ -19,7 +28,10 @@ import asyncio
 import base64
 import logging
 import re
+import time
 from typing import Any
+
+import httpx
 
 from app.core.config import settings
 
@@ -125,6 +137,58 @@ async def _generate_gemini(prompt: str, aspect: str, model: str) -> tuple[bytes,
     raise RuntimeError("Gemini returned no image data")
 
 
+def image_channel() -> str:
+    """이미지를 어느 채널로 만들지. 비워 두면 텍스트 provider 를 따라간다."""
+    explicit = (settings.image_channel or "").strip().lower()
+    if explicit in ("relay", "gemini"):
+        return explicit
+    return "relay" if (settings.ai_provider or "").strip().lower() == "relay" else "gemini"
+
+
+async def _generate_relay(prompt: str, aspect: str) -> tuple[bytes, str]:
+    """릴레이 너머의 구독 CLI 로 한 장. 잡을 걸고 끝날 때까지 물어본다."""
+    base = (settings.relay_url or "").strip().rstrip("/")
+    if not base or not settings.relay_token:
+        raise RuntimeError("RELAY_URL·RELAY_TOKEN 이 없어 릴레이 이미지 채널을 쓸 수 없다.")
+
+    headers = {"Authorization": f"Bearer {settings.relay_token}"}
+    # 폴링 왕복은 짧게 — 길게 잡으면 Cloudflare 100초 벽에 다시 닿는다.
+    timeout = httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=10.0)
+    deadline = time.monotonic() + SLOT_TIMEOUT_SECONDS
+
+    async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
+        started = await client.post(
+            f"{base}/v1/image", json={"prompt": prompt, "aspect": aspect}
+        )
+        if started.status_code >= 400:
+            raise RuntimeError(f"릴레이 이미지 요청 실패 ({started.status_code}).")
+        job_id = started.json().get("jobId")
+        if not job_id:
+            raise RuntimeError("릴레이가 jobId 를 주지 않았다.")
+
+        while True:
+            if time.monotonic() > deadline:
+                raise RuntimeError("릴레이 이미지 생성이 제한 시간을 넘겼다.")
+            await asyncio.sleep(settings.relay_poll_seconds)
+            try:
+                polled = await client.get(f"{base}/v1/job/{job_id}")
+            except httpx.RequestError:
+                continue
+            if polled.status_code >= 400:
+                raise RuntimeError(f"릴레이 이미지 폴링 실패 ({polled.status_code}).")
+            body = polled.json()
+            state = body.get("status")
+            if state == "running":
+                continue
+            if state != "done":
+                raise RuntimeError(str(body.get("error"))[:300])
+            result = body.get("result") or {}
+            data = base64.b64decode(result.get("base64", ""))
+            if not data:
+                raise RuntimeError("릴레이가 빈 이미지를 돌려줬다.")
+            return data, result.get("mime") or "image/png"
+
+
 async def generate_slot_image(
     slot: dict[str, Any], model: str | None = None
 ) -> tuple[bytes, str] | None:
@@ -132,10 +196,16 @@ async def generate_slot_image(
     prompt = (slot.get("prompt") or "").strip()
     if not prompt:
         return None
-    chosen = model or settings.gemini_image_model
+    aspect = slot.get("aspect") or "16:9"
+    channel = image_channel()
+    chosen = "relay" if channel == "relay" else (model or settings.gemini_image_model)
     try:
+        if channel == "relay":
+            # 릴레이는 자체 폴링 deadline 을 갖는다. 여기서 또 감싸면 두 시계가
+            # 어긋나 진행 중인 잡을 먼저 끊는다.
+            return await _generate_relay(prompt, aspect)
         return await asyncio.wait_for(
-            _generate_gemini(prompt, slot.get("aspect") or "16:9", chosen),
+            _generate_gemini(prompt, aspect, chosen),
             timeout=SLOT_TIMEOUT_SECONDS,
         )
     except Exception as exc:  # noqa: BLE001 — 한 장의 실패로 시안을 버리지 않는다.
@@ -165,5 +235,9 @@ async def generate_slot_images(slots: list[dict[str, Any]]) -> dict[str, tuple[b
 
 
 def images_enabled() -> bool:
-    """이미지 생성을 시도할 수 있는 상태인지."""
-    return bool(settings.mockup_images_enabled and settings.gemini_api_key)
+    """이미지 생성을 시도할 수 있는 상태인지. 채널마다 필요한 것이 다르다."""
+    if not settings.mockup_images_enabled:
+        return False
+    if image_channel() == "relay":
+        return bool((settings.relay_url or "").strip() and settings.relay_token)
+    return bool(settings.gemini_api_key)

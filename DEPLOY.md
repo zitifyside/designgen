@@ -152,6 +152,9 @@ done
     안에 응답하지 않으면 524 로 끊는데 Stage 3·4 는 분 단위다. 그래서 릴레이는
     `POST /v1/stage` 로 잡을 만들고 `GET /v1/job/{id}` 로 결과를 준다. 동기
     응답으로 되돌리면 운영에서 긴 생성이 전부 524 로 죽는다.
+  . 이미지도 릴레이가 만든다 — `IMAGE_CHANNEL`(비우면 `AI_PROVIDER` 를 따라감).
+    `relay` 면 PC 의 Grok Imagine → Codex image_gen 을 쓰고 구독이라 장당 과금이
+    없다. `gemini` 로 두면 API 키가 필요하고 장당 과금이 붙는다.
   . env 변경은 `backend/scripts/set_cloudrun_env.py` 로 한다 — spec 을 통째로
     받아 app 컨테이너 env 만 고치고 되돌려 넣는다. `gcloud run services update`
     계열은 멀티 컨테이너에서 어느 쪽을 고칠지 애매하고 sidecar 를 떨어뜨릴 수
