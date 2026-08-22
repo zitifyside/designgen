@@ -155,6 +155,21 @@ done
   . 이미지도 릴레이가 만든다 — `IMAGE_CHANNEL`(비우면 `AI_PROVIDER` 를 따라감).
     `relay` 면 PC 의 Grok Imagine → Codex image_gen 을 쓰고 구독이라 장당 과금이
     없다. `gemini` 로 두면 API 키가 필요하고 장당 과금이 붙는다.
+  . ⚠ **릴레이 계약이 바뀌는 배포는 Cloud Run 배포와 릴레이 재기동이 한 쌍이다.**
+    릴레이는 이 PC 에서 도는 별개 프로세스라 Cloud Run 만 올리면 옛 코드가 남아
+    `unknown op: ...` 로 죽는다(2026-08-22 `complete_json` 에서 실제로 겪었다).
+    배포 스크립트가 리비전 확인 뒤 `start_relay.ps1 -Restart` 를 직접 부른다.
+  . ⚠ **재기동은 진행 중인 생성을 죽인다.** 잡 목록은 릴레이 메모리에만 있어,
+    올리는 순간 Cloud Run 은 404 를 받고 재시도를 돌기 시작한다(2026-08-22
+    배포 한 번으로 27분짜리 생성을 날렸다). 그래서 `-Restart` 는 `/health` 의
+    `runningJobs` 가 0 이 될 때까지 기다리고, 안 비면 **재기동을 거부**한다.
+    정말 끊어야 하면 `-Force` 를 명시한다.
+  . 재기동 실패는 조용히 넘어가지 않는다 — 배포는 성공으로 두되 사유를 찍는다.
+    찍지 않으면 옛 코드가 남은 채 "배포 성공" 이 되고, 그게 `unknown op` 으로
+    돌아온다(실제로 `TimeoutExpired` 가 그렇게 묻혔다).
+  . 3채널 디스패치 — `MAE_DISPATCH`(기본 `parallel`). 단건은 경주, 다건은 채널별
+    배분이다. 경주는 호출 수를 채널 수만큼 늘려 구독 세션 쿼터가 빨리 닳으므로,
+    아껴야 하면 `ladder` 로 되돌린다.
   . env 변경은 `backend/scripts/set_cloudrun_env.py` 로 한다 — spec 을 통째로
     받아 app 컨테이너 env 만 고치고 되돌려 넣는다. `gcloud run services update`
     계열은 멀티 컨테이너에서 어느 쪽을 고칠지 애매하고 sidecar 를 떨어뜨릴 수

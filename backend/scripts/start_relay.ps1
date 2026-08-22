@@ -11,7 +11,14 @@
 # 사용:  powershell -NoProfile -ExecutionPolicy Bypass -File start_relay.ps1
 #        powershell ... -File start_relay.ps1 -Restart      # 떠 있어도 다시 올린다
 
-param([switch]$Restart)
+# -Restart      : 떠 있어도 다시 올린다. 단, 진행 중인 잡이 있으면 기다린다.
+# -Force        : 진행 중인 잡이 있어도 즉시 재기동한다(생성이 죽는다).
+# -WaitMinutes  : 진행 중인 잡을 기다릴 최대 시간(기본 20분).
+param(
+    [switch]$Restart,
+    [switch]$Force,
+    [int]$WaitMinutes = 20
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -33,11 +40,34 @@ if (-not (Test-Path $SecretFile)) { throw "relay.env 없음: $SecretFile" }
 $token = ((Get-Content $SecretFile -Encoding UTF8 | Where-Object { $_ -like 'ADG_RELAY_TOKEN=*' }) -replace '^ADG_RELAY_TOKEN=', '').Trim()
 if ($token.Length -lt 32) { throw 'ADG_RELAY_TOKEN 이 없거나 32자 미만이다. 인증 없는 릴레이는 띄우지 않는다.' }
 
-function Test-RelayUp {
+function Get-RelayHealth {
     try {
         $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 5 -UseBasicParsing
-        return $r.StatusCode -eq 200
-    } catch { return $false }
+        if ($r.StatusCode -ne 200) { return $null }
+        return ($r.Content | ConvertFrom-Json)
+    } catch { return $null }
+}
+
+function Test-RelayUp { return $null -ne (Get-RelayHealth) }
+
+# 릴레이의 잡 목록은 메모리에만 있다. 진행 중인데 재기동하면 그 생성이 통째로
+# 사라지고, Cloud Run 쪽은 404 를 받아 재시도를 돌기 시작한다 — 2026-08-22 에
+# 배포 한 번으로 27분짜리 생성을 날렸다. 그래서 끝나기를 기다린다.
+function Wait-ForIdle {
+    param([int]$Minutes)
+    $deadline = (Get-Date).AddMinutes($Minutes)
+    while ($true) {
+        $h = Get-RelayHealth
+        if ($null -eq $h) { return $true }              # 이미 죽어 있다
+        $running = [int]$h.runningJobs
+        if ($running -le 0) { return $true }
+        if ((Get-Date) -gt $deadline) {
+            Write-Output "진행 중인 잡 $running 개가 ${Minutes}분 안에 끝나지 않았다."
+            return $false
+        }
+        Write-Output "진행 중인 잡 $running 개 — 대기 중 (남은 $([int]($deadline - (Get-Date)).TotalMinutes)분)"
+        Start-Sleep -Seconds 20
+    }
 }
 
 # ── 릴레이 ────────────────────────────────────────────────────────
@@ -45,6 +75,17 @@ if ((Test-RelayUp) -and -not $Restart) {
     Write-Output "relay already up on $Port"
 } else {
     if ($Restart) {
+        if (-not $Force) {
+            if (-not (Wait-ForIdle -Minutes $WaitMinutes)) {
+                throw ("진행 중인 잡 때문에 재기동을 멈춘다. 끝난 뒤 다시 돌리거나, " +
+                       "정말 끊어도 되면 -Force 를 붙여라.")
+            }
+        } else {
+            $h = Get-RelayHealth
+            if ($null -ne $h -and [int]$h.runningJobs -gt 0) {
+                Write-Output "경고: 진행 중인 잡 $([int]$h.runningJobs) 개를 끊고 재기동한다(-Force)."
+            }
+        }
         Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
             Where-Object { $_.CommandLine -like '*relay_server:app*' } |
             ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

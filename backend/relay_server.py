@@ -139,16 +139,25 @@ async def health() -> dict[str, Any]:
         "status": "ok",
         "channels": len(mae_channels_available()),
         "imageChannels": len(image_channels()),
+        # 재기동해도 되는지 밖에서 판단할 근거. 잡 목록은 메모리에만 있어
+        # 재기동하면 진행 중인 생성이 통째로 사라진다.
+        "runningJobs": sum(1 for j in _jobs.values() if j["status"] == "running"),
     }
 
 
 @app.get("/v1/status")
 async def relay_status(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     _authorize(authorization)
+    running = [
+        {"jobId": key, "op": job["op"], "elapsedSeconds": round(time.monotonic() - job["startedAt"], 1)}
+        for key, job in _jobs.items()
+        if job["status"] == "running"
+    ]
     return {
         "status": "ok",
         "channels": mae_channels_available(),
         "imageChannels": image_channels(),
+        "runningJobs": running,
     }
 
 
