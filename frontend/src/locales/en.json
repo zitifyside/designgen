@@ -163,7 +163,7 @@
     "promptHint": "Describe mood, audience, and feel in one go. Multiple concept mockups appear as a gallery.",
     "promptPlaceholder": "Example:\n\nFintech brand for an investor meeting. Navy and gold, large type, generous whitespace, trustworthy. Hero scene is the main concept board.",
     "attachments": "Attachments (optional)",
-    "attachHint": ".md·.txt·.pdf·.png·.jpg — images 20MB, documents 10MB, up to 5 files",
+    "attachHint": "Up to {f} files — .md, .txt, .pdf, .png, .jpg (images 20MB, documents 10MB)",
     "dropFiles": "Drag files here or click to upload",
     "attachNote": "※ .md·.txt·.pdf text is extracted and merged into the brief. Images record reference metadata only in v1.0 and are not used in analysis.",
     "platform": "Platform",
@@ -227,7 +227,16 @@
     "sceneDetail": "Detail",
     "presetCalmDir": "Low saturation, generous whitespace, neutral colors. Calm and trustworthy.",
     "presetBoldDir": "High saturation, bold type, deep shadows. A strong first impression.",
-    "presetWarmDir": "Pastel colors, rounded corners, warm mood. Friendly and soft."
+    "presetWarmDir": "Pastel colors, rounded corners, warm mood. Friendly and soft.",
+    "attachRemove": "Remove attachment",
+    "linkTitle": "Attach URLs",
+    "linkHint": "Add a reference site and its page text is pulled into the requirements.",
+    "linkPlaceholder": "e.g. https://www.example.com/about",
+    "linkAdd": "Add",
+    "linkInvalid": "Only http and https addresses are allowed.",
+    "linkDuplicate": "That address is already added.",
+    "linkMax": "You can add up to {n} URLs.",
+    "linkNote": "Up to {n}. The server opens each address and keeps only the page text. Private and internal addresses are rejected, and any address that fails to load is skipped without stopping generation."
   },
   "generating": {
     "inputAnalyzerDesc": "Analyze the input text to extract context and the hero scene",

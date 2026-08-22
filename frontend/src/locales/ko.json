@@ -162,8 +162,8 @@
     "prompt": "프롬프트",
     "promptHint": "무드·대상·느낌을 한 번에 적는다. 여러 콘셉 시안이 갤러리로 나온다.",
     "promptPlaceholder": "예시:\n\n투자자 미팅용 핀테크 브랜드. 네이비·골드, 큰 타이포, 여백이 넓은 신뢰감. 대표 장면은 메인 컨셉 보드.",
-    "attachments": "파일 첨부 (선택)",
-    "attachHint": ".md·.txt·.pdf·.png·.jpg — 이미지 20MB·문서 10MB, 최대 5개",
+    "attachments": "첨부 (선택)",
+    "attachHint": "파일 {f}개까지 — .md·.txt·.pdf·.png·.jpg (이미지 20MB·문서 10MB)",
     "dropFiles": "파일을 드래그하거나 클릭하여 업로드",
     "attachNote": "※ .md·.txt·.pdf 는 본문 텍스트를 추출해 요건에 합쳐 분석한다. 이미지는 v1.0 에서 참고 메타만 기록하며 분석에는 쓰이지 않는다.",
     "platform": "플랫폼",
@@ -227,7 +227,16 @@
     "sceneDetail": "상세",
     "presetCalmDir": "낮은 채도·넓은 여백·중성 컬러 중심. 차분하고 신뢰감 있는 무드.",
     "presetBoldDir": "강한 채도·굵은 타이포·진한 그림자. 임팩트 있는 첫인상.",
-    "presetWarmDir": "파스텔 컬러·둥근 모서리·따뜻한 무드. 친근하고 부드럽게."
+    "presetWarmDir": "파스텔 컬러·둥근 모서리·따뜻한 무드. 친근하고 부드럽게.",
+    "attachRemove": "첨부 제거",
+    "linkTitle": "URL 첨부",
+    "linkHint": "참고할 사이트 주소를 넣으면 본문 텍스트를 읽어 요건에 합친다.",
+    "linkPlaceholder": "예: https://www.example.co.kr/about",
+    "linkAdd": "추가",
+    "linkInvalid": "http·https 주소만 넣을 수 있다.",
+    "linkDuplicate": "이미 추가한 주소다.",
+    "linkMax": "URL 은 최대 {n}개까지 넣을 수 있다.",
+    "linkNote": "※ 최대 {n}개. 서버가 주소를 직접 열어 본문 텍스트만 가져온다. 사설·내부 주소는 넣을 수 없고, 열리지 않는 주소는 건너뛴 채 생성이 계속된다."
   },
   "generating": {
     "inputAnalyzerDesc": "입력 텍스트를 분석하여 컨텍스트와 대표 장면을 추출한다",

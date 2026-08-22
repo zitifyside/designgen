@@ -543,6 +543,12 @@ export const api = {
       request<FileUploadRecord[]>(`/projects/${projectId}/files`),
     upload: (projectId: string, files: File[]) =>
       uploadMultipart<FileUploadRecord[]>(`/projects/${projectId}/files`, files),
+    /** URL 첨부 — 서버가 주소를 가져와 본문 텍스트를 추출한다. */
+    attachLink: (projectId: string, url: string) =>
+      request<FileUploadRecord>(`/projects/${projectId}/files/links`, {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      }),
     remove: (projectId: string, fileId: string) =>
       request<{ detail: string }>(`/projects/${projectId}/files/${fileId}`, {
         method: "DELETE",

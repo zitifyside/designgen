@@ -1,11 +1,18 @@
-﻿"""프로젝트 첨부 파일 업로드·조회·삭제.
+﻿"""프로젝트 첨부 업로드·조회·삭제 — 파일과 URL.
 
 기능정의서 v0.2.0 §3.1 '파일 업로드' — 형식·크기·개수 제한과 3중 검증은
 services/upload.py 가 담당한다. 여기서는 소유권·개수·기록을 다룬다.
+
+URL 첨부도 같은 테이블에 `kind=link` 로 넣는다. 생성 파이프라인은 이미
+첨부의 추출 텍스트를 요건에 합류시키므로, 여기 얹으면 별도 배선 없이
+그대로 분석 입력으로 흐른다. SSRF 방어는 services/url_fetch.py 가 진다.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from pydantic import BaseModel, Field
+from hashlib import sha256
+
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbDep
@@ -17,6 +24,12 @@ from app.models.upload import FileUpload
 from app.schemas.common import Message
 from app.schemas.upload import FileUploadOut
 from app.services.upload import MAX_FILES_PER_PROJECT, validate_and_extract
+from app.services.url_fetch import (
+    MAX_URLS_PER_PROJECT,
+    UrlNotAllowed,
+    fetch_url,
+    normalize_url,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/files", tags=["uploads"])
 
@@ -107,6 +120,76 @@ async def upload_files(
         },
     )
     return [_to_out(r) for r in saved]
+
+
+class LinkIn(BaseModel):
+    url: str = Field(min_length=3, max_length=2048)
+
+
+@router.post("/links", response_model=FileUploadOut, status_code=status.HTTP_201_CREATED)
+async def attach_link(project_id: str, body: LinkIn, user: CurrentUser, db: DbDep):
+    """URL 하나를 가져와 첨부로 등록한다.
+
+    업로드보다 상한을 낮게 잡는다 — 파일은 사용자가 이미 가진 것을 올리는
+    반면, 이 경로는 서버가 바깥으로 요청을 낸다. 남용되면 이 서버가 남의
+    사이트를 긁는 도구가 된다.
+    """
+    project = await _owned(db, project_id, user.id)
+    retry = hit_rate_limit(f"linkfetch|{user.id}", 3600, 30)
+    if retry is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="URL 첨부가 너무 잦습니다. 잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(retry)},
+        )
+
+    try:
+        canonical = normalize_url(body.url)
+    except UrlNotAllowed as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    existing = (
+        await db.scalars(select(FileUpload).where(FileUpload.project_id == project_id))
+    ).all()
+    links = [e for e in existing if e.kind == "link"]
+    if len(links) >= MAX_URLS_PER_PROJECT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"URL 첨부는 프로젝트당 최대 {MAX_URLS_PER_PROJECT}개입니다.",
+        )
+
+    try:
+        fetched = await fetch_url(canonical)
+    except UrlNotAllowed as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    digest = sha256(fetched.url.encode("utf-8")).hexdigest()
+    # 같은 주소를 다시 넣으면 앞의 것을 대체한다 — 내용이 바뀌었을 수 있으므로
+    # 무시가 아니라 갱신이 맞다.
+    duplicate = next((e for e in existing if e.sha256 == digest), None)
+    if duplicate is not None:
+        await db.delete(duplicate)
+
+    row = FileUpload(
+        project_id=project.id,
+        user_id=user.id,
+        filename=(fetched.title or fetched.url)[:160],
+        kind="link",
+        content_type=fetched.content_type[:120],
+        size_bytes=fetched.byte_size,
+        sha256=digest,
+        pages=None,
+        extracted_text=f"[출처] {fetched.url}\n\n{fetched.text}",
+    )
+    db.add(row)
+    await db.flush()
+    log_event(
+        kind="upload.link",
+        message="URL 첨부",
+        user_id=user.id,
+        payload={"projectId": project.id, "url": fetched.url, "bytes": fetched.byte_size},
+    )
+    return _to_out(row)
 
 
 @router.delete("/{file_id}", response_model=Message)

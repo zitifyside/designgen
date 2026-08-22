@@ -162,7 +162,7 @@ export interface FileUploadRecord {
   id: string;
   projectId: string;
   filename: string;
-  kind: "image" | "document";
+  kind: "image" | "document" | "link";
   contentType: string;
   sizeBytes: number;
   pages?: number | null;

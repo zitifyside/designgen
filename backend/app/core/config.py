@@ -84,7 +84,9 @@ class Settings(BaseSettings):
     # 진행 중인 렌더를 끊고 Fallback 으로 떨어뜨린다.
     relay_url: str = ""
     relay_token: str = ""
-    relay_timeout_seconds: int = 600
+    relay_timeout_seconds: int = 3000
+    # 잡 상태를 물어보는 간격. 짧으면 요청이 늘고, 길면 끝난 작업을 놀려 둔다.
+    relay_poll_seconds: int = 5
 
     # 결제 (Stripe) — 스텁 처리됨
     stripe_secret_key: str = ""

@@ -13,6 +13,12 @@ PowerShell 도 `D:\\` 드라이브도 그 로그인 세션도 없다. 그래서 
 이미 운영 DB 가 같은 경로(터널 → 이 PC)를 쓰고 있으므로 새로운 종속을
 만드는 것이 아니라 이미 있는 종속에 하나를 얹는 것이다.
 
+**호출은 비동기 잡으로 받는다.** Cloudflare 는 프록시 뒤 origin 이 100초
+안에 응답하지 않으면 524 로 끊는다. 그런데 Stage 3·4 는 분 단위다. 그래서
+`POST /v1/stage` 는 잡을 만들고 즉시 id 만 돌려주고, 호출 쪽이
+`GET /v1/job/{id}` 로 물어본다. 매 HTTP 왕복이 짧아지므로 100초 벽에
+걸리지 않는다. 동기로 두면 터널을 지나는 순간 긴 작업이 전부 실패한다.
+
 **바깥에 열리는 문이라 다음 셋을 지킨다.**
 
   1. 루프백에만 바인딩한다. 인터넷 노출은 오직 터널을 통해서만 일어나고,
@@ -28,10 +34,12 @@ PowerShell 도 `D:\\` 드라이브도 그 로그인 세션도 없다. 그래서 
 """
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
 import os
 import time
+import uuid
 from typing import Any
 
 from fastapi import Body, FastAPI, Header, HTTPException, status
@@ -48,6 +56,14 @@ ALLOWED_OPS = frozenset(
 )
 
 TOKEN_ENV = "ADG_RELAY_TOKEN"
+
+#: 끝난 잡을 이만큼 붙들었다가 버린다. 호출 쪽이 결과를 가져갈 시간이면 충분하고,
+#: 무한히 쌓아 두면 페이지 HTML 이 든 결과가 메모리를 채운다.
+JOB_TTL_SECONDS = 900
+#: 한 잡이 이 시간을 넘기면 포기한다. 사다리 3채널 × Stage 4 최악을 감안한 값.
+JOB_MAX_SECONDS = 3600
+
+_jobs: dict[str, dict[str, Any]] = {}
 
 
 def _expected_token() -> str:
@@ -106,37 +122,95 @@ async def relay_status(authorization: str | None = Header(default=None)) -> dict
     return {"status": "ok", "channels": mae_channels_available()}
 
 
-@app.post("/v1/stage")
+def _sweep_jobs() -> None:
+    """끝난 지 오래된 잡을 버린다. 결과에 페이지 HTML 이 들어 크다."""
+    now = time.monotonic()
+    stale = [
+        key
+        for key, job in _jobs.items()
+        if job["status"] != "running" and now - job["finishedAt"] > JOB_TTL_SECONDS
+    ]
+    for key in stale:
+        _jobs.pop(key, None)
+
+
+async def _run_job(job_id: str, op: str, args: list[Any]) -> None:
+    job = _jobs[job_id]
+    started = time.monotonic()
+    try:
+        provider = MaeLadderProvider()
+        result = await asyncio.wait_for(
+            getattr(provider, op)(*args), timeout=JOB_MAX_SECONDS
+        )
+    except Exception as exc:  # noqa: BLE001 — 실패도 잡의 정상적인 끝이다.
+        job.update(
+            status="failed",
+            error=str(exc)[:2000],
+            finishedAt=time.monotonic(),
+            elapsedSeconds=round(time.monotonic() - started, 2),
+        )
+        logger.warning("job %s (%s) failed: %s", job_id, op, str(exc)[:300])
+        return
+    elapsed = round(time.monotonic() - started, 2)
+    job.update(
+        status="done", result=result, finishedAt=time.monotonic(), elapsedSeconds=elapsed
+    )
+    logger.info("job %s (%s) ok in %ss", job_id, op, elapsed)
+
+
+@app.post("/v1/stage", status_code=status.HTTP_202_ACCEPTED)
 async def run_stage(
     body: StageRequest = Body(...),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
+    """잡을 시작하고 id 만 돌려준다. 결과는 `/v1/job/{id}` 로 가져간다."""
     _authorize(authorization)
 
     if body.op not in ALLOWED_OPS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"unknown op: {body.op}"
         )
-
-    try:
-        provider = MaeLadderProvider()
-    except RuntimeError as exc:
+    if not mae_channels_available():
         # CLI 가 하나도 없으면 그건 릴레이의 잘못이 아니라 이 PC 의 상태다.
         # 503 으로 알려 호출 쪽이 재시도·폴백을 판단하게 한다.
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="사용 가능한 마에 CLI 채널이 없습니다.",
+        )
 
-    started = time.monotonic()
-    try:
-        result = await getattr(provider, body.op)(*body.args)
-    except Exception as exc:  # noqa: BLE001 — 호출 쪽이 재시도로 판단한다.
-        logger.warning("stage %s failed: %s", body.op, str(exc)[:300])
+    _sweep_jobs()
+    job_id = uuid.uuid4().hex
+    _jobs[job_id] = {
+        "status": "running",
+        "op": body.op,
+        "startedAt": time.monotonic(),
+        "finishedAt": 0.0,
+    }
+    # 응답을 기다리지 않고 뒤에서 돌린다 — 이 요청은 즉시 끝나야 100초 벽을
+    # 넘지 않는다. 태스크 참조를 잡에 남겨 GC 가 중간에 걷어가지 않게 한다.
+    _jobs[job_id]["task"] = asyncio.create_task(_run_job(job_id, body.op, body.args))
+    logger.info("job %s (%s) started", job_id, body.op)
+    return {"jobId": job_id, "status": "running"}
+
+
+@app.get("/v1/job/{job_id}")
+async def get_job(
+    job_id: str, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    _authorize(authorization)
+    job = _jobs.get(job_id)
+    if job is None:
+        # 이미 버렸거나 없는 잡. 호출 쪽이 영원히 폴링하지 않도록 404 로 끊는다.
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)[:500]
-        ) from exc
-
-    elapsed = round(time.monotonic() - started, 2)
-    logger.info("stage %s ok in %ss", body.op, elapsed)
-    # 단계마다 반환 타입이 다르다(dict·list). 감싸서 형태를 하나로 만든다.
-    return {"result": result, "elapsedSeconds": elapsed}
+            status_code=status.HTTP_404_NOT_FOUND, detail="unknown or expired job"
+        )
+    payload: dict[str, Any] = {"status": job["status"], "op": job["op"]}
+    if job["status"] == "running":
+        payload["elapsedSeconds"] = round(time.monotonic() - job["startedAt"], 1)
+        return payload
+    payload["elapsedSeconds"] = job.get("elapsedSeconds", 0)
+    if job["status"] == "done":
+        payload["result"] = job["result"]
+    else:
+        payload["error"] = job.get("error", "")
+    return payload

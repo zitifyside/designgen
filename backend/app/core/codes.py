@@ -100,6 +100,9 @@ CODE_MAP: dict[str, dict[str, str]] = {
     "FILE_KIND": {
         "image": "C170101",
         "document": "C170102",
+        # URL 첨부. 별도 테이블을 두지 않고 첨부 한 종류로 다룬다 — 파이프라인은
+        # 이미 첨부의 추출 텍스트를 요건에 합류시키므로 여기 얹으면 그대로 흐른다.
+        "link": "C170103",
     },
     "QUOTA_BUCKET": {
         "monthly": "C180101",

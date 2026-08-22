@@ -32,6 +32,10 @@ const SCREEN_PRESETS: Array<{ value: string; labelKey: string }> = [
   { value: "detail", labelKey: "projectNew.sceneDetail" },
 ];
 
+/** 첨부 상한 — 서버(services/upload·url_fetch)와 같은 값이어야 한다. */
+const MAX_FILES = 5;
+const MAX_LINKS = 5;
+
 const EMPTY_CONCEPT: ConceptBrief = { name: "", direction: "", keywords: "" };
 
 const CONCEPT_PLACEHOLDERS: Array<{ name: string; directionKey: string; keywords: string }> = [
@@ -128,6 +132,9 @@ export default function NewProjectPage() {
   const [screenPreset, setScreenPreset] = useState<string>("main");
   const [customScreen, setCustomScreen] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [links, setLinks] = useState<string[]>([]);
+  const [linkDraft, setLinkDraft] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [conceptMode, setConceptMode] = useState<ConceptMode>("auto");
   const [concepts, setConcepts] = useState<ConceptBrief[]>([
     { ...EMPTY_CONCEPT },
@@ -310,8 +317,39 @@ export default function NewProjectPage() {
 
   const handleFiles = (list: FileList | null) => {
     if (!list) return;
-    setFiles(Array.from(list).slice(0, 5));
+    setFiles((prev) => [...prev, ...Array.from(list)].slice(0, MAX_FILES));
   };
+
+  const removeFile = (index: number) =>
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+
+  const addLink = () => {
+    const value = linkDraft.trim();
+    if (!value) return;
+    // 형태만 여기서 본다 — 실제 접근 가능 여부·사설망 차단은 서버가 판정한다.
+    const candidate = value.includes("://") ? value : `https://${value}`;
+    try {
+      const parsed = new URL(candidate);
+      if (!/^https?:$/.test(parsed.protocol)) throw new Error("scheme");
+    } catch {
+      setLinkError(t("projectNew.linkInvalid"));
+      return;
+    }
+    if (links.includes(candidate)) {
+      setLinkError(t("projectNew.linkDuplicate"));
+      return;
+    }
+    if (links.length >= MAX_LINKS) {
+      setLinkError(t("projectNew.linkMax", { n: MAX_LINKS }));
+      return;
+    }
+    setLinks((prev) => [...prev, candidate]);
+    setLinkDraft("");
+    setLinkError(null);
+  };
+
+  const removeLink = (index: number) =>
+    setLinks((prev) => prev.filter((_, i) => i !== index));
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -352,6 +390,16 @@ export default function NewProjectPage() {
       // 요건과 합쳐 분석 입력으로 쓴다.
       if (files.length > 0) {
         await api.files.upload(project.id, files);
+      }
+      // URL 은 서버가 직접 가져와야 하므로 한 건씩 보낸다. 한 건이 막혀도
+      // (사설 주소·404 등) 나머지와 생성 자체는 그대로 진행한다 — 첨부는
+      // 요건을 거드는 재료이지 생성의 전제가 아니다.
+      for (const url of links) {
+        try {
+          await api.files.attachLink(project.id, url);
+        } catch (err) {
+          console.warn("link attach failed", url, err);
+        }
       }
 
       const generation = await api.generations.start(project.id, {
@@ -450,7 +498,7 @@ export default function NewProjectPage() {
         <Card>
           <div className="text-xs font-medium text-ink-700">{t("projectNew.attachments")}</div>
           <p className="mt-0.5 text-[11px] text-ink-500">
-            {t("projectNew.attachHint")}
+            {t("projectNew.attachHint", { f: MAX_FILES })}
           </p>
           <label
             htmlFor="file-input"
@@ -470,15 +518,23 @@ export default function NewProjectPage() {
 
           {files.length > 0 && (
             <ul className="mt-3 space-y-1">
-              {files.map((f) => (
+              {files.map((f, i) => (
                 <li
-                  key={f.name}
-                  className="flex items-center justify-between rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs"
+                  key={`${f.name}-${f.size}-${i}`}
+                  className="flex items-center gap-2 rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs"
                 >
                   <span className="truncate text-ink-700">{f.name}</span>
-                  <span className="shrink-0 text-[10px] text-ink-500">
+                  <span className="ml-auto shrink-0 text-[10px] text-ink-500">
                     {(f.size / 1024).toFixed(1)} KB
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    aria-label={t("projectNew.attachRemove")}
+                    className="shrink-0 rounded px-1 text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ul>
@@ -487,6 +543,72 @@ export default function NewProjectPage() {
           <p className="mt-2 text-[10px] text-ink-500">
             {t("projectNew.attachNote")}
           </p>
+
+          <div className="mt-4 border-t border-ink-200 pt-3">
+            <div className="text-xs font-medium text-ink-700">
+              {t("projectNew.linkTitle")}
+            </div>
+            <p className="mt-0.5 text-[11px] text-ink-500">
+              {t("projectNew.linkHint")}
+            </p>
+            <div className="mt-2 flex gap-1.5">
+              <input
+                type="url"
+                inputMode="url"
+                value={linkDraft}
+                onChange={(e) => {
+                  setLinkDraft(e.target.value);
+                  setLinkError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    // 이 입력은 폼 안에 있다. 막지 않으면 Enter 가 생성 자체를 시작한다.
+                    e.preventDefault();
+                    addLink();
+                  }
+                }}
+                placeholder={t("projectNew.linkPlaceholder")}
+                className="min-w-0 flex-1 rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={addLink}
+                disabled={!linkDraft.trim() || links.length >= MAX_LINKS}
+                className="shrink-0 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t("projectNew.linkAdd")}
+              </button>
+            </div>
+            {linkError && (
+              <p className="mt-1.5 text-[11px] text-danger-600">{linkError}</p>
+            )}
+            {links.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {links.map((url, i) => (
+                  <li
+                    key={url}
+                    className="flex items-center gap-2 rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs"
+                  >
+                    <span className="text-[11px]">🔗</span>
+                    <span className="truncate text-ink-700" title={url}>
+                      {url}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeLink(i)}
+                      aria-label={t("projectNew.attachRemove")}
+                      className="ml-auto shrink-0 rounded px-1 text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-[10px] text-ink-500">
+              {t("projectNew.linkNote", { n: MAX_LINKS })}
+            </p>
+          </div>
         </Card>
 
         <Card>
