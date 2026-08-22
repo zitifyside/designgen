@@ -22,6 +22,7 @@ Provider 선택:
 from __future__ import annotations
 
 import datetime as dt
+import logging
 
 from sqlalchemy import delete, select, update
 
@@ -73,6 +74,8 @@ STAGE_PROGRESS = {
 
 # 경량(화면 추가) 파이프라인은 Layout Engine 부터 시작한다.
 SCREEN_STAGE_PROGRESS = {"LayoutEngine": 45, "Renderer": 90, "Done": 100}
+
+logger = logging.getLogger(__name__)
 
 RENDER_MAX_ATTEMPTS = 3
 FALLBACK_REASON = (
@@ -661,37 +664,61 @@ def _normalize_layouts(
     return normalized
 
 
+def _apply_artifact(layout: dict, artifact: dict) -> None:
+    """Stage 4 산출물을 레이아웃에 얹는다."""
+    if artifact.get("nodeTree") is not None:
+        layout["nodeTree"] = artifact["nodeTree"]
+    if artifact.get("imageUrl"):
+        layout["imageUrl"] = artifact["imageUrl"]
+    if artifact.get("html"):
+        # 시안의 실제 그림. nodeTree 는 이미 JSON 컬럼으로 끝까지 배선돼
+        # 있어(모델→스키마→프론트) 새 컬럼 없이 여기 얹는다.
+        tree = dict(layout.get("nodeTree") or {})
+        tree["html"] = artifact["html"]
+        tree["imageSlots"] = artifact.get("imageSlots") or []
+        tree["pageHeight"] = artifact.get("pageHeight") or 0
+        layout["nodeTree"] = tree
+        layout["isFallback"] = False
+
+
 async def _render_layouts(provider: AIProvider, layouts: list[dict], tokens: dict) -> bool:
-    """레이아웃별 Stage 4 렌더. 3회 실패 시 CSS Fallback 으로 표시한다.
+    """Stage 4 렌더. 실패한 장은 재시도하고, 그래도 안 되면 Fallback 으로 둔다.
+
+    한 장씩 순서대로 그리면 채널이 셋이어도 하나만 일한다. 그래서 배치로
+    넘겨 provider 가 장마다 다른 채널에 맡기게 한다 — 6장 순차 39분이 이
+    지점의 문제였다.
 
     반환: 하나라도 Fallback 이 발생했는지 여부.
     """
-    fallback_used = False
-    for layout in layouts:
-        for attempt in range(1, RENDER_MAX_ATTEMPTS + 1):
-            try:
-                artifact = await provider.render(layout, tokens)
-                if artifact.get("nodeTree") is not None:
-                    layout["nodeTree"] = artifact["nodeTree"]
-                if artifact.get("imageUrl"):
-                    layout["imageUrl"] = artifact["imageUrl"]
-                if artifact.get("html"):
-                    # 시안의 실제 그림. nodeTree 는 이미 JSON 컬럼으로 끝까지
-                    # 배선돼 있어(모델→스키마→프론트) 새 컬럼 없이 여기 얹는다.
-                    tree = dict(layout.get("nodeTree") or {})
-                    tree["html"] = artifact["html"]
-                    tree["imageSlots"] = artifact.get("imageSlots") or []
-                    tree["pageHeight"] = artifact.get("pageHeight") or 0
-                    layout["nodeTree"] = tree
-                    layout["isFallback"] = False
-                break
-            except NotImplementedError:
-                raise
-            except Exception:  # noqa: BLE001 — 재시도 후 Fallback
-                if attempt == RENDER_MAX_ATTEMPTS:
-                    layout["isFallback"] = True
-                    fallback_used = True
-    return fallback_used
+    if not layouts:
+        return False
+
+    pending = list(enumerate(layouts))
+    for attempt in range(1, RENDER_MAX_ATTEMPTS + 1):
+        if not pending:
+            break
+        batch = [layouts[i] for i, _ in pending]
+        try:
+            artifacts = await provider.render_batch(batch, tokens)
+        except NotImplementedError:
+            raise
+        except Exception:  # noqa: BLE001 — 배치가 통째로 실패하면 다음 회차로
+            continue
+        remaining: list[tuple[int, dict]] = []
+        for (index, layout), artifact in zip(pending, artifacts):
+            if artifact:
+                _apply_artifact(layout, artifact)
+            else:
+                remaining.append((index, layout))
+        pending = remaining
+        if pending:
+            logger.warning(
+                "render attempt %s left %s layout(s) unrendered", attempt, len(pending)
+            )
+
+    for _, layout in pending:
+        layout["isFallback"] = True
+    return bool(pending)
 
 
 async def _fill_image_slots(

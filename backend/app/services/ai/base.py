@@ -18,8 +18,12 @@
       Stage 3 · LayoutEngine — 컨셉별로 `variants` 개의 컨셉 시안을 생성한다:
       {kind, title, nodeTree}. 사이트 목업 페이지가 아니다.
 
-  render(layout, tokens) -> {imageUrl?, nodeTree?}
-      Stage 4 · Renderer — 레이아웃 + 토큰을 렌더링된 산출물로 변환한다.
+  render(layout, tokens) -> {html, imageSlots, pageHeight}
+      Stage 4 · Renderer — 레이아웃 + 토큰으로 완성 페이지 마크업을 만든다.
+
+  render_batch(layouts, tokens) -> [artifact|None, ...]
+      Stage 4 를 여러 장. 채널을 여럿 가진 provider 는 장마다 다른 채널에
+      맡겨 동시에 그린다.
 """
 from __future__ import annotations
 
@@ -49,3 +53,20 @@ class AIProvider(abc.ABC):
     async def render(
         self, layout: dict[str, Any], tokens: dict[str, Any]
     ) -> dict[str, Any]: ...
+
+    async def render_batch(
+        self, layouts: list[dict[str, Any]], tokens: dict[str, Any]
+    ) -> list[dict[str, Any] | None]:
+        """여러 장을 한 번에. 기본은 순차이며 실패한 자리는 None 이다.
+
+        채널을 여럿 가진 provider(마에 3채널)는 이걸 덮어써서 장마다 다른
+        채널에 맡기고 동시에 그린다. 그 provider 밖에서는 나눌 채널이 없으므로
+        순차가 맞다.
+        """
+        results: list[dict[str, Any] | None] = []
+        for layout in layouts:
+            try:
+                results.append(await self.render(layout, tokens))
+            except Exception:  # noqa: BLE001 — 한 장의 실패가 나머지를 막지 않는다.
+                results.append(None)
+        return results

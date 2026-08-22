@@ -63,7 +63,14 @@ def mae_channels_available() -> list[str]:
 
 
 def record_mae_channel(channel: str, ok: bool, reason: str = "") -> None:
-    """마에 오케 헬스레저에 성공·실패를 남긴다. 실패해도 생성을 막지 않는다."""
+    """마에 오케 헬스레저에 성공·실패를 남긴다. 실패해도 생성을 막지 않는다.
+
+    ⚠ 이 함수는 PowerShell 을 띄우는 **동기 호출**이라 1초 안팎을 잡아먹는다.
+    async 안에서 그대로 부르면 이벤트 루프가 그동안 멈춘다 — 3채널을 동시에
+    돌리기 시작하면서 이게 지배적 병목이 됐다(시안 6장이 6.1초, 순차와 동일).
+    그래서 async 문맥에서는 `record_mae_channel_async` 를 쓴다. 기록은 생성의
+    결과에 영향을 주지 않으므로 뒤에서 돌아도 된다.
+    """
     if not ORCH_CALL.is_file():
         return
     args = [
@@ -90,6 +97,24 @@ def record_mae_channel(channel: str, ok: bool, reason: str = "") -> None:
         )
     except Exception:
         return
+
+
+def record_mae_channel_async(channel: str, ok: bool, reason: str = "") -> None:
+    """레저 기록을 스레드로 던지고 즉시 돌아온다.
+
+    결과를 기다리지 않는다. 기록이 늦거나 실패해도 생성은 그대로 진행되어야
+    하고, 반대로 기록 때문에 생성이 느려지면 안 된다.
+    """
+    if not ORCH_CALL.is_file():
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        record_mae_channel(channel, ok, reason)
+        return
+    # 태스크 참조를 붙들지 않는다 — 결과를 쓰지 않으므로 fire-and-forget 이고,
+    # 예외는 to_thread 안에서 이미 삼켜진다.
+    loop.create_task(asyncio.to_thread(record_mae_channel, channel, ok, reason))
 
 
 def _kill_tree(pid: int) -> None:

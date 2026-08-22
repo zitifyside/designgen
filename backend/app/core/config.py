@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     codex_timeout_seconds: int = 180
     codex_render_timeout_seconds: int = 900
     mae_ladder: str = "antigravity,codex,claude"
+    # 3채널을 어떻게 쓸지. parallel = 단건은 경주·다건은 나눠 맡기(기본),
+    # ladder = 순서대로 부르고 실패하면 다음(예전 방식).
+    mae_dispatch: str = "parallel"
     antigravity_model: str = "gemini-3.7-flash-medium"
     claude_cli_model: str = "sonnet"
     mae_cli_timeout_seconds: int = 180

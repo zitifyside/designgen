@@ -120,6 +120,17 @@ class RelayProvider(AIProvider):
     ) -> dict[str, Any]:
         return await self._call("render", layout, tokens)
 
+    async def render_batch(
+        self, layouts: list[dict[str, Any]], tokens: dict[str, Any]
+    ) -> list[dict[str, Any] | None]:
+        """여러 장을 한 번의 왕복으로 넘긴다.
+
+        장마다 따로 부르면 HTTP·폴링이 장 수만큼 늘고, 무엇보다 릴레이가
+        채널을 나눠 맡길 기회를 잃는다. 나누는 일은 CLI 가 있는 쪽에서 해야
+        한다.
+        """
+        return await self._call("render_batch", layouts, tokens)
+
     # ── 파이프라인 밖 ──────────────────────────────────────────────
     async def complete_json(
         self, system_prompt: str, payload: dict[str, Any], schema: dict[str, Any]
