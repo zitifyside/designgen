@@ -23,7 +23,7 @@ class ProjectCreate(CamelModel):
     platform: str = "Web"
     # 요건 입력 화면에서 확정되는 생성 옵션 (기능정의서 v0.2.0 §4.1).
     concept_count: int | None = Field(default=None, ge=1, le=3)
-    variant_count: int | None = Field(default=None)  # 3 | 5
+    variant_count: int | None = Field(default=None)  # 방향당 시안 수: 3 | 6
     ds_mode: str | None = None  # per_concept | unified
     target_screen: str | None = Field(default=None, max_length=60)
     target_screen_title: str | None = Field(default=None, max_length=120)

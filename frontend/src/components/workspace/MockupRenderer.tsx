@@ -4,15 +4,18 @@ import { CSSProperties } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import type { TranslateVars } from "@/lib/i18n";
 import type { DesignTokens, Mockup } from "@/lib/types";
+import { HtmlMockup } from "./HtmlMockup";
 
 /**
  * 시안 렌더러.
  *
- * 시안은 완성 사이트가 아니라 **동일 장면(kind)의 컨셉 시안 변형**이다.
- * 화면 아키타입은 `mockup.kind` 로 고정되고, `mockup.index` 가 그 장면 안에서의
- * 시안 변형을 결정한다. 기본 장면은 메인(컨셉 보드)이다.
+ * 시안은 **완성된 웹페이지 한 벌**이다. Stage 4 Renderer 가 그 페이지의
+ * 마크업을 직접 쓰고, 여기서는 그것을 `HtmlMockup` 에 넘겨 그린다.
  *
- * 렌더링은 v1.0 확정대로 React + CSS 변수 방식이다 (Fabric.js·Konva.js 는 v2.0 검토).
+ * 아래의 아키타입별 React 화면들은 그 마크업이 없을 때만 쓰는 폴백이다 —
+ * Stage 4 도입 이전에 생성한 프로젝트와, 렌더가 3회 실패해 Fallback 으로
+ * 떨어진 시안이 그 경우다. 이 폴백은 색·타이포를 보여 주는 컨셉 보드이지
+ * 완성 시안이 아니므로, 새 시안이 여기로 오면 그건 렌더 실패 신호다.
  */
 
 export interface ElementSelection {
@@ -52,8 +55,12 @@ interface Props {
   onSelect?: (chain: SelectionChain) => void;
   /** 더블클릭 — 선택 사슬에서 한 단계 안으로. */
   onEnterChild?: () => void;
-  /** Image Gen 실패로 CSS Fallback 된 시안 — 콘텐츠 슬롯을 단색으로 채운다. */
+  /** 렌더 실패로 CSS Fallback 된 시안 — 콘텐츠 슬롯을 단색으로 채운다. */
   fallback?: boolean;
+  /** 시안 폭. 모델이 그 폭을 기준으로 페이지를 그렸다. */
+  width?: number;
+  /** 완성 페이지의 실제 높이가 확정되면 알려 준다. */
+  onHeight?: (height: number) => void;
 }
 
 export function MockupRenderer({
@@ -63,8 +70,26 @@ export function MockupRenderer({
   onSelect,
   onEnterChild,
   fallback,
+  width = 1440,
+  onHeight,
 }: Props) {
   const { t } = useI18n();
+
+  // 완성 페이지 마크업이 있으면 그것이 시안이다. 아래 아키타입 화면들은
+  // 마크업이 없을 때만 도는 폴백 경로다.
+  const html = mockup.nodeTree?.html;
+  if (html) {
+    return (
+      <HtmlMockup
+        html={html}
+        width={width}
+        onSelect={onSelect}
+        onEnterChild={onEnterChild}
+        onHeight={onHeight}
+      />
+    );
+  }
+
   const ctx: RenderContext = {
     variant: mockup.index,
     projectName,

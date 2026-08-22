@@ -39,8 +39,8 @@ PLANS = [
     # code, name, monthly_cents, annual_cents, gens(-1=무제한), concepts, variants, credit_unit_cents
     # 단가는 USD 센트 기준 — 서비스정책서 9장 (Pro $19/월·연 $190, Team $49/월·연 $490)
     ("Free", "Free", 0, 0, 3, 1, 3, 0),
-    ("Pro", "Pro", 1_900, 19_000, 30, 3, 5, 50),
-    ("Team", "Team", 4_900, 49_000, -1, 3, 5, 30),
+    ("Pro", "Pro", 1_900, 19_000, 30, 3, 6, 50),
+    ("Team", "Team", 4_900, 49_000, -1, 3, 6, 30),
 ]
 
 TEMPLATES = [

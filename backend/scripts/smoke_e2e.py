@@ -156,7 +156,7 @@ async def main() -> None:
                 "requirementsText": "B2B SaaS 분석 대시보드. 차분한 무드.",
                 "platform": "Web",
                 "conceptCount": 3,
-                "variantCount": 5,
+                "variantCount": 6,
                 "dsMode": "unified",
                 "targetScreen": "dashboard",
             },
@@ -183,13 +183,13 @@ async def main() -> None:
         # 4) 시안 = 동일 화면의 구조 변형인지 검증
         r = await c.get(f"{API}/projects/{pid}/mockups", headers=h)
         mocks = r.json()
-        check("mockups 3컨셉 x 5변형 = 15", len(mocks) == 15, str(len(mocks)))
+        check("mockups 3컨셉 x 6변형 = 18", len(mocks) == 18, str(len(mocks)))
         screens = {m["screen"] for m in mocks}
         kinds = {m["kind"] for m in mocks}
         check("  단일 화면 축", screens == {"dashboard"}, str(screens))
         check("  단일 아키타입", kinds == {"dashboard"}, str(kinds))
         labels = {m["variantLabel"] for m in mocks if m["conceptLabel"] == "A"}
-        check("  변형 라벨 5종 상이", len(labels) == 5, str(labels))
+        check("  변형 라벨 6종 상이", len(labels) == 6, str(labels))
 
         # 5) unified DS — Base 공통 + 강조색만 변주
         r = await c.get(f"{API}/projects/{pid}/design-systems", headers=h)
@@ -472,10 +472,10 @@ async def main() -> None:
         r = await c.post(
             f"{API}/projects",
             headers=fh,
-            json={"name": "프리 프로젝트", "requirementsText": "간단한 랜딩", "conceptCount": 3, "variantCount": 5, "dsMode": "unified"},
+            json={"name": "프리 프로젝트", "requirementsText": "간단한 랜딩", "conceptCount": 3, "variantCount": 6, "dsMode": "unified"},
         )
         check("Free 단일DS통일 차단(403)", r.status_code == 403, str(r.status_code))
-        r = await c.post(f"{API}/projects", headers=fh, json={"name": "프리 프로젝트", "requirementsText": "간단한 랜딩 페이지", "conceptCount": 3, "variantCount": 5})
+        r = await c.post(f"{API}/projects", headers=fh, json={"name": "프리 프로젝트", "requirementsText": "간단한 랜딩 페이지", "conceptCount": 3, "variantCount": 6})
         fp = r.json()
         check("Free 컨셉 1종 강제", fp["conceptCount"] == 1, str(fp["conceptCount"]))
         check("Free 시안 3종 강제", fp["variantCount"] == 3, str(fp["variantCount"]))

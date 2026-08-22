@@ -20,9 +20,9 @@ from app.models.user import User
 # plan → (monthly_generations[-1=무제한], max_concepts, allowed_variants)
 PLAN_LIMITS: dict[str, tuple[int, int, tuple[int, ...]]] = {
     "Free": (3, 1, (3,)),
-    "Pro": (30, 3, (3, 5)),
-    "Team": (-1, 3, (3, 5)),
-    "Admin": (-1, 3, (3, 5)),
+    "Pro": (30, 3, (3, 6)),
+    "Team": (-1, 3, (3, 6)),
+    "Admin": (-1, 3, (3, 6)),
 }
 
 # 단일 DS 통일 모드는 Pro 이상 한정 (기획서 v0.5.0 §4 F-002).
@@ -48,7 +48,10 @@ def cap_concepts(plan: str, requested: int | None) -> int:
 
 
 def variants_for(plan: str, requested: int | None = None) -> int:
-    """시안 수를 확정한다 — Pro·Team 은 3/5 선택, Free 는 3 고정."""
+    """시안 수를 확정한다 — Pro·Team 은 3/6 선택, Free 는 3 고정.
+
+    한 방향(컨셉)당 뽑는 완성 페이지 시안의 개수다.
+    """
     allowed = plan_limits(plan)[2]
     if requested is None:
         return allowed[0]

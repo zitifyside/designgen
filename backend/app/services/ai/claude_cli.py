@@ -8,13 +8,16 @@ from app.services.ai.codex import (
     PROMPT_CONCEPT_ENGINE,
     PROMPT_INPUT_ANALYZER,
     PROMPT_LAYOUT_ENGINE,
+    PROMPT_RENDERER,
 )
 from app.services.ai.mae_cli import run_claude_json
 from app.services.ai.placeholder import archetype_for
+from app.services.ai.render_stage import build_render_payload, finalize_render
 from app.services.ai.schemas import (
     ANALYSIS_SCHEMA,
     CONCEPTS_SCHEMA,
     LAYOUTS_SCHEMA,
+    RENDER_SCHEMA,
     validate_concepts,
     validate_layouts,
 )
@@ -74,4 +77,9 @@ class ClaudeCliProvider(AIProvider):
         return [{**layout, "nodeTree": None} for layout in layouts]
 
     async def render(self, layout: dict[str, Any], tokens: dict[str, Any]) -> dict[str, Any]:
-        return {}
+        result = await self._complete(
+            PROMPT_RENDERER,
+            build_render_payload(layout, tokens),
+            schema=RENDER_SCHEMA,
+        )
+        return finalize_render(result)

@@ -125,6 +125,11 @@ done
 . `SECRET_KEY` — `backend/.env`(Secrets SSOT 링크) 의 `CLOUDRUN_SECRET_KEY` 를 쓴다.
   값이 바뀌면 기존 토큰이 전부 무효가 된다.
 . 실제 AI 생성 — `FAKE_AI_PIPELINE=false` + `GEMINI_API_KEY`/`OPENAI_API_KEY`.
+. 시안 안 이미지 — `MOCKUP_IMAGES_ENABLED`(기본 `true`) + `GEMINI_IMAGE_MODEL`
+  (기본 `gemini-3-pro-image`). 끄면 이미지 자리가 그라디언트로 채워지고 시안 자체는
+  그대로 나온다 — 이미지는 시안의 장식이지 본체가 아니다. 생성 바이트는
+  `trx_mockup_asset` 에 들어가므로 **DB 용량이 늘어난다**(장당 대략 0.3~1MB).
+. 시안 이미지 테이블은 마이그레이션 `202608221000` 이 만든다 — 배포 전 `alembic upgrade head`.
 . `--max-instances 1` — SQLite 를 쓰는 동안은 인스턴스가 늘면 DB 가 갈라진다.
   Postgres 로 옮긴 뒤에 상한을 올린다.
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     admin,
     api_keys,
+    assets,
     auth,
     billing,
     design_systems,
@@ -29,6 +30,7 @@ api_router.include_router(projects.router)
 api_router.include_router(generations.router)
 api_router.include_router(design_systems.router)
 api_router.include_router(mockups.router)
+api_router.include_router(assets.router)
 api_router.include_router(uploads.router)
 api_router.include_router(exports.router)
 api_router.include_router(public_api.router)

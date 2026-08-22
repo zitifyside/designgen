@@ -6,10 +6,9 @@ Docs: https://ai.google.dev/gemini-api/docs  (SDK: `google-genai`)
 구조화된 출력을 강제한다 — `schemas.py`의 스키마가 곧 프론트엔드 계약이므로
 자유서술 출력을 파싱하는 방식은 쓰지 않는다.
 
-Stage 4(Renderer)는 의도적으로 API를 호출하지 않는다 — `nodeTree`를 실제로
-소비하는 프론트엔드 코드가 없고(placeholder.py도 항상 None을 반환), 스키마도
-정의된 적이 없다. 소비처가 생기기 전까지 LLM 호출 자체가 낭비이므로 no-op으로
-둔다. 아래 render() 독스트링 참고.
+Stage 4(Renderer)는 모델이 직접 쓴 완성 페이지 마크업을 받는다 — 시안의
+픽셀을 정하는 단계이며, 프롬프트·검증·살균은 codex.py·render_stage.py 와
+공유한다.
 """
 from __future__ import annotations
 
@@ -22,22 +21,18 @@ from app.services.ai.codex import (
     PROMPT_CONCEPT_ENGINE,
     PROMPT_INPUT_ANALYZER,
     PROMPT_LAYOUT_ENGINE,
+    PROMPT_RENDERER,
 )
 from app.services.ai.placeholder import archetype_for
+from app.services.ai.render_stage import build_render_payload, finalize_render
 from app.services.ai.schemas import (
     ANALYSIS_SCHEMA,
     CONCEPTS_SCHEMA,
     LAYOUTS_SCHEMA,
+    RENDER_SCHEMA,
     validate_concepts,
     validate_layouts,
 )
-
-# Stage 4(Renderer)는 아래 render() 독스트링 참고 — 현재 소비처가 없어 미호출.
-PROMPT_RENDERER = (
-    "(미사용) nodeTree를 실제로 렌더링하는 프론트엔드 소비처와 스키마가 "
-    "정의되면, 그때 이 프롬프트를 채우고 render()에서 _complete()를 호출한다."
-)
-
 
 class GeminiProvider(AIProvider):
     name = "gemini"
@@ -62,6 +57,8 @@ class GeminiProvider(AIProvider):
         payload: dict[str, Any],
         *,
         schema: dict[str, Any],
+        model: str | None = None,
+        max_output_tokens: int | None = None,
     ) -> dict[str, Any]:
         """구조화된 JSON을 반환하는 단일 Gemini 호출."""
         from google.genai import types  # 지연 임포트
@@ -69,13 +66,23 @@ class GeminiProvider(AIProvider):
         client = self._get_client()
         contents = f"{prompt}\n\n입력 데이터(JSON):\n{json.dumps(payload, ensure_ascii=False)}"
         response = await client.aio.models.generate_content(
-            model=settings.gemini_model,
+            model=model or settings.gemini_model,
             contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=schema,
+                max_output_tokens=max_output_tokens,
             ),
         )
+        # 출력 상한에 걸려 끊긴 응답은 "빈 응답"이나 "JSON 파싱 실패"로 나타나
+        # 원인이 안 보인다. 끊겼다는 사실을 그대로 올려 진단 가능하게 한다.
+        for candidate in response.candidates or []:
+            if str(getattr(candidate, "finish_reason", "")).endswith("MAX_TOKENS"):
+                raise RuntimeError(
+                    "Gemini hit the output token limit — raise "
+                    "GEMINI_RENDER_MAX_OUTPUT_TOKENS or use a model with a "
+                    "larger output window"
+                )
         text = response.text
         if not text:
             raise RuntimeError("Gemini returned an empty response")
@@ -122,12 +129,16 @@ class GeminiProvider(AIProvider):
         return [{**layout, "nodeTree": None} for layout in layouts]
 
     async def render(self, layout: dict[str, Any], tokens: dict[str, Any]) -> dict[str, Any]:
-        """의도적 no-op.
+        """Stage 4 · Renderer — 완성 페이지 시안 마크업을 받는다.
 
-        `nodeTree`를 실제로 그리는 프론트엔드 코드가 없다(MockupRenderer.tsx는
-        `mockup.kind`+`mockup.index`만으로 6종의 하드코딩된 시안을 렌더하고
-        `node_tree` 컬럼은 읽지 않는다) — 스키마도 정의된 적이 없다. 존재하지
-        않는 계약을 향해 LLM을 호출하는 건 비용·지연만 늘리는 낭비이므로,
-        소비처와 스키마가 생기기 전까지는 호출하지 않는다.
+        시안의 픽셀을 정하는 것이 이 단계다. 앞 세 단계는 무엇을 그릴지만
+        정하고, 실제로 그리는 것은 여기서 모델이 쓴 HTML 이다.
         """
-        return {}
+        result = await self._complete(
+            PROMPT_RENDERER,
+            build_render_payload(layout, tokens),
+            schema=RENDER_SCHEMA,
+            model=settings.gemini_render_model or settings.gemini_model,
+            max_output_tokens=settings.gemini_render_max_output_tokens,
+        )
+        return finalize_render(result)

@@ -13,6 +13,7 @@ Codex/Gemini 프로바이더 양쪽에서 이 스키마를 그대로 재사용�
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.services.ai.placeholder import SCREEN_PRESETS
@@ -251,8 +252,41 @@ LAYOUTS_SCHEMA: dict[str, Any] = {
                             "creativeDirections[i] 의 레이아웃·밀도·내비게이션·컴포넌트·강조를 반영한다."
                         ),
                     },
+                    "sections": {
+                        "type": "array",
+                        "description": (
+                            "이 시안이 위에서 아래로 담을 섹션 순서. Stage 4 Renderer 가 "
+                            "이 뼈대를 그대로 그린다. 헤더에서 푸터까지 실제 페이지 한 벌을 "
+                            "이룰 만큼(보통 6~10개) 채운다."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "description": "영문 소문자·하이픈 식별자. 예: 'hero', 'service-cards'.",
+                                },
+                                "role": {
+                                    "type": "string",
+                                    # 값은 아래 SECTION_ROLES 정의 뒤에 주입한다.
+                                    "enum": [],
+                                    "description": "섹션의 구조적 역할.",
+                                },
+                                "heading": {
+                                    "type": "string",
+                                    "description": "그 섹션에 실제로 들어갈 한국어 문구. 더미 텍스트 금지.",
+                                },
+                                "note": {
+                                    "type": "string",
+                                    "description": "배치·구성 지시 한 구절. 예: '카드 4열, 각 카드에 사진 배경'.",
+                                },
+                            },
+                            "required": ["id", "role", "heading", "note"],
+                            "additionalProperties": False,
+                        },
+                    },
                 },
-                "required": ["kind", "title", "variantLabel", "imagePrompt"],
+                "required": ["kind", "title", "variantLabel", "imagePrompt", "sections"],
                 "additionalProperties": False,
             },
         },
@@ -300,3 +334,101 @@ def validate_layouts(
         raise ValueError("every layout needs a non-empty variantLabel")
     if len(set(labels)) != len(labels):
         raise ValueError(f"duplicate variantLabel in layouts: {labels}")
+
+
+# ── Stage 4 · Renderer ────────────────────────────────────────────────
+# 시안은 한 화면 프레임이 아니라 위에서 아래로 읽히는 완성 페이지다. 아래
+# 역할 목록이 그 페이지를 이루는 섹션의 어휘이며, 레퍼런스 실무 시안(공공기관
+# 포털·서비스 랜딩)에서 반복적으로 나타나는 구성을 그대로 옮긴 것이다.
+SECTION_ROLES = [
+    "topBar",          # 공지·긴급 안내 띠
+    "globalNav",       # 로고 + 주 메뉴 + 로그인/회원가입
+    "hero",            # 키비주얼 + 대표 문구 (+ 검색·주요 동작)
+    "quickLinks",      # 바로가기 칩·아이콘 묶음
+    "featureCards",    # 서비스·기능 카드 그리드
+    "processSteps",    # 단계 안내 (1단계~N단계)
+    "mediaRow",        # 영상·이미지 가로 나열
+    "noticeBoard",     # 공지·자료 목록 (탭 포함)
+    "statHighlight",   # 수치·성과 강조
+    "loginPanel",      # 로그인·인증 박스
+    "banner",          # 프로모션·안내 배너
+    "gallery",         # 사진 갤러리
+    "faq",             # 자주 묻는 질문
+    "cta",             # 전환 유도 구역
+    "partnerStrip",    # 패밀리사이트·로고 스트립
+    "footer",          # 기관·회사 정보, 약관, 카피라이트
+]
+
+# 스키마 정의 시점에 SECTION_ROLES 가 필요해 위에서 참조하므로, 모듈을
+# 읽는 순서상 여기서 다시 주입한다.
+LAYOUTS_SCHEMA["properties"]["layouts"]["items"]["properties"]["sections"]["items"][
+    "properties"
+]["role"]["enum"] = SECTION_ROLES
+
+IMAGE_ASPECTS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"]
+
+RENDER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "html": {
+            "type": "string",
+            "description": (
+                "시안 한 벌의 완성 마크업. 최상위에 <style> 하나와 섹션들을 두는 "
+                "조각(fragment)이며 <html>·<head>·<body> 는 쓰지 않는다."
+            ),
+        },
+        "imageSlots": {
+            "type": "array",
+            "description": "html 안의 {{img:id}} 자리표시자마다 하나씩.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "html 의 {{img:id}} 와 정확히 일치하는 식별자.",
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": (
+                            "이 자리에 들어갈 이미지를 생성기에 넣을 한 문단. "
+                            "피사체·구도·색·질감을 적고 화면 안 글자는 요구하지 않는다."
+                        ),
+                    },
+                    "alt": {"type": "string", "description": "한국어 대체 텍스트."},
+                    "aspect": {"type": "string", "enum": IMAGE_ASPECTS},
+                },
+                "required": ["id", "prompt", "alt", "aspect"],
+                "additionalProperties": False,
+            },
+        },
+        "pageHeight": {
+            "type": "integer",
+            "description": "1440px 폭에서 예상되는 전체 세로 픽셀. 대략치면 된다.",
+        },
+    },
+    "required": ["html", "imageSlots", "pageHeight"],
+    "additionalProperties": False,
+}
+
+
+def validate_render(result: dict[str, Any]) -> None:
+    """스키마가 형태만 보장하는 부분을 실제 계약으로 좁힌다."""
+    html = result.get("html")
+    if not isinstance(html, str) or len(html.strip()) < 400:
+        raise ValueError("renderer returned no usable html")
+    # `<header` 가 `<head` 를 품으므로 단어 경계로 본다 — 접두 일치로 검사하면
+    # 정상 마크업이 통째로 거절된다.
+    document_tag = re.search(r"<!doctype|<\s*(?:html|head|body)\b", html, re.IGNORECASE)
+    if document_tag:
+        raise ValueError(f"renderer returned a full document ({document_tag.group(0)})")
+    slots = result.get("imageSlots")
+    if not isinstance(slots, list):
+        raise ValueError("imageSlots must be a list")
+    seen: set[str] = set()
+    for slot in slots:
+        slot_id = slot.get("id", "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,60}", slot_id):
+            raise ValueError(f"invalid image slot id: {slot_id!r}")
+        if slot_id in seen:
+            raise ValueError(f"duplicate image slot id: {slot_id}")
+        seen.add(slot_id)

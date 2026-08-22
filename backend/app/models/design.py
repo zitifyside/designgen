@@ -1,7 +1,7 @@
 ﻿"""디자인 시스템(토큰 세트) 및 목업 모델."""
 from __future__ import annotations
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
@@ -64,3 +64,29 @@ class Mockup(Base, AuditMixin):
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
 
     project: Mapped["Project"] = relationship(back_populates="mockups")  # noqa: F821
+
+
+class MockupAsset(Base, AuditMixin):
+    """시안 안에 놓인 생성 이미지 한 장.
+
+    Cloud Run 컨테이너 파일시스템은 배포마다 사라지고 오브젝트 스토리지는
+    아직 붙이지 않았다. 그래서 시안이 참조하는 이미지는 DB 에 둔다 — 시안
+    자체와 수명이 같아야 하는 데이터라, 시안은 남았는데 그림만 사라지는
+    상태를 만들지 않는 것이 저장소 선택보다 중요하다.
+
+    오브젝트 스토리지를 붙이는 날에는 `data` 대신 외부 URL 을 들고 같은
+    공개 경로(`/assets/{id}`)를 유지하면 프론트는 바뀌지 않는다.
+    """
+
+    __tablename__ = "trx_mockup_asset"
+
+    pk: Mapped[int] = pk_column("mockup_asset_id")
+    id: Mapped[str] = public_id_column("as")
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("trx_project.public_id", ondelete="CASCADE"), index=True
+    )
+    slot_id: Mapped[str] = mapped_column("slot_cd", String(60), default="")
+    mime: Mapped[str] = mapped_column("mime_cd", String(60), default="image/png")
+    data: Mapped[bytes] = mapped_column("asset_bin", LargeBinary)
+    byte_size: Mapped[int] = mapped_column(Integer, default=0)
+    prompt: Mapped[str] = mapped_column("prompt_txt", Text, default="")

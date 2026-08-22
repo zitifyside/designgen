@@ -141,6 +141,14 @@ export interface Mockup {
   variantLabel: string;
   imageUrl?: string | null;
   nodeTree?: {
+    /** Stage 4 Renderer 가 그린 완성 페이지 마크업. 이것이 시안의 본체다. */
+    html?: string;
+    /** 페이지 안 이미지 자리 — 생성에 성공한 것은 이미 src 에 박혀 있다. */
+    imageSlots?: { id: string; prompt: string; alt: string; aspect: string }[];
+    /** 실제로 채워 넣은 이미지 장수. */
+    imageCount?: number;
+    /** 모델이 어림한 전체 세로 픽셀. 실제 높이는 렌더 후 다시 잰다. */
+    pageHeight?: number;
     imagePrompt?: string;
     stylePrompt?: string;
     recreatePrompt?: string;

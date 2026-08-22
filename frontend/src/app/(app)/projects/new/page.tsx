@@ -71,7 +71,7 @@ interface Draft {
   requirements: string;
   platform: Platform;
   conceptCount: 1 | 2 | 3;
-  variantCount: 3 | 5;
+  variantCount: 3 | 6;
   dsMode: DsMode;
   screenPreset: string;
   customScreen: string;
@@ -123,7 +123,7 @@ export default function NewProjectPage() {
   const [notifyDone, setNotifyDone] = useState(false);
   const [notifyBusy, setNotifyBusy] = useState(false);
   const [conceptCount, setConceptCount] = useState<1 | 2 | 3>(isFree ? 1 : 3);
-  const [variantCount, setVariantCount] = useState<3 | 5>(isFree ? 3 : 5);
+  const [variantCount, setVariantCount] = useState<3 | 6>(isFree ? 3 : 6);
   const [dsMode, setDsMode] = useState<DsMode>("per_concept");
   const [screenPreset, setScreenPreset] = useState<string>("main");
   const [customScreen, setCustomScreen] = useState("");
@@ -181,7 +181,7 @@ export default function NewProjectPage() {
     setRequirements(project.requirementsText ?? "");
     setPlatform(project.platform ?? "Web");
     setConceptCount((project.conceptCount as 1 | 2 | 3) || 1);
-    setVariantCount((project.variantCount as 3 | 5) || 3);
+    setVariantCount((project.variantCount as 3 | 6) || 3);
     setDsMode(project.dsMode ?? "per_concept");
     if (!screen) {
       setScreenPreset("");
@@ -610,12 +610,12 @@ export default function NewProjectPage() {
                 {isFree && <Badge tone="warning">{t("projectNew.freeFixed3")}</Badge>}
               </div>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
-                {[3, 5].map((n) => (
+                {[3, 6].map((n) => (
                   <button
                     key={n}
                     type="button"
                     disabled={isFree && n !== 3}
-                    onClick={() => setVariantCount(n as 3 | 5)}
+                    onClick={() => setVariantCount(n as 3 | 6)}
                     className={`rounded-lg border py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                       variantCount === n
                         ? "border-brand-500 bg-brand-50 text-brand-700"

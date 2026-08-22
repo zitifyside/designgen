@@ -97,11 +97,12 @@ SCREEN_PRESETS: dict[str, str] = {
 # 화면 아키타입별 구조 변형 라벨 — 시안은 이 축으로만 달라진다.
 VARIANT_LABELS: dict[str, list[str]] = {
     "main": [
-        "풀블리드 포스터",
-        "타이포 · 컬러 스플릿",
-        "워드마크 센터",
-        "에디토리얼 키비주얼",
-        "컬러필드 세로",
+        "풀블리드 히어로 + 서비스 카드 4열",
+        "좌우 분할 히어로 + 바로가기 그리드",
+        "상단 안내 띠 + 검색 중심 히어로",
+        "에디토리얼 키비주얼 + 2열 본문",
+        "카드 우선 배치 + 히어로 축약",
+        "세로 스토리 스크롤 + 구간별 색면 전환",
     ],
     "landing": [
         "히어로 중앙 정렬 + 3열 특징 카드",
@@ -109,6 +110,7 @@ VARIANT_LABELS: dict[str, list[str]] = {
         "상단 풀블리드 배너 + 2열 본문",
         "좌측 고정 내비 + 세로 스크롤 섹션",
         "카드 그리드 우선 + 히어로 축약",
+        "지그재그 교차 섹션 + 하단 전환 유도",
     ],
     "login": [
         "중앙 단일 카드 + 소셜 로그인 상단",
@@ -116,6 +118,7 @@ VARIANT_LABELS: dict[str, list[str]] = {
         "상단 로고 + 폭 넓은 단일 컬럼",
         "카드 없는 전면 폼 + 하단 보조 링크",
         "우측 폼 고정 + 좌측 이미지 배경",
+        "상단 브랜드 배너 + 하단 2열 보조 안내",
     ],
     "dashboard": [
         "지표 4열 + 대형 차트 1 + 보조 1",
@@ -123,6 +126,7 @@ VARIANT_LABELS: dict[str, list[str]] = {
         "좌측 사이드바 + 지표 3열",
         "상단 필터 바 + 표 중심 레이아웃",
         "카드 대시보드 (지표·차트 혼합 그리드)",
+        "요약 헤더 + 좌측 지표·우측 활동 타임라인",
     ],
     "list": [
         "표 형식 + 상단 필터 바",
@@ -130,6 +134,7 @@ VARIANT_LABELS: dict[str, list[str]] = {
         "좌측 필터 패널 + 우측 리스트",
         "밀집 리스트 + 우측 미리보기",
         "섹션 그룹 리스트 + 상단 탭",
+        "히어로 검색 + 카테고리 타일 + 최신 목록",
     ],
     "detail": [
         "좌측 내비 + 우측 상세 카드",
@@ -137,8 +142,67 @@ VARIANT_LABELS: dict[str, list[str]] = {
         "2열 (본문 + 사이드 메타)",
         "단일 컬럼 롱폼 + 고정 액션 바",
         "히어로 요약 + 아코디언 섹션",
+        "좌측 목차 고정 + 우측 롱폼 본문",
     ],
 }
+
+# 아키타입별 기본 섹션 뼈대. 모델이 sections 를 빠뜨려도 시안이 "한 화면짜리
+# 컨셉 보드" 로 되돌아가지 않도록, 서버가 최소한의 페이지 골격을 강제한다.
+def _section(sid: str, role: str, heading: str, note: str) -> dict:
+    return {"id": sid, "role": role, "heading": heading, "note": note}
+
+
+DEFAULT_SECTIONS: dict[str, list[dict]] = {
+    "main": [
+        _section("global-nav", "globalNav", "서비스 안내", "로고 좌측, 주 메뉴 5개, 우측 로그인·회원가입"),
+        _section("hero", "hero", "필요한 정보를 한곳에서", "풀폭 키비주얼 사진 위 대형 제목과 검색창"),
+        _section("quick-links", "quickLinks", "자주 찾는 서비스", "아이콘 칩 8개를 한 줄로"),
+        _section("service-cards", "featureCards", "주요 서비스", "카드 4열, 각 카드 상단에 사진"),
+        _section("process", "processSteps", "이용 절차", "1단계부터 5단계까지 가로 배열"),
+        _section("notice", "noticeBoard", "공지사항", "탭 2개와 날짜가 붙은 목록 5줄"),
+        _section("partners", "partnerStrip", "관련 사이트", "로고 7개를 한 줄로"),
+        _section("footer", "footer", "기관 정보", "주소·대표전화·약관 링크·카피라이트"),
+    ],
+    "landing": [
+        _section("global-nav", "globalNav", "제품 소개", "로고와 메뉴 4개, 우측에 시작하기 버튼"),
+        _section("hero", "hero", "더 빠르게 시작하세요", "좌측 문구, 우측 제품 화면 이미지"),
+        _section("logos", "partnerStrip", "함께하는 기업", "고객사 로고 6개"),
+        _section("features", "featureCards", "핵심 기능", "카드 3열, 각 카드에 일러스트"),
+        _section("stats", "statHighlight", "숫자로 보는 성과", "지표 3개를 크게"),
+        _section("cta", "cta", "지금 무료로 시작하기", "중앙 정렬 버튼 2개"),
+        _section("footer", "footer", "회사 정보", "메뉴 4열과 카피라이트"),
+    ],
+    "login": [
+        _section("global-nav", "globalNav", "로그인", "로고만 있는 단순 헤더"),
+        _section("hero", "hero", "다시 만나 반갑습니다", "좌측 브랜드 패널에 배경 사진"),
+        _section("login-panel", "loginPanel", "로그인", "아이디·비밀번호 입력과 간편 로그인 3종"),
+        _section("faq", "faq", "로그인에 문제가 있나요?", "질문 3개 접이식"),
+        _section("footer", "footer", "고객센터", "대표전화와 약관 링크"),
+    ],
+    "dashboard": [
+        _section("global-nav", "globalNav", "관리 콘솔", "좌측 세로 내비게이션"),
+        _section("stats", "statHighlight", "오늘의 지표", "지표 카드 4열"),
+        _section("charts", "mediaRow", "기간별 추이", "큰 차트 하나와 보조 차트 하나"),
+        _section("table", "noticeBoard", "최근 활동", "표 형식 8줄"),
+        _section("footer", "footer", "시스템 정보", "버전과 문의처"),
+    ],
+    "list": [
+        _section("global-nav", "globalNav", "자료실", "로고와 메뉴, 우측 검색"),
+        _section("hero", "hero", "자료 검색", "얇은 배너 위 검색 필드"),
+        _section("filters", "quickLinks", "분류", "필터 칩 한 줄"),
+        _section("items", "featureCards", "전체 자료", "카드 3열 9개, 각 카드에 썸네일"),
+        _section("footer", "footer", "기관 정보", "주소와 카피라이트"),
+    ],
+    "detail": [
+        _section("global-nav", "globalNav", "상세 보기", "로고와 메뉴, 브레드크럼"),
+        _section("hero", "hero", "문서 제목", "제목·작성일·분류 배지"),
+        _section("body", "noticeBoard", "본문", "본문 단락과 표 하나"),
+        _section("gallery", "gallery", "첨부 이미지", "사진 3장 가로 배열"),
+        _section("cta", "cta", "목록으로 돌아가기", "하단 액션 버튼 2개"),
+        _section("footer", "footer", "기관 정보", "주소와 카피라이트"),
+    ],
+}
+
 
 # 자유 입력 화면명 → 아키타입 추론 키워드.
 _ARCHETYPE_HINTS: list[tuple[tuple[str, ...], str]] = [
@@ -274,6 +338,7 @@ def placeholder_layouts(
             "screenTitle": screen_title,
             "title": f"{screen_title} · 변형 {i + 1}",
             "variantLabel": labels[i],
+            "sections": _deep_copy(DEFAULT_SECTIONS.get(archetype, DEFAULT_SECTIONS["main"])),
             "nodeTree": None,
         }
         for i in range(count)

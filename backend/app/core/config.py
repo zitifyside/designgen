@@ -50,6 +50,22 @@ class Settings(BaseSettings):
     ai_provider: str = "mae"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
+    # 시안 안 이미지 슬롯 생성. 끄면 슬롯이 그라디언트로 채워지고 시안 자체는
+    # 그대로 나온다 — 이미지는 시안의 장식이지 본체가 아니다.
+    mockup_images_enabled: bool = True
+    gemini_image_model: str = "gemini-3-pro-image"
+    # 이미지 모델 풀. 쉼표로 나열하면 슬롯을 모델별로 나눠 굽는다 — 한 모델이
+    # 전부 그리면 시안 안 사진의 화풍이 한 벌로 굳고, 그 모델이 막히면 전멸한다.
+    # 비우면 gemini_image_model 하나만 쓴다.
+    image_model_pool: str = ""
+    # 모델 하나가 연속으로 맡는 장수(1~2 권장). 이 수만큼 굽고 다음 모델로 넘어간다.
+    image_slots_per_model: int = 1
+    # Stage 4 는 완성 페이지 HTML 한 벌을 한 응답에 담는다. 출력 상한이 작은
+    # 모델(예: gemini-2.0-flash = 8,192)에서는 마크업이 중간에 잘려 JSON 이
+    # 깨지고, 그 실패가 "렌더 3회 실패 → 컨셉 보드" 로만 보여 원인을 못 찾는다.
+    # 그래서 렌더 단계만 모델·출력 상한을 따로 준다. 비우면 gemini_model 을 쓴다.
+    gemini_render_model: str = ""
+    gemini_render_max_output_tokens: int = 32768
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     codex_cli: str = ""

@@ -29,7 +29,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.identity import get_pub
 from app.core.observability import build_event
-from app.models.design import DesignSystem, Mockup
+from app.models.design import DesignSystem, Mockup, MockupAsset
 from app.models.generation import Generation
 from app.models.notification import Notification
 from app.models.project import DS_MODE_UNIFIED, Project
@@ -40,6 +40,12 @@ from app.services.ai.base import AIProvider
 from app.services.ai.claude_cli import ClaudeCliProvider
 from app.services.ai.codex import CodexProvider
 from app.services.ai.gemini import GeminiProvider
+from app.services.ai.html_sanitize import replace_image_slots
+from app.services.ai.imagegen import (
+    fallback_gradient,
+    generate_slot_images,
+    images_enabled,
+)
 from app.services.ai.mae_ladder import MaeLadderProvider
 from app.services.ai.placeholder import (
     archetype_for,
@@ -69,8 +75,8 @@ SCREEN_STAGE_PROGRESS = {"LayoutEngine": 45, "Renderer": 90, "Done": 100}
 
 RENDER_MAX_ATTEMPTS = 3
 FALLBACK_REASON = (
-    "Image Gen 3회 실패로 Token 기반 CSS 렌더링으로 대체했습니다. "
-    "콘텐츠 슬롯은 단색 Placeholder 로 표시됩니다."
+    "시안 렌더링 3회 실패로 Token 기반 CSS 렌더링으로 대체했습니다. "
+    "완성 페이지 대신 컨셉 보드가 표시됩니다."
 )
 
 
@@ -358,6 +364,7 @@ async def run_screen_generation(
                 layouts = await provider.generate_layouts(concept, variants)
                 layouts = _normalize_layouts(layouts, variants, screen, screen_title)
                 fallback = await _render_layouts(provider, layouts, confirmed.tokens)
+                await _fill_image_slots(db, project.id, layouts)
 
             gen.stage = "Renderer"
             gen.progress = SCREEN_STAGE_PROGRESS["Renderer"]
@@ -596,6 +603,7 @@ async def _run_real(
         )
         if await _render_layouts(provider, layouts, c["tokens"]):
             fallback = True
+        await _fill_image_slots(db, project.id, layouts)
         layouts_by_concept[c["conceptLabel"]] = layouts
     return concept_sets, layouts_by_concept, fallback
 
@@ -625,6 +633,7 @@ def _normalize_layouts(
         merged["kind"] = archetype_for(screen, screen_title)
         merged.setdefault("title", ref["title"])
         merged.setdefault("variantLabel", ref["variantLabel"])
+        merged.setdefault("sections", ref.get("sections") or [])
         tree = dict(merged.get("nodeTree") or {})
         if merged.get("imagePrompt"):
             tree["imagePrompt"] = merged["imagePrompt"]
@@ -655,6 +664,15 @@ async def _render_layouts(provider: AIProvider, layouts: list[dict], tokens: dic
                     layout["nodeTree"] = artifact["nodeTree"]
                 if artifact.get("imageUrl"):
                     layout["imageUrl"] = artifact["imageUrl"]
+                if artifact.get("html"):
+                    # 시안의 실제 그림. nodeTree 는 이미 JSON 컬럼으로 끝까지
+                    # 배선돼 있어(모델→스키마→프론트) 새 컬럼 없이 여기 얹는다.
+                    tree = dict(layout.get("nodeTree") or {})
+                    tree["html"] = artifact["html"]
+                    tree["imageSlots"] = artifact.get("imageSlots") or []
+                    tree["pageHeight"] = artifact.get("pageHeight") or 0
+                    layout["nodeTree"] = tree
+                    layout["isFallback"] = False
                 break
             except NotImplementedError:
                 raise
@@ -663,3 +681,50 @@ async def _render_layouts(provider: AIProvider, layouts: list[dict], tokens: dic
                     layout["isFallback"] = True
                     fallback_used = True
     return fallback_used
+
+
+async def _fill_image_slots(db, project_id: str, layouts: list[dict]) -> None:
+    """시안 마크업의 `{{img:...}}` 자리를 실제 이미지로 바꾼다.
+
+    이미지가 꺼져 있거나 생성에 실패해도 시안은 그대로 살린다 — 채우지 못한
+    자리는 컨셉 색을 쓴 그라디언트가 대신한다. 여기서 예외를 올리면 다 그려
+    놓은 페이지가 Fallback 컨셉 보드로 되돌아간다.
+    """
+    for layout in layouts:
+        tree = layout.get("nodeTree") or {}
+        html = tree.get("html")
+        slots = tree.get("imageSlots") or []
+        if not html or not slots:
+            continue
+
+        generated: dict[str, tuple[bytes, str]] = {}
+        if images_enabled():
+            try:
+                generated = await generate_slot_images(slots)
+            except Exception:  # noqa: BLE001 — 이미지는 시안의 본체가 아니다.
+                generated = {}
+
+        urls: dict[str, str] = {}
+        for slot in slots:
+            slot_id = slot.get("id", "")
+            made = generated.get(slot_id)
+            if not made:
+                urls[slot_id] = fallback_gradient(slot)
+                continue
+            data, mime = made
+            asset = MockupAsset(
+                project_id=project_id,
+                slot_id=slot_id[:60],
+                mime=mime[:60],
+                data=data,
+                byte_size=len(data),
+                prompt=(slot.get("prompt") or "")[:2000],
+            )
+            db.add(asset)
+            await db.flush()
+            urls[slot_id] = f"{settings.api_v1_prefix}/assets/{asset.id}"
+
+        tree = dict(tree)
+        tree["html"] = replace_image_slots(html, urls)
+        tree["imageCount"] = len(generated)
+        layout["nodeTree"] = tree

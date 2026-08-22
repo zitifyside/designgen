@@ -8,7 +8,7 @@ from app.models.billing import (
     Refund,
     Subscription,
 )
-from app.models.design import DesignSystem, Mockup
+from app.models.design import DesignSystem, Mockup, MockupAsset
 from app.models.generation import Generation
 from app.models.hist import PlanHist, UserHist
 from app.models.logging import AppLogEvent
@@ -39,6 +39,7 @@ __all__ = [
     "Feedback",
     "Generation",
     "Mockup",
+    "MockupAsset",
     "Notification",
     "PasswordReset",
     "Payment",
