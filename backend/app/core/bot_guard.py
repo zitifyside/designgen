@@ -6,10 +6,14 @@ httpx·curl·node fetch 는 막지 않는다.
 """
 from __future__ import annotations
 
+import logging
+
 import re
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+from app.core.config import settings
 
 # 헬스·루트는 프로브가 들어오므로 UA 를 보지 않는다.
 SKIP_PATHS = frozenset({"/", "/docs", "/redoc", "/openapi.json"})
@@ -44,6 +48,9 @@ BLOCKED_BOT_RE = re.compile(
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def is_blocked_bot(user_agent: str | None) -> bool:
     ua = user_agent or ""
     if INAPP_RE.search(ua):
@@ -52,6 +59,14 @@ def is_blocked_bot(user_agent: str | None) -> bool:
 
 
 def enforce_bot_guard(request: Request) -> JSONResponse | None:
+    # 꺼 두면 공개 표면이 스크래퍼에 그대로 열린다. 그 상태가 잊힌 채 남는
+    # 것이 가장 나쁘므로, 통과시킬 때마다 경고를 남겨 로그에서 눈에 띄게 한다.
+    if not settings.bot_guard_enabled:
+        logger.warning(
+            "bot guard disabled — 공개 표면이 열려 있다. BOT_GUARD_ENABLED=true 로 되돌려라."
+        )
+        return None
+
     path = request.url.path
     if path in SKIP_PATHS or path.endswith("/health"):
         return None

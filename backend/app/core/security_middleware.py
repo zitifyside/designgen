@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import logging
+
 import time
 from collections import defaultdict, deque
 
@@ -243,6 +245,9 @@ class BodyTooLarge(Exception):
     """청크 전송으로 Content-Length 를 속인 본문."""
 
 
+logger = logging.getLogger(__name__)
+
+
 def enforce_ip_ban(request: Request) -> JSONResponse | None:
     from app.core.ip_ban import is_banned
 
@@ -263,6 +268,18 @@ def enforce_crawl_trap(request: Request) -> JSONResponse | None:
     trapped = path in TRAP_PATHS or path.startswith("/.git/")
     if not trapped:
         return None
+    # 꺼져 있으면 함정 경로를 404 로만 돌려주고 IP 를 밴하지 않는다. 밴은
+    # 24시간·프로세스 메모리라 한 번 걸리면 리비전을 새로 올려야 풀린다 —
+    # QA 가 자기 IP 를 밴해 운영 전체가 403 이 된 일이 실제로 있었다.
+    if not settings.crawl_trap_enabled:
+        logger.warning(
+            "crawl trap disabled — 함정 경로가 IP 를 밴하지 않는다. "
+            "CRAWL_TRAP_ENABLED=true 로 되돌려라. path=%s",
+            path,
+        )
+        return JSONResponse(
+            status_code=404, content={"detail": "Not Found"}, headers=SECURITY_HEADERS
+        )
     ban_ip(client_ip(request))
     return JSONResponse(
         status_code=404,

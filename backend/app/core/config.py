@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     # 걷어낼 때는 이 값과 services/ai/autofill.py, projects 라우트의 autofill,
     # 프론트의 자동 입력 버튼을 함께 지운다. 파이프라인 4단계와는 무관하다.
     enable_dev_autofill: bool = True
+    # ⚠ 봇 차단·크롤 함정 스위치. **기본은 켜짐**이고, 끄는 것은 QA 처럼
+    # 한시적인 사유가 있을 때뿐이다. 끄면 공개 API 표면이 스크래퍼에 그대로
+    # 열리므로, 켜는 것을 잊지 않도록 요청마다 경고 로그를 남긴다.
+    bot_guard_enabled: bool = True
+    crawl_trap_enabled: bool = True
     # Stage 4 는 완성 페이지 HTML 한 벌을 한 응답에 담는다. 출력 상한이 작은
     # 모델(예: gemini-2.0-flash = 8,192)에서는 마크업이 중간에 잘려 JSON 이
     # 깨지고, 그 실패가 "렌더 3회 실패 → 컨셉 보드" 로만 보여 원인을 못 찾는다.
