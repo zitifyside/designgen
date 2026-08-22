@@ -11,6 +11,7 @@ from app.core.deps import CurrentUser, DbDep
 from app.core.identity import get_pub
 from app.models.design import DesignSystem
 from app.models.project import DS_MODE_UNIFIED, Project
+from app.services.design_guide import build_guide
 from app.schemas.design import DesignSystemOut, DesignSystemUpdate
 
 router = APIRouter(prefix="/projects/{project_id}/design-systems", tags=["design-systems"])
@@ -93,11 +94,7 @@ async def list_design_systems(project_id: str, user: CurrentUser, db: DbDep):
     return [DesignSystemOut.model_validate(d) for d in rows]
 
 
-@router.get("/{concept_label}", response_model=DesignSystemOut)
-async def get_design_system(
-    project_id: str, concept_label: str, user: CurrentUser, db: DbDep
-):
-    await _owned_project(db, project_id, user.id)
+async def _concept_ds(db: DbDep, project_id: str, concept_label: str) -> DesignSystem:
     ds = await db.scalar(
         select(DesignSystem).where(
             DesignSystem.project_id == project_id,
@@ -106,7 +103,31 @@ async def get_design_system(
     )
     if ds is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Design system not found")
-    return DesignSystemOut.model_validate(ds)
+    return ds
+
+
+@router.get("/{concept_label}", response_model=DesignSystemOut)
+async def get_design_system(
+    project_id: str, concept_label: str, user: CurrentUser, db: DbDep
+):
+    await _owned_project(db, project_id, user.id)
+    return DesignSystemOut.model_validate(
+        await _concept_ds(db, project_id, concept_label)
+    )
+
+
+@router.get("/{concept_label}/guide")
+async def get_design_guide(
+    project_id: str, concept_label: str, user: CurrentUser, db: DbDep
+) -> dict:
+    """컨셉 토큰에서 계산한 디자인 시스템·컴포넌트 가이드.
+
+    저장하지 않고 그때그때 만든다. 가이드는 토큰의 다른 표현일 뿐이라,
+    저장해 두면 토큰을 고쳤을 때 조용히 어긋난 문서가 남는다.
+    """
+    await _owned_project(db, project_id, user.id)
+    ds = await _concept_ds(db, project_id, concept_label)
+    return build_guide(ds.tokens or {}, ds.concept_name or "")
 
 
 @router.patch("/{concept_label}", response_model=DesignSystemOut)

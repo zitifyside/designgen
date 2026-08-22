@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -99,22 +100,29 @@ def record_mae_channel(channel: str, ok: bool, reason: str = "") -> None:
         return
 
 
+#: 레저 기록 전용 스레드 풀.
+#
+# `asyncio.to_thread` + fire-and-forget 로 두면 인터프리터가 내려갈 때 아직
+# 도는 스레드가 stderr 에 손을 대다 죽는다(`_enter_buffered_busy ... at
+# interpreter shutdown`). ThreadPoolExecutor 는 종료 훅에서 일꾼을 거둬 가므로
+# 프로세스가 조용히 기다렸다 끝난다. 기록은 급하지 않으니 일꾼은 둘이면 된다.
+_LEDGER_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="adg-ledger")
+
+
 def record_mae_channel_async(channel: str, ok: bool, reason: str = "") -> None:
-    """레저 기록을 스레드로 던지고 즉시 돌아온다.
+    """레저 기록을 스레드에 맡기고 즉시 돌아온다.
 
     결과를 기다리지 않는다. 기록이 늦거나 실패해도 생성은 그대로 진행되어야
-    하고, 반대로 기록 때문에 생성이 느려지면 안 된다.
+    하고, 반대로 기록 때문에 생성이 느려지면 안 된다 — 이 함수가 동기였을 때
+    3채널 병렬이 순차로 굳었다(시안 6장 6.1초 = 순차와 동일).
     """
     if not ORCH_CALL.is_file():
         return
     try:
-        loop = asyncio.get_running_loop()
+        _LEDGER_POOL.submit(record_mae_channel, channel, ok, reason)
     except RuntimeError:
-        record_mae_channel(channel, ok, reason)
+        # 풀이 이미 닫혔다(종료 중). 기록 하나 때문에 예외를 올리지 않는다.
         return
-    # 태스크 참조를 붙들지 않는다 — 결과를 쓰지 않으므로 fire-and-forget 이고,
-    # 예외는 to_thread 안에서 이미 삼켜진다.
-    loop.create_task(asyncio.to_thread(record_mae_channel, channel, ok, reason))
 
 
 def _kill_tree(pid: int) -> None:
